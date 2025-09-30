@@ -1,6 +1,8 @@
 # Add Vulkan-Headers first to provide Vulkan::Headers target
 add_subdirectory(Vulkan-Headers)
 
+# Configure volk to use our Vulkan-Headers submodule
+set(VULKAN_HEADERS_INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Vulkan-Headers")
 add_subdirectory(volk)
 
 add_library(vkbootstrap STATIC)
@@ -19,7 +21,7 @@ target_sources(vkbootstrap PRIVATE
   )
 
 target_include_directories(vkbootstrap PUBLIC vkbootstrap/src)
-target_link_libraries(vkbootstrap PUBLIC volk::volk_headers $<$<BOOL:UNIX>:${CMAKE_DL_LIBS}>)
+target_link_libraries(vkbootstrap PUBLIC volk::volk_headers Vulkan::Headers $<$<BOOL:UNIX>:${CMAKE_DL_LIBS}>)
 set_property(TARGET vkbootstrap PROPERTY CXX_STANDARD 20)
 
 #both vma and glm and header only libs so we only need the include path
@@ -50,6 +52,6 @@ target_sources(imgui PRIVATE
   imgui/backends/imgui_impl_sdl3.cpp
   )
 
-target_link_libraries(imgui PUBLIC volk::volk_headers SDL3::SDL3)
+target_link_libraries(imgui PUBLIC volk::volk_headers SDL3::SDL3 Vulkan::Headers)
 
 target_include_directories(stb_image INTERFACE stb_image)
