@@ -62,6 +62,8 @@ nunit-*.xml
 *.received.*
 
 # Build Results of an ATL Project
+[Cc]make_build/
+[Bb]uild/
 [Dd]ebugPS/
 [Rr]eleasePS/
 dlldata.c
