@@ -11,8 +11,8 @@
 #include <functional>
 #include <deque>
 
-#include <vulkan/vulkan.h>
-#include <vulkan/vk_enum_string_helper.h>
+#define VK_NO_PROTOTYPES
+#include <volk.h>
 #include <vk_mem_alloc.h>
 
 #include <fmt/core.h>
@@ -25,7 +25,7 @@
     do {                                                                \
         VkResult err = x;                                               \
         if (err) {                                                      \
-            fmt::println("Detected Vulkan error: {}", string_VkResult(err)); \
+            fmt::println("Detected Vulkan error: {}", static_cast<int>(err)); \
             abort();                                                    \
         }                                                               \
     } while (0)
