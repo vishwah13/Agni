@@ -4,32 +4,11 @@ on:
   push:
     branches:
       - main
-      - dev
   pull_request:
     branches:
       - main
-      - dev
 
-jobs:
-  build_ubuntu_x11:
-    name: Build Ubuntu
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: "recursive"
-
-      - name: Install dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y libvulkan-dev libxcb1-dev libx11-dev libxrandr-dev libxi-dev libxxf86vm-dev libxinerama-dev libxcursor-dev libwayland-dev libxkbcommon-dev wayland-protocols libgl1-mesa-dev
-
-      - name: Build
-        run: |
-          cmake .
-          make
-      
+jobs: 
 
   build_windows:
     name: Build Windows
