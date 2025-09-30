@@ -1,4 +1,5 @@
-find_package(Vulkan REQUIRED)
+# Add Vulkan-Headers first to provide Vulkan::Headers target
+add_subdirectory(Vulkan-Headers)
 
 add_subdirectory(volk)
 
