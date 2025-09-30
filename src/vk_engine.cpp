@@ -1,8 +1,8 @@
 ﻿//> includes
 #include "vk_engine.h"
 
-#include <SDL.h>
-#include <SDL_vulkan.h>
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_vulkan.h>
 
 #include <vk_initializers.h>
 #include <vk_types.h>
@@ -10,78 +10,89 @@
 #include <chrono>
 #include <thread>
 
-VulkanEngine* loadedEngine = nullptr;
+AgniEngine* loadedEngine = nullptr;
 
-VulkanEngine& VulkanEngine::Get() { return *loadedEngine; }
-void VulkanEngine::init()
+AgniEngine& AgniEngine::Get()
 {
-    // only one engine initialization is allowed with the application.
-    assert(loadedEngine == nullptr);
-    loadedEngine = this;
+	return *loadedEngine;
+}
+void AgniEngine::init()
+{
+	// only one engine initialization is allowed with the application.
+	assert(loadedEngine == nullptr);
+	loadedEngine = this;
 
-    // We initialize SDL and create a window with it.
-    SDL_Init(SDL_INIT_VIDEO);
+	// We initialize SDL and create a window with it.
+	SDL_Init(SDL_INIT_VIDEO);
 
-    SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN);
+	SDL_WindowFlags window_flags = (SDL_WindowFlags) (SDL_WINDOW_VULKAN);
 
-    _window = SDL_CreateWindow(
-        "Vulkan Engine",
-        SDL_WINDOWPOS_UNDEFINED,
-        SDL_WINDOWPOS_UNDEFINED,
-        _windowExtent.width,
-        _windowExtent.height,
-        window_flags);
+	_window = SDL_CreateWindow(
+	"Agni", _windowExtent.width, _windowExtent.height, window_flags);
 
-    // everything went fine
-    _isInitialized = true;
+	// everything went fine
+	_isInitialized = true;
 }
 
-void VulkanEngine::cleanup()
+void AgniEngine::cleanup()
 {
-    if (_isInitialized) {
+	if (_isInitialized)
+	{
 
-        SDL_DestroyWindow(_window);
-    }
+		SDL_DestroyWindow(_window);
+	}
 
-    // clear engine pointer
-    loadedEngine = nullptr;
+	// clear engine pointer
+	loadedEngine = nullptr;
 }
 
-void VulkanEngine::draw()
+void AgniEngine::draw()
 {
-    // nothing yet
+	// nothing yet
 }
 
-void VulkanEngine::run()
+void AgniEngine::run()
 {
-    SDL_Event e;
-    bool bQuit = false;
+	SDL_Event e;
+	bool      bQuit = false;
 
-    // main loop
-    while (!bQuit) {
-        // Handle events on queue
-        while (SDL_PollEvent(&e) != 0) {
-            // close the window when user alt-f4s or clicks the X button
-            if (e.type == SDL_QUIT)
-                bQuit = true;
+	// main loop
+	while (!bQuit)
+	{
+		// Handle events on queue
+		while (SDL_PollEvent(&e) != 0)
+		{
+			// close the window when user alt-f4s or clicks the X button
+			if (e.type == SDL_EVENT_QUIT)
+				bQuit = true;
 
-            if (e.type == SDL_WINDOWEVENT) {
-                if (e.window.event == SDL_WINDOWEVENT_MINIMIZED) {
-                    stop_rendering = true;
-                }
-                if (e.window.event == SDL_WINDOWEVENT_RESTORED) {
-                    stop_rendering = false;
-                }
-            }
-        }
+			if (e.type == SDL_EVENT_WINDOW_MINIMIZED)
+			{
+				stop_rendering = true;
+			}
+			if (e.type == SDL_EVENT_WINDOW_RESTORED)
+			{
+				stop_rendering = false;
+			}
 
-        // do not draw if we are minimized
-        if (stop_rendering) {
-            // throttle the speed to avoid the endless spinning
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            continue;
-        }
+			if (e.type == SDL_EVENT_KEY_DOWN)
+			{
+				if (e.key.key == SDLK_ESCAPE)
+				{
+					bQuit = true;
+				}
+				// fmt::print("Key down: {}\n", SDL_GetKeyName(e.key.key));
+			}
+		}
 
-        draw();
-    }
+		// do not draw if we are minimized
+		if (stop_rendering)
+		{
+			// throttle the speed to avoid the endless spinning
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			continue;
+		}
+
+		draw();
+	}
 }
