@@ -1,0 +1,12 @@
+{
+	"InstallScripts" : 
+	[
+		"C:/Dev/Repo/Agni/cmake_build/cmake_install.cmake",
+		"C:/Dev/Repo/Agni/cmake_build/third_party/cmake_install.cmake",
+		"C:/Dev/Repo/Agni/cmake_build/third_party/fastgltf/cmake_install.cmake",
+		"C:/Dev/Repo/Agni/cmake_build/third_party/fmt/cmake_install.cmake",
+		"C:/Dev/Repo/Agni/cmake_build/third_party/SDL/cmake_install.cmake",
+		"C:/Dev/Repo/Agni/cmake_build/src/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
