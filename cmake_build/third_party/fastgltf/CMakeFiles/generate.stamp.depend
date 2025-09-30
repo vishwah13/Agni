@@ -1,0 +1,4 @@
+# CMake generation dependency list for this directory.
+C:/Dev/Repo/Agni/third_party/fastgltf/CMakeLists.txt
+C:/Dev/Repo/Agni/third_party/fastgltf/cmake/add_source_directory.cmake
+C:/Dev/Repo/Agni/third_party/fastgltf/cmake/compiler_flags.cmake
