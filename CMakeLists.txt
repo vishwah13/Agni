@@ -6,7 +6,7 @@ cmake_minimum_required (VERSION 3.8)
 project ("Agni")
 
 
-find_package(Vulkan REQUIRED)
+# Using Vulkan-Headers submodule instead of system Vulkan SDK
 
 add_subdirectory(third_party)
 
