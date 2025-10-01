@@ -5,6 +5,15 @@
 
 #include <vk_types.h>
 
+constexpr unsigned int FRAME_OVERLAP = 2;
+
+struct FrameData
+{
+
+	VkCommandPool   _commandPool;
+	VkCommandBuffer _mainCommandBuffer;
+};
+
 class AgniEngine
 {
 public:
@@ -29,6 +38,16 @@ public:
 	std::vector<VkImage>     _swapchainImages;
 	std::vector<VkImageView> _swapchainImageViews;
 	VkExtent2D               _swapchainExtent;
+
+	FrameData _frames[FRAME_OVERLAP];
+
+	FrameData& getCurrentFrame()
+	{
+		return _frames[_frameNumber % FRAME_OVERLAP];
+	};
+
+	VkQueue  _graphicsQueue;
+	uint32_t _graphicsQueueFamily;
 
 	// initializes everything in the engine
 	void init();
