@@ -17,6 +17,19 @@ public:
 
 	static AgniEngine& Get();
 
+	VkInstance               _instance;        // Vulkan library handle
+	VkDebugUtilsMessengerEXT _debugMessenger; // Vulkan debug output handle
+	VkPhysicalDevice         _chosenGPU; // GPU chosen as the default device
+	VkDevice                 _device;    // Vulkan device for commands
+	VkSurfaceKHR             _surface;   // Vulkan window surface
+
+	VkSwapchainKHR _swapchain;
+	VkFormat       _swapchainImageFormat;
+
+	std::vector<VkImage>     _swapchainImages;
+	std::vector<VkImageView> _swapchainImageViews;
+	VkExtent2D               _swapchainExtent;
+
 	// initializes everything in the engine
 	void init();
 
@@ -28,4 +41,13 @@ public:
 
 	// run main loop
 	void run();
+
+private:
+	void initVulkan();
+	void initSwapchain();
+	void initCommands();
+	void initSyncStructures();
+
+	void createSwapchain(uint32_t width, uint32_t height);
+	void destroySwapchain();
 };
