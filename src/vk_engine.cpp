@@ -4,6 +4,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 
+#include <vk_images.h>
 #include <vk_initializers.h>
 #include <vk_types.h>
 
@@ -11,6 +12,8 @@
 
 #include <chrono>
 #include <thread>
+
+// https://vkguide.dev/docs/new_chapter_1/vulkan_mainloop_code/
 
 #ifdef NDEBUG
 constexpr bool bUseValidationLayers = false;
@@ -60,6 +63,12 @@ void AgniEngine::cleanup()
 		for (int i = 0; i < FRAME_OVERLAP; i++)
 		{
 			vkDestroyCommandPool(_device, _frames[i]._commandPool, nullptr);
+
+			// destroy sync objects
+			vkDestroyFence(_device, _frames[i]._renderFence, nullptr);
+			vkDestroySemaphore(_device, _frames[i]._renderSemaphore, nullptr);
+			vkDestroySemaphore(
+			_device, _frames[i]._swapchainSemaphore, nullptr);
 		}
 
 		destroySwapchain();
@@ -78,7 +87,109 @@ void AgniEngine::cleanup()
 
 void AgniEngine::draw()
 {
-	// nothing yet
+	// wait until the gpu has finished rendering the last frame. Timeout of 1
+	// second
+	VK_CHECK(vkWaitForFences(
+	_device, 1, &getCurrentFrame()._renderFence, true, 1000000000));
+	VK_CHECK(vkResetFences(_device, 1, &getCurrentFrame()._renderFence));
+
+	// request image from the swapchain
+	uint32_t swapchainImageIndex;
+	VK_CHECK(vkAcquireNextImageKHR(_device,
+	                               _swapchain,
+	                               1000000000,
+	                               getCurrentFrame()._swapchainSemaphore,
+	                               nullptr,
+	                               &swapchainImageIndex));
+
+	VkCommandBuffer cmd = getCurrentFrame()._mainCommandBuffer;
+
+	// now that we are sure that the commands finished executing, we can safely
+	// reset the command buffer to begin recording again.
+	VK_CHECK(vkResetCommandBuffer(cmd, 0));
+
+	// begin the command buffer recording. We will use this command buffer
+	// exactly once, so we want to let vulkan know that
+	VkCommandBufferBeginInfo cmdBeginInfo = vkinit::command_buffer_begin_info(
+	VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+
+	// start the command buffer recording
+	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
+
+	// make the swapchain image into writeable mode before rendering
+	vkutil::transitionImage(cmd,
+	                        _swapchainImages[swapchainImageIndex],
+	                        VK_IMAGE_LAYOUT_UNDEFINED,
+	                        VK_IMAGE_LAYOUT_GENERAL);
+
+	// make a clear-color from frame number. This will flash with a 120 frame
+	// period.
+	VkClearColorValue clearValue;
+	float             flash = std::abs(std::sin(_frameNumber / 120.f));
+	clearValue              = {{0.0f, 0.0f, flash, 1.0f}};
+
+	VkImageSubresourceRange clearRange =
+	vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
+
+	// clear image
+	vkCmdClearColorImage(cmd,
+	                     _swapchainImages[swapchainImageIndex],
+	                     VK_IMAGE_LAYOUT_GENERAL,
+	                     &clearValue,
+	                     1,
+	                     &clearRange);
+
+	// make the swapchain image into presentable mode
+	vkutil::transitionImage(cmd,
+	                        _swapchainImages[swapchainImageIndex],
+	                        VK_IMAGE_LAYOUT_GENERAL,
+	                        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+
+	// finalize the command buffer (we can no longer add commands, but it can
+	// now be executed)
+	VK_CHECK(vkEndCommandBuffer(cmd));
+
+	// prepare the submission to the queue.
+	// we want to wait on the _presentSemaphore, as that semaphore is signaled
+	// when the swapchain is ready we will signal the _renderSemaphore, to
+	// signal that rendering has finished
+
+	VkCommandBufferSubmitInfo cmdinfo = vkinit::command_buffer_submit_info(cmd);
+
+	VkSemaphoreSubmitInfo waitInfo = vkinit::semaphore_submit_info(
+	VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR,
+	getCurrentFrame()._swapchainSemaphore);
+	VkSemaphoreSubmitInfo signalInfo = vkinit::semaphore_submit_info(
+	VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, getCurrentFrame()._renderSemaphore);
+
+	VkSubmitInfo2 submit =
+	vkinit::submit_info(&cmdinfo, &signalInfo, &waitInfo);
+
+	// submit command buffer to the queue and execute it.
+	//  _renderFence will now block until the graphic commands finish execution
+	VK_CHECK(
+	vkQueueSubmit2(_graphicsQueue, 1, &submit, getCurrentFrame()._renderFence));
+
+	// prepare present
+	//  this will put the image we just rendered to into the visible window.
+	//  we want to wait on the _renderSemaphore for that,
+	//  as its necessary that drawing commands have finished before the image is
+	//  displayed to the user
+	VkPresentInfoKHR presentInfo = {};
+	presentInfo.sType            = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	presentInfo.pNext            = nullptr;
+	presentInfo.pSwapchains      = &_swapchain;
+	presentInfo.swapchainCount   = 1;
+
+	presentInfo.pWaitSemaphores    = &getCurrentFrame()._renderSemaphore;
+	presentInfo.waitSemaphoreCount = 1;
+
+	presentInfo.pImageIndices = &swapchainImageIndex;
+
+	VK_CHECK(vkQueuePresentKHR(_graphicsQueue, &presentInfo));
+
+	// increase the number of frames drawn
+	_frameNumber++;
 }
 
 void AgniEngine::run()
@@ -217,7 +328,31 @@ void AgniEngine::initCommands()
 	}
 }
 
-void AgniEngine::initSyncStructures() {}
+void AgniEngine::initSyncStructures()
+{
+
+	// create syncronization structures
+	// one fence to control when the gpu has finished rendering the frame,
+	// and 2 semaphores to syncronize rendering with swapchain
+	// we want the fence to start signalled so we can wait on it on the first
+	// frame
+	VkFenceCreateInfo fenceCreateInfo =
+	vkinit::fence_create_info(VK_FENCE_CREATE_SIGNALED_BIT);
+	VkSemaphoreCreateInfo semaphoreCreateInfo = vkinit::semaphore_create_info();
+
+	for (int i = 0; i < FRAME_OVERLAP; i++)
+	{
+		VK_CHECK(vkCreateFence(
+		_device, &fenceCreateInfo, nullptr, &_frames[i]._renderFence));
+
+		VK_CHECK(vkCreateSemaphore(_device,
+		                           &semaphoreCreateInfo,
+		                           nullptr,
+		                           &_frames[i]._swapchainSemaphore));
+		VK_CHECK(vkCreateSemaphore(
+		_device, &semaphoreCreateInfo, nullptr, &_frames[i]._renderSemaphore));
+	}
+}
 
 void AgniEngine::createSwapchain(uint32_t width, uint32_t height)
 {

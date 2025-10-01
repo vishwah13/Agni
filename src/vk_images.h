@@ -1,7 +1,12 @@
+#pragma once
+#include <vk_types.h>
 
-#pragma once 
+namespace vkutil
+{
 
-namespace vkutil {
-
+	void transitionImage(VkCommandBuffer cmd,
+	                     VkImage         image,
+	                     VkImageLayout   currentLayout,
+	                     VkImageLayout   newLayout);
 
 };

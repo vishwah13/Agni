@@ -177,6 +177,7 @@ VkRenderingInfo vkinit::rendering_info(VkExtent2D renderExtent, VkRenderingAttac
 }
 //< render_info
 //> subresource
+// infficient it will do for now
 VkImageSubresourceRange vkinit::image_subresource_range(VkImageAspectFlags aspectMask)
 {
     VkImageSubresourceRange subImage {};
