@@ -7,6 +7,27 @@
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 
+struct DeletionQueue
+{
+	std::deque<std::function<void()>> deletors;
+
+	void push_function(std::function<void()>&& function)
+	{
+		deletors.push_back(function);
+	}
+
+	void flush()
+	{
+		// reverse iterate the deletion queue to execute all the functions
+		for (auto it = deletors.rbegin(); it != deletors.rend(); it++)
+		{
+			(*it)(); // call functors
+		}
+
+		deletors.clear();
+	}
+};
+
 struct FrameData
 {
 
@@ -15,8 +36,9 @@ struct FrameData
 
 	VkSemaphore _swapchainSemaphore, _renderSemaphore;
 	VkFence     _renderFence;
-};
 
+	DeletionQueue _deletionQueue;
+};
 class AgniEngine
 {
 public:
@@ -29,7 +51,9 @@ public:
 
 	static AgniEngine& Get();
 
-	VkInstance               _instance;        // Vulkan library handle
+	DeletionQueue _mainDeletionQueue;
+
+	VkInstance               _instance;       // Vulkan library handle
 	VkDebugUtilsMessengerEXT _debugMessenger; // Vulkan debug output handle
 	VkPhysicalDevice         _chosenGPU; // GPU chosen as the default device
 	VkDevice                 _device;    // Vulkan device for commands
