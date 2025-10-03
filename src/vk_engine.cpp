@@ -69,7 +69,12 @@ void AgniEngine::cleanup()
 			vkDestroySemaphore(_device, _frames[i]._renderSemaphore, nullptr);
 			vkDestroySemaphore(
 			_device, _frames[i]._swapchainSemaphore, nullptr);
+
+			_frames[i]._deletionQueue.flush();
 		}
+
+		// flush the global deletion queue
+		_mainDeletionQueue.flush();
 
 		destroySwapchain();
 
@@ -91,6 +96,8 @@ void AgniEngine::draw()
 	// second
 	VK_CHECK(vkWaitForFences(
 	_device, 1, &getCurrentFrame()._renderFence, true, 1000000000));
+
+	getCurrentFrame()._deletionQueue.flush();
 	VK_CHECK(vkResetFences(_device, 1, &getCurrentFrame()._renderFence));
 
 	// request image from the swapchain
