@@ -8,6 +8,9 @@
 #include <vk_initializers.h>
 #include <vk_types.h>
 
+#define VMA_IMPLEMENTATION
+#include "vk_mem_alloc.h"
+
 #include <VkBootstrap.h>
 
 #include <chrono>
@@ -303,6 +306,9 @@ void AgniEngine::initVulkan()
 	_graphicsQueue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
 	_graphicsQueueFamily =
 	vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
+
+	//initializing VMA
+	initVMA();
 }
 
 void AgniEngine::initSwapchain()
@@ -400,4 +406,25 @@ void AgniEngine::destroySwapchain()
 	{
 		vkDestroyImageView(_device, _swapchainImageViews[i], nullptr);
 	}
+}
+
+void AgniEngine::initVMA()
+{
+
+	// initialize the memory allocator
+	VmaAllocatorCreateInfo allocatorInfo = {};
+	allocatorInfo.physicalDevice         = _chosenGPU;
+	allocatorInfo.device                 = _device;
+	allocatorInfo.instance               = _instance;
+	allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT |
+	                      VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT;
+
+	VmaVulkanFunctions vulkanFunctions = {};
+	vmaImportVulkanFunctionsFromVolk(&allocatorInfo ,& vulkanFunctions);
+	allocatorInfo.pVulkanFunctions = &vulkanFunctions;
+	allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_4;
+	VK_CHECK(vmaCreateAllocator(&allocatorInfo, &_allocator));
+
+	_mainDeletionQueue.push_function([&]()
+	                                 { vmaDestroyAllocator(_allocator); });
 }
