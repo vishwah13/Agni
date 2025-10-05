@@ -53,6 +53,8 @@ public:
 
 	DeletionQueue _mainDeletionQueue;
 
+	VmaAllocator _allocator;
+
 	VkInstance               _instance;       // Vulkan library handle
 	VkDebugUtilsMessengerEXT _debugMessenger; // Vulkan debug output handle
 	VkPhysicalDevice         _chosenGPU; // GPU chosen as the default device
@@ -96,4 +98,6 @@ private:
 
 	void createSwapchain(uint32_t width, uint32_t height);
 	void destroySwapchain();
+
+	void initVMA();
 };
