@@ -78,6 +78,10 @@ public:
 	VkQueue  _graphicsQueue;
 	uint32_t _graphicsQueueFamily;
 
+	// draw resources
+	AllocatedImage _drawImage;
+	VkExtent2D     _drawExtent;
+
 	// initializes everything in the engine
 	void init();
 
@@ -86,6 +90,8 @@ public:
 
 	// draw loop
 	void draw();
+
+	void drawBackground(VkCommandBuffer cmd);
 
 	// run main loop
 	void run();
