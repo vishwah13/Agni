@@ -16,7 +16,6 @@
 #include <chrono>
 #include <thread>
 
-// https://vkguide.dev/docs/new_chapter_1/vulkan_mainloop_code/
 
 #ifdef NDEBUG
 constexpr bool bUseValidationLayers = false;
@@ -52,6 +51,8 @@ void AgniEngine::init()
 	initCommands();
 
 	initSyncStructures();
+
+	initDescriptors();
 
 	// everything went fine
 	_isInitialized = true;
@@ -132,27 +133,26 @@ void AgniEngine::draw()
 	// transition our main draw image into general layout so we can write into
 	// it we will overwrite it all so we dont care about what was the older
 	// layout
-	vkutil::transitionImage(cmd,
-	                        _drawImage.image,
-	                        VK_IMAGE_LAYOUT_UNDEFINED,
-	                        VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transitionImage(
+	cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
 	drawBackground(cmd);
 
 	vkutil::transitionImage(cmd,
-							_drawImage.image,
-							VK_IMAGE_LAYOUT_GENERAL,
+	                        _drawImage.image,
+	                        VK_IMAGE_LAYOUT_GENERAL,
 	                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-	vkutil::transitionImage(cmd,_swapchainImages[swapchainImageIndex],
-							VK_IMAGE_LAYOUT_UNDEFINED,
+	vkutil::transitionImage(cmd,
+	                        _swapchainImages[swapchainImageIndex],
+	                        VK_IMAGE_LAYOUT_UNDEFINED,
 	                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 	// execute a copy from the draw image into the swapchain
 	vkutil::copyImageToImage(cmd,
-	                            _drawImage.image,
-	                            _swapchainImages[swapchainImageIndex],
-	                            _drawExtent,
-	                            _swapchainExtent);
+	                         _drawImage.image,
+	                         _swapchainImages[swapchainImageIndex],
+	                         _drawExtent,
+	                         _swapchainExtent);
 
 	// make the swapchain image into presentable mode
 	vkutil::transitionImage(cmd,
@@ -207,7 +207,8 @@ void AgniEngine::draw()
 	_frameNumber++;
 }
 
-void AgniEngine::drawBackground(VkCommandBuffer cmd) {
+void AgniEngine::drawBackground(VkCommandBuffer cmd)
+{
 
 	// make a clear-color from frame number. This will flash with a 120 frame
 	// period.
@@ -496,4 +497,22 @@ void AgniEngine::initVMA()
 
 	_mainDeletionQueue.push_function([&]()
 	                                 { vmaDestroyAllocator(_allocator); });
+}
+
+void AgniEngine::initDescriptors()
+{
+
+	// create a descriptor pool that will hold 10 sets with 1 image each
+	std::vector<DescriptorAllocator::PoolSizeRatio> sizes = {
+	{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1}};
+
+	globalDescriptorAllocator.initPool(_device, 10, sizes);
+
+	// make the descriptor set layout for our compute draw
+	{
+		DescriptorLayoutBuilder builder;
+		builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		_drawImageDescriptorLayout =
+		builder.build(_device, VK_SHADER_STAGE_COMPUTE_BIT);
+	}
 }

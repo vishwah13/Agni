@@ -3,6 +3,11 @@
 
 #pragma once
 
+#include "vk_mem_alloc.h"
+#include <deque>
+#include <functional>
+#include <vector>
+#include <vk_descriptors.h>
 #include <vk_types.h>
 
 constexpr unsigned int FRAME_OVERLAP = 2;
@@ -82,6 +87,11 @@ public:
 	AllocatedImage _drawImage;
 	VkExtent2D     _drawExtent;
 
+	DescriptorAllocator globalDescriptorAllocator;
+
+	VkDescriptorSet       _drawImageDescriptors;
+	VkDescriptorSetLayout _drawImageDescriptorLayout;
+
 	// initializes everything in the engine
 	void init();
 
@@ -106,4 +116,6 @@ private:
 	void destroySwapchain();
 
 	void initVMA();
+
+	void initDescriptors();
 };
