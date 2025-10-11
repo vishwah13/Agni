@@ -581,7 +581,7 @@ void AgniEngine::initBackgroundPipelines()
 
 	VkShaderModule computeDrawShader;
 	if (!vkutil::loadShaderModule(
-	    "../../bin/shaders/gradient.comp.spv", _device, &computeDrawShader))
+	    "../../shaders/glsl/gradient.comp.spv", _device, &computeDrawShader))
 	{
 		fmt::print("Error when building the compute shader \n");
 	}
