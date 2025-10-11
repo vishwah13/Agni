@@ -92,6 +92,9 @@ public:
 	VkDescriptorSet       _drawImageDescriptors;
 	VkDescriptorSetLayout _drawImageDescriptorLayout;
 
+	VkPipeline       _gradientPipeline;
+	VkPipelineLayout _gradientPipelineLayout;
+
 	// initializes everything in the engine
 	void init();
 
@@ -118,4 +121,7 @@ private:
 	void initVMA();
 
 	void initDescriptors();
+
+	void initPipelines();
+	void initBackgroundPipelines();
 };
