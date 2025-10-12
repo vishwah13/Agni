@@ -38,7 +38,9 @@ target_include_directories(glm INTERFACE glm)
 
 add_library(imgui STATIC)
 
-target_include_directories(imgui PUBLIC imgui)
+target_include_directories(imgui PUBLIC imgui imgui/backends)
+
+target_compile_definitions(imgui PUBLIC IMGUI_IMPL_VULKAN_USE_VOLK)
 
 target_sources(imgui PRIVATE
   imgui/imgui.h
