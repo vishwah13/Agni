@@ -4,7 +4,7 @@ void DescriptorLayoutBuilder::addBinding(uint32_t         binding,
                                          VkDescriptorType type)
 {
 	VkDescriptorSetLayoutBinding newbind {};
-	newbind.binding         = binding;
+	newbind.binding         = binding; // tells the binding number in shader
 	newbind.descriptorCount = 1;
 	newbind.descriptorType  = type;
 
