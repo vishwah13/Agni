@@ -29,7 +29,7 @@ foreach(GLSL ${GLSL_SOURCE_FILES})
 
     add_custom_command(
         OUTPUT ${SPIRV}
-        COMMAND $<TARGET_FILE:glslc_exe> ${GLSL} -o ${SPIRV}
+        COMMAND $<TARGET_FILE:glslc_exe> -I"${PROJECT_SOURCE_DIR}/shaders/glsl" ${GLSL} -o ${SPIRV}
         DEPENDS ${GLSL} glslc_exe
         COMMENT "Compiling shader ${FILE_NAME}"
         VERBATIM
