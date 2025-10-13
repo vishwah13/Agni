@@ -19,6 +19,7 @@
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 
 #define VK_CHECK(x)                                                     \
