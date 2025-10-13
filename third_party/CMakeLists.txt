@@ -5,6 +5,17 @@ add_subdirectory(Vulkan-Headers)
 set(VULKAN_HEADERS_INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Vulkan-Headers")
 add_subdirectory(volk)
 
+# Add shaderc for shader compilation
+set(SHADERC_SKIP_TESTS ON CACHE BOOL "" FORCE)
+set(SHADERC_SKIP_EXAMPLES ON CACHE BOOL "" FORCE)
+#set(SHADERC_SKIP_INSTALL ON CACHE BOOL "" FORCE)
+
+# Disable install commands to avoid export errors
+#macro(install)
+#endmacro()
+
+add_subdirectory(shaderc)
+
 add_library(vkbootstrap STATIC)
 add_library(glm INTERFACE)
 add_library(vma INTERFACE)
