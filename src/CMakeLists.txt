@@ -1,12 +1,12 @@
 
 # Add source to this project's executable.
-add_executable (engine 
+add_executable (engine
   main.cpp
   vk_types.h
   vk_initializers.cpp
   vk_initializers.h
   vk_images.h
-  vk_images.cpp 
+  vk_images.cpp
   vk_descriptors.h
   vk_descriptors.cpp
   vk_pipelines.h
@@ -18,6 +18,19 @@ add_executable (engine
   camera.cpp
   camera.h
 )
+
+# Add shader files to the project so they appear in Visual Studio
+file(GLOB_RECURSE SHADER_FILES
+  "${PROJECT_SOURCE_DIR}/shaders/glsl/*.comp"
+  "${PROJECT_SOURCE_DIR}/shaders/glsl/*.vert"
+  "${PROJECT_SOURCE_DIR}/shaders/glsl/*.frag"
+  "${PROJECT_SOURCE_DIR}/shaders/glsl/*.glsl"
+)
+
+target_sources(engine PRIVATE ${SHADER_FILES})
+
+# Set the folder for shaders in Visual Studio
+source_group("Shaders" FILES ${SHADER_FILES})
 
 set_property(TARGET engine PROPERTY CXX_STANDARD 20)
 target_compile_definitions(engine PUBLIC GLM_FORCE_DEPTH_ZERO_TO_ONE)
