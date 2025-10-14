@@ -149,7 +149,17 @@ void AgniEngine::draw()
 	vkutil::transitionImage(cmd,
 	                        _drawImage.image,
 	                        VK_IMAGE_LAYOUT_GENERAL,
+	                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+	drawGeometry(cmd);
+
+	// transtion the draw image and the swapchain image into their correct
+	// transfer layouts
+	vkutil::transitionImage(cmd,
+	                        _drawImage.image,
+	                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
 	vkutil::transitionImage(cmd,
 	                        _swapchainImages[swapchainImageIndex],
 	                        VK_IMAGE_LAYOUT_UNDEFINED,
@@ -677,6 +687,7 @@ void AgniEngine::initPipelines()
 {
 
 	initBackgroundPipelines();
+	initTrianglePipeline();
 }
 
 void AgniEngine::initBackgroundPipelines()
@@ -847,4 +858,114 @@ void AgniEngine::initImgui()
 		ImGui_ImplVulkan_Shutdown();
 		vkDestroyDescriptorPool(_device, imguiPool, nullptr);
 	});
+}
+
+void AgniEngine::initTrianglePipeline()
+{
+
+	VkShaderModule triangleFragShader;
+	if (!vkutil::loadShaderModule("../../shaders/glsl/colored_triangle.frag.spv",
+	                              _device,
+	                              &triangleFragShader))
+	{
+		fmt::print("Error when building the triangle fragment shader module");
+	}
+	else
+	{
+		fmt::print("Triangle fragment shader succesfully loaded");
+	}
+
+	VkShaderModule triangleVertexShader;
+	if (!vkutil::loadShaderModule("../../shaders/glsl/colored_triangle.vert.spv",
+	                              _device,
+	                              &triangleVertexShader))
+	{
+		fmt::print("Error when building the triangle vertex shader module");
+	}
+	else
+	{
+		fmt::print("Triangle vertex shader succesfully loaded");
+	}
+
+	// build the pipeline layout that controls the inputs/outputs of the shader
+	// we are not using descriptor sets or other systems yet, so no need to use
+	// anything other than empty default
+	VkPipelineLayoutCreateInfo pipeline_layout_info =
+	vkinit::pipeline_layout_create_info();
+	VK_CHECK(vkCreatePipelineLayout(
+	_device, &pipeline_layout_info, nullptr, &_trianglePipelineLayout));
+
+	PipelineBuilder pipelineBuilder;
+
+	// use the triangle layout we created
+	pipelineBuilder._pipelineLayout = _trianglePipelineLayout;
+	// connecting the vertex and pixel shaders to the pipeline
+	pipelineBuilder.setShaders(triangleVertexShader, triangleFragShader);
+	// it will draw triangles
+	pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	// filled triangles
+	pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
+	// no backface culling
+	pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+	// no multisampling
+	pipelineBuilder.setMultisamplingNone();
+	// no blending
+	pipelineBuilder.disableBlending();
+	// no depth testing
+	pipelineBuilder.disableDepthtest();
+
+	// connect the image format we will draw into, from draw image
+	pipelineBuilder.setColorAttachmentFormat(_drawImage.imageFormat);
+	pipelineBuilder.setDepthFormat(VK_FORMAT_UNDEFINED);
+
+	// finally build the pipeline
+	_trianglePipeline = pipelineBuilder.buildPipeline(_device);
+
+	// clean structures
+	vkDestroyShaderModule(_device, triangleFragShader, nullptr);
+	vkDestroyShaderModule(_device, triangleVertexShader, nullptr);
+
+	_mainDeletionQueue.push_function(
+	[&]()
+	{
+		vkDestroyPipelineLayout(_device, _trianglePipelineLayout, nullptr);
+		vkDestroyPipeline(_device, _trianglePipeline, nullptr);
+	});
+}
+
+void AgniEngine::drawGeometry(VkCommandBuffer cmd)
+{
+	// begin a render pass  connected to our draw image
+	VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(
+	_drawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+	VkRenderingInfo renderInfo =
+	vkinit::rendering_info(_drawExtent, &colorAttachment, nullptr);
+	vkCmdBeginRendering(cmd, &renderInfo);
+
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _trianglePipeline);
+
+	// set dynamic viewport and scissor
+	VkViewport viewport = {};
+	viewport.x          = 0;
+	viewport.y          = 0;
+	viewport.width      = _drawExtent.width;
+	viewport.height     = _drawExtent.height;
+	viewport.minDepth   = 0.f;
+	viewport.maxDepth   = 1.f;
+
+	vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+	VkRect2D scissor      = {};
+	scissor.offset.x      = 0;
+	scissor.offset.y      = 0;
+	scissor.extent.width  = _drawExtent.width;
+	scissor.extent.height = _drawExtent.height;
+
+	vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+	// launch a draw command to draw 3 vertices
+	vkCmdDraw(cmd, 3, 1, 0, 0);
+
+	vkCmdEndRendering(cmd);
 }
