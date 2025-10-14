@@ -53,6 +53,11 @@ struct ComputePushConstants
 	glm::vec4 data4;
 };
 
+struct TrianglePushConstants
+{
+	glm::vec3 color;
+};
+
 struct ComputeEffect
 {
 	const char* name;
@@ -125,6 +130,9 @@ public:
 	// compute shader effects shinanigans
 	std::vector<ComputeEffect> backgroundEffects;
 	int                        currentBackgroundEffect {0};
+
+	TrianglePushConstants pcForTriangle;
+	
 
 	// initializes everything in the engine
 	void init();

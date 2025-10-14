@@ -385,6 +385,8 @@ void AgniEngine::run()
 			ImGui::InputFloat4("data2", glm::value_ptr(selected.data.data2));
 			ImGui::InputFloat4("data3", glm::value_ptr(selected.data.data3));
 			ImGui::InputFloat4("data4", glm::value_ptr(selected.data.data4));
+
+			ImGui::InputFloat3("color", glm::value_ptr(pcForTriangle.color));
 		}
 		ImGui::End();
 
@@ -892,8 +894,18 @@ void AgniEngine::initTrianglePipeline()
 	// anything other than empty default
 	VkPipelineLayoutCreateInfo pipeline_layout_info =
 	vkinit::pipeline_layout_create_info();
+
+	VkPushConstantRange pushConstant {};
+	pushConstant.offset                         = 0;
+	pushConstant.size                           = sizeof(TrianglePushConstants);
+	pushConstant.stageFlags                     = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	pipeline_layout_info.pushConstantRangeCount = 1;
+	pipeline_layout_info.pPushConstantRanges    = &pushConstant;
 	VK_CHECK(vkCreatePipelineLayout(
 	_device, &pipeline_layout_info, nullptr, &_trianglePipelineLayout));
+
+	pcForTriangle.color = glm::vec3(1.0f, 0.0f, 0.0f);
 
 	PipelineBuilder pipelineBuilder;
 
@@ -963,6 +975,13 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 	scissor.extent.height = _drawExtent.height;
 
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+	vkCmdPushConstants(cmd,
+	                   _trianglePipelineLayout,
+	                   VK_SHADER_STAGE_FRAGMENT_BIT,
+	                   0,
+	                   sizeof(TrianglePushConstants),
+	                   &pcForTriangle);
 
 	// launch a draw command to draw 3 vertices
 	vkCmdDraw(cmd, 3, 1, 0, 0);
