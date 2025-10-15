@@ -122,6 +122,11 @@ public:
 	VkPipeline       _trianglePipeline;
 	VkPipelineLayout _trianglePipelineLayout;
 
+	VkPipelineLayout _meshPipelineLayout;
+	VkPipeline       _meshPipeline;
+
+	GPUMeshBuffers rectangle;
+
 	// immediate submit structures for ImGui
 	VkFence         _immFence;
 	VkCommandBuffer _immCommandBuffer;
@@ -132,7 +137,7 @@ public:
 	int                        currentBackgroundEffect {0};
 
 	TrianglePushConstants pcForTriangle;
-	
+
 
 	// initializes everything in the engine
 	void init();
@@ -164,10 +169,23 @@ private:
 
 	void initDescriptors();
 
+	void initImgui();
+
 	void initPipelines();
 	void initBackgroundPipelines();
 
-	void initImgui();
 	void initTrianglePipeline();
+	void initDefaultData();
+	void initMeshPipeline();
 	void drawGeometry(VkCommandBuffer cmd);
+
+	// creating and destroying buffers can go in their own class later ??
+	AllocatedBuffer createBuffer(size_t             allocSize,
+	                             VkBufferUsageFlags usage,
+	                             VmaMemoryUsage     memoryUsage);
+
+	void destroyBuffer(const AllocatedBuffer& buffer);
+
+	GPUMeshBuffers uploadMesh(std::span<uint32_t> indices,
+	                          std::span<Vertex>   vertices);
 };

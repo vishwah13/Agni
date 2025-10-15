@@ -61,6 +61,7 @@ void AgniEngine::init()
 
 	initPipelines();
 	initImgui();
+	initDefaultData();
 
 	// everything went fine
 	_isInitialized = true;
@@ -690,6 +691,7 @@ void AgniEngine::initPipelines()
 
 	initBackgroundPipelines();
 	initTrianglePipeline();
+	initMeshPipeline();
 }
 
 void AgniEngine::initBackgroundPipelines()
@@ -866,9 +868,10 @@ void AgniEngine::initTrianglePipeline()
 {
 
 	VkShaderModule triangleFragShader;
-	if (!vkutil::loadShaderModule("../../shaders/glsl/colored_triangle.frag.spv",
-	                              _device,
-	                              &triangleFragShader))
+	if (!vkutil::loadShaderModule(
+	    "../../shaders/glsl/colored_triangle.frag.spv",
+	    _device,
+	    &triangleFragShader))
 	{
 		fmt::print("Error when building the triangle fragment shader module");
 	}
@@ -878,9 +881,10 @@ void AgniEngine::initTrianglePipeline()
 	}
 
 	VkShaderModule triangleVertexShader;
-	if (!vkutil::loadShaderModule("../../shaders/glsl/colored_triangle.vert.spv",
-	                              _device,
-	                              &triangleVertexShader))
+	if (!vkutil::loadShaderModule(
+	    "../../shaders/glsl/colored_triangle.vert.spv",
+	    _device,
+	    &triangleVertexShader))
 	{
 		fmt::print("Error when building the triangle vertex shader module");
 	}
@@ -896,9 +900,9 @@ void AgniEngine::initTrianglePipeline()
 	vkinit::pipeline_layout_create_info();
 
 	VkPushConstantRange pushConstant {};
-	pushConstant.offset                         = 0;
-	pushConstant.size                           = sizeof(TrianglePushConstants);
-	pushConstant.stageFlags                     = VK_SHADER_STAGE_FRAGMENT_BIT;
+	pushConstant.offset     = 0;
+	pushConstant.size       = sizeof(TrianglePushConstants);
+	pushConstant.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
 	pipeline_layout_info.pushConstantRangeCount = 1;
 	pipeline_layout_info.pPushConstantRanges    = &pushConstant;
@@ -945,6 +949,120 @@ void AgniEngine::initTrianglePipeline()
 	});
 }
 
+void AgniEngine::initDefaultData()
+{
+	std::array<Vertex, 4> rect_vertices;
+
+	rect_vertices[0].position = {0.5, -0.5, 0};
+	rect_vertices[1].position = {0.5, 0.5, 0};
+	rect_vertices[2].position = {-0.5, -0.5, 0};
+	rect_vertices[3].position = {-0.5, 0.5, 0};
+
+	rect_vertices[0].color = {0, 0, 0, 1};
+	rect_vertices[1].color = {0.5, 0.5, 0.5, 1};
+	rect_vertices[2].color = {1, 0, 0, 1};
+	rect_vertices[3].color = {0, 1, 0, 1};
+
+	std::array<uint32_t, 6> rect_indices;
+
+	rect_indices[0] = 0;
+	rect_indices[1] = 1;
+	rect_indices[2] = 2;
+
+	rect_indices[3] = 2;
+	rect_indices[4] = 1;
+	rect_indices[5] = 3;
+
+	rectangle = uploadMesh(rect_indices, rect_vertices);
+
+	// delete the rectangle data on engine shutdown
+	_mainDeletionQueue.push_function(
+	[&]()
+	{
+		destroyBuffer(rectangle.indexBuffer);
+		destroyBuffer(rectangle.vertexBuffer);
+	});
+}
+
+void AgniEngine::initMeshPipeline()
+{
+	VkShaderModule triangleFragShader;
+	if (!vkutil::loadShaderModule(
+	    "../../shaders/glsl/colored_triangle_mesh.frag.spv",
+	    _device,
+	    &triangleFragShader))
+	{
+		fmt::print("Error when building the triangle fragment shader module");
+	}
+	else
+	{
+		fmt::print("Triangle fragment shader succesfully loaded");
+	}
+
+	VkShaderModule triangleVertexShader;
+	if (!vkutil::loadShaderModule(
+	    "../../shaders/glsl/colored_triangle_mesh.vert.spv",
+	    _device,
+	    &triangleVertexShader))
+	{
+		fmt::print("Error when building the triangle vertex shader module");
+	}
+	else
+	{
+		fmt::print("Triangle vertex shader succesfully loaded");
+	}
+
+	VkPushConstantRange bufferRange {};
+	bufferRange.offset     = 0;
+	bufferRange.size       = sizeof(GPUDrawPushConstants);
+	bufferRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+	VkPipelineLayoutCreateInfo pipeline_layout_info =
+	vkinit::pipeline_layout_create_info();
+	pipeline_layout_info.pPushConstantRanges    = &bufferRange;
+	pipeline_layout_info.pushConstantRangeCount = 1;
+
+	VK_CHECK(vkCreatePipelineLayout(
+	_device, &pipeline_layout_info, nullptr, &_meshPipelineLayout));
+
+	PipelineBuilder pipelineBuilder;
+
+	// use the triangle layout we created
+	pipelineBuilder._pipelineLayout = _meshPipelineLayout;
+	// connecting the vertex and pixel shaders to the pipeline
+	pipelineBuilder.setShaders(triangleVertexShader, triangleFragShader);
+	// it will draw triangles
+	pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	// filled triangles
+	pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
+	// no backface culling
+	pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+	// no multisampling
+	pipelineBuilder.setMultisamplingNone();
+	// no blending
+	pipelineBuilder.disableBlending();
+
+	pipelineBuilder.disableDepthtest();
+
+	// connect the image format we will draw into, from draw image
+	pipelineBuilder.setColorAttachmentFormat(_drawImage.imageFormat);
+	pipelineBuilder.setDepthFormat(VK_FORMAT_UNDEFINED);
+
+	// finally build the pipeline
+	_meshPipeline = pipelineBuilder.buildPipeline(_device);
+
+	// clean structures
+	vkDestroyShaderModule(_device, triangleFragShader, nullptr);
+	vkDestroyShaderModule(_device, triangleVertexShader, nullptr);
+
+	_mainDeletionQueue.push_function(
+	[&]()
+	{
+		vkDestroyPipelineLayout(_device, _meshPipelineLayout, nullptr);
+		vkDestroyPipeline(_device, _meshPipeline, nullptr);
+	});
+}
+
 void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 {
 	// begin a render pass  connected to our draw image
@@ -986,5 +1104,123 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 	// launch a draw command to draw 3 vertices
 	vkCmdDraw(cmd, 3, 1, 0, 0);
 
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipeline);
+
+	GPUDrawPushConstants push_constants;
+	push_constants.worldMatrix  = glm::mat4 {1.f};
+	push_constants.vertexBuffer = rectangle.vertexBufferAddress;
+
+	vkCmdPushConstants(cmd,
+	                   _meshPipelineLayout,
+	                   VK_SHADER_STAGE_VERTEX_BIT,
+	                   0,
+	                   sizeof(GPUDrawPushConstants),
+	                   &push_constants);
+	vkCmdBindIndexBuffer(
+	cmd, rectangle.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+	vkCmdDrawIndexed(cmd, 6, 1, 0, 0, 0);
+
 	vkCmdEndRendering(cmd);
+}
+
+AllocatedBuffer AgniEngine::createBuffer(size_t             allocSize,
+                                         VkBufferUsageFlags usage,
+                                         VmaMemoryUsage     memoryUsage)
+{
+	// allocate buffer
+	VkBufferCreateInfo bufferInfo = {.sType =
+	                                 VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+	bufferInfo.pNext              = nullptr;
+	bufferInfo.size               = allocSize;
+
+	bufferInfo.usage = usage;
+
+	VmaAllocationCreateInfo vmaallocInfo = {};
+	vmaallocInfo.usage                   = memoryUsage;
+	vmaallocInfo.flags                   = VMA_ALLOCATION_CREATE_MAPPED_BIT;
+	AllocatedBuffer newBuffer;
+
+	// allocate the buffer
+	VK_CHECK(vmaCreateBuffer(_allocator,
+	                         &bufferInfo,
+	                         &vmaallocInfo,
+	                         &newBuffer.buffer,
+	                         &newBuffer.allocation,
+	                         &newBuffer.info));
+
+	return newBuffer;
+}
+
+void AgniEngine::destroyBuffer(const AllocatedBuffer& buffer)
+{
+	vmaDestroyBuffer(_allocator, buffer.buffer, buffer.allocation);
+}
+
+// Note that this pattern is not very efficient, as we are waiting for the GPU
+// command to fully execute before continuing with our CPU side logic. This is
+// something people generally put on a background thread, whose sole job is to
+// execute uploads like this one, and deleting/reusing the staging buffers.
+GPUMeshBuffers AgniEngine::uploadMesh(std::span<uint32_t> indices,
+                                      std::span<Vertex>   vertices)
+{
+	const size_t vertexBufferSize = vertices.size() * sizeof(Vertex);
+	const size_t indexBufferSize  = indices.size() * sizeof(uint32_t);
+
+	GPUMeshBuffers newSurface;
+
+	// create vertex buffer
+	newSurface.vertexBuffer = createBuffer(
+	vertexBufferSize,
+	VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+	VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+	VMA_MEMORY_USAGE_GPU_ONLY);
+
+	// find the address of the vertex buffer
+	VkBufferDeviceAddressInfo deviceAdressInfo {
+	.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+	.buffer = newSurface.vertexBuffer.buffer};
+	newSurface.vertexBufferAddress =
+	vkGetBufferDeviceAddress(_device, &deviceAdressInfo);
+
+	// create index buffer
+	newSurface.indexBuffer = createBuffer(indexBufferSize,
+	                                      VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+	                                      VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+	                                      VMA_MEMORY_USAGE_GPU_ONLY);
+
+	AllocatedBuffer staging = createBuffer(vertexBufferSize + indexBufferSize,
+	                                       VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+	                                       VMA_MEMORY_USAGE_CPU_ONLY);
+
+	void* data = staging.allocation->GetMappedData();
+
+	// copy vertex buffer
+	memcpy(data, vertices.data(), vertexBufferSize);
+	// copy index buffer
+	memcpy((char*) data + vertexBufferSize, indices.data(), indexBufferSize);
+
+	immediateSubmit(
+	[&](VkCommandBuffer cmd)
+	{
+		VkBufferCopy vertexCopy {0};
+		vertexCopy.dstOffset = 0;
+		vertexCopy.srcOffset = 0;
+		vertexCopy.size      = vertexBufferSize;
+
+		vkCmdCopyBuffer(
+		cmd, staging.buffer, newSurface.vertexBuffer.buffer, 1, &vertexCopy);
+
+		VkBufferCopy indexCopy {0};
+		indexCopy.dstOffset = 0;
+		indexCopy.srcOffset = vertexBufferSize;
+		indexCopy.size      = indexBufferSize;
+
+		vkCmdCopyBuffer(
+		cmd, staging.buffer, newSurface.indexBuffer.buffer, 1, &indexCopy);
+	});
+
+	destroyBuffer(staging);
+
+	return newSurface;
 }
