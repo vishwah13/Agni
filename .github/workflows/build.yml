@@ -25,5 +25,5 @@ jobs:
         env:
           TARGET_PLATFORM: windows
         run: |
-          cmake -B build
+          cmake -B build -DAGNI_COMPILE_SHADERS=OFF
           cmake --build build --config Debug
