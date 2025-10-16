@@ -8,6 +8,7 @@
 #include <functional>
 #include <vector>
 #include <vk_descriptors.h>
+#include <vk_loader.h>
 #include <vk_types.h>
 
 constexpr unsigned int FRAME_OVERLAP = 2;
@@ -126,6 +127,7 @@ public:
 	VkPipeline       _meshPipeline;
 
 	GPUMeshBuffers rectangle;
+	std::vector<std::shared_ptr<MeshAsset>> testMeshes;
 
 	// immediate submit structures for ImGui
 	VkFence         _immFence;
@@ -156,6 +158,9 @@ public:
 	// run main loop
 	void run();
 
+	GPUMeshBuffers uploadMesh(std::span<uint32_t> indices,
+	                          std::span<Vertex>   vertices);
+
 private:
 	void initVulkan();
 	void initSwapchain();
@@ -185,7 +190,4 @@ private:
 	                             VmaMemoryUsage     memoryUsage);
 
 	void destroyBuffer(const AllocatedBuffer& buffer);
-
-	GPUMeshBuffers uploadMesh(std::span<uint32_t> indices,
-	                          std::span<Vertex>   vertices);
 };
