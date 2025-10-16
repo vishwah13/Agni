@@ -284,8 +284,8 @@ void AgniEngine::drawBackground(VkCommandBuffer cmd)
 	// execute the compute pipeline dispatch. We are using 16x16 workgroup size
 	// so we need to divide by it
 	vkCmdDispatch(cmd,
-	              std::ceil(_drawExtent.width / 16.0),
-	              std::ceil(_drawExtent.height / 16.0),
+	              static_cast<uint32_t>(std::ceil(_drawExtent.width / 16.0)),
+	              static_cast<uint32_t>(std::ceil(_drawExtent.height / 16.0)),
 	              1);
 }
 
@@ -393,14 +393,14 @@ void AgniEngine::run()
 			ImGui::SliderInt("Effect Index",
 			                 &currentBackgroundEffect,
 			                 0,
-			                 backgroundEffects.size() - 1);
+			                 static_cast<int>(backgroundEffects.size()) - 1);
 
 			ImGui::InputFloat4("data1", glm::value_ptr(selected.data.data1));
 			ImGui::InputFloat4("data2", glm::value_ptr(selected.data.data2));
 			ImGui::InputFloat4("data3", glm::value_ptr(selected.data.data3));
 			ImGui::InputFloat4("data4", glm::value_ptr(selected.data.data4));
 
-			//ImGui::InputFloat3("color", glm::value_ptr(pcForTriangle.color));
+			// ImGui::InputFloat3("color", glm::value_ptr(pcForTriangle.color));
 		}
 		ImGui::End();
 
@@ -906,39 +906,7 @@ void AgniEngine::initImgui()
 
 void AgniEngine::initDefaultData()
 {
-	std::array<Vertex, 4> rect_vertices;
-
-	rect_vertices[0].position = {0.5, -0.5, 0};
-	rect_vertices[1].position = {0.5, 0.5, 0};
-	rect_vertices[2].position = {-0.5, -0.5, 0};
-	rect_vertices[3].position = {-0.5, 0.5, 0};
-
-	rect_vertices[0].color = {0, 0, 0, 1};
-	rect_vertices[1].color = {0.5, 0.5, 0.5, 1};
-	rect_vertices[2].color = {1, 0, 0, 1};
-	rect_vertices[3].color = {0, 1, 0, 1};
-
-	std::array<uint32_t, 6> rect_indices;
-
-	rect_indices[0] = 0;
-	rect_indices[1] = 1;
-	rect_indices[2] = 2;
-
-	rect_indices[3] = 2;
-	rect_indices[4] = 1;
-	rect_indices[5] = 3;
-
-	rectangle = uploadMesh(rect_indices, rect_vertices);
-
 	testMeshes = loadGltfMeshes(this, "../../assets/basicmesh.glb").value();
-
-	// delete the rectangle data on engine shutdown
-	_mainDeletionQueue.push_function(
-	[&]()
-	{
-		destroyBuffer(rectangle.indexBuffer);
-		destroyBuffer(rectangle.vertexBuffer);
-	});
 }
 
 void AgniEngine::initMeshPipeline()
@@ -999,7 +967,7 @@ void AgniEngine::initMeshPipeline()
 	// no blending
 	pipelineBuilder.disableBlending();
 
-	//pipelineBuilder.disableDepthtest();
+	// pipelineBuilder.disableDepthtest();
 	pipelineBuilder.enableDepthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
 	// connect the image format we will draw into, from draw image
@@ -1039,8 +1007,8 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 	VkViewport viewport = {};
 	viewport.x          = 0;
 	viewport.y          = 0;
-	viewport.width      = _drawExtent.width;
-	viewport.height     = _drawExtent.height;
+	viewport.width      = static_cast<float>(_drawExtent.width);
+	viewport.height     = static_cast<float>(_drawExtent.height);
 	viewport.minDepth   = 0.f;
 	viewport.maxDepth   = 1.f;
 

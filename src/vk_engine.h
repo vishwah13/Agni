@@ -124,7 +124,6 @@ public:
 	VkPipelineLayout _meshPipelineLayout;
 	VkPipeline       _meshPipeline;
 
-	GPUMeshBuffers rectangle;
 	std::vector<std::shared_ptr<MeshAsset>> testMeshes;
 
 	// immediate submit structures for ImGui
