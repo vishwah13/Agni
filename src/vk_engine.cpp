@@ -21,6 +21,9 @@
 #include <chrono>
 #include <thread>
 
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/transform.hpp>
+
 
 #ifdef NDEBUG
 constexpr bool bUseValidationLayers = false;
@@ -84,6 +87,12 @@ void AgniEngine::cleanup()
 			_device, _frames[i]._swapchainSemaphore, nullptr);
 
 			_frames[i]._deletionQueue.flush();
+		}
+
+		for (auto& mesh : testMeshes)
+		{
+			destroyBuffer(mesh->meshBuffers.indexBuffer);
+			destroyBuffer(mesh->meshBuffers.vertexBuffer);
 		}
 
 		// flush the global deletion queue
@@ -975,6 +984,8 @@ void AgniEngine::initDefaultData()
 
 	rectangle = uploadMesh(rect_indices, rect_vertices);
 
+	testMeshes = loadGltfMeshes(this, "../../assets/basicmesh.glb").value();
+
 	// delete the rectangle data on engine shutdown
 	_mainDeletionQueue.push_function(
 	[&]()
@@ -1106,9 +1117,22 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipeline);
 
+	glm::mat4 view = glm::translate(glm::vec3 {0, 0, -5});
+	// camera projection
+	glm::mat4 projection =
+	glm::perspective(glm::radians(70.f),
+	                 (float) _drawExtent.width / (float) _drawExtent.height,
+	                 10000.f,
+	                 0.1f);
+
+	// invert the Y direction on projection matrix so that we are more similar
+	// to opengl and gltf axis
+	projection[1][1] *= -1;
+
 	GPUDrawPushConstants push_constants;
-	push_constants.worldMatrix  = glm::mat4 {1.f};
-	push_constants.vertexBuffer = rectangle.vertexBufferAddress;
+	push_constants.worldMatrix = projection * view;
+	push_constants.vertexBuffer =
+	testMeshes[2]->meshBuffers.vertexBufferAddress;
 
 	vkCmdPushConstants(cmd,
 	                   _meshPipelineLayout,
@@ -1116,10 +1140,17 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 	                   0,
 	                   sizeof(GPUDrawPushConstants),
 	                   &push_constants);
-	vkCmdBindIndexBuffer(
-	cmd, rectangle.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+	vkCmdBindIndexBuffer(cmd,
+	                     testMeshes[2]->meshBuffers.indexBuffer.buffer,
+	                     0,
+	                     VK_INDEX_TYPE_UINT32);
 
-	vkCmdDrawIndexed(cmd, 6, 1, 0, 0, 0);
+	vkCmdDrawIndexed(cmd,
+	                 testMeshes[2]->surfaces[0].count,
+	                 1,
+	                 testMeshes[2]->surfaces[0].startIndex,
+	                 0,
+	                 0);
 
 	vkCmdEndRendering(cmd);
 }
