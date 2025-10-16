@@ -400,7 +400,7 @@ void AgniEngine::run()
 			ImGui::InputFloat4("data3", glm::value_ptr(selected.data.data3));
 			ImGui::InputFloat4("data4", glm::value_ptr(selected.data.data4));
 
-			ImGui::InputFloat3("color", glm::value_ptr(pcForTriangle.color));
+			//ImGui::InputFloat3("color", glm::value_ptr(pcForTriangle.color));
 		}
 		ImGui::End();
 
@@ -731,7 +731,6 @@ void AgniEngine::initPipelines()
 {
 
 	initBackgroundPipelines();
-	initTrianglePipeline();
 	initMeshPipeline();
 }
 
@@ -905,92 +904,6 @@ void AgniEngine::initImgui()
 	});
 }
 
-void AgniEngine::initTrianglePipeline()
-{
-
-	VkShaderModule triangleFragShader;
-	if (!vkutil::loadShaderModule(
-	    "../../shaders/glsl/colored_triangle.frag.spv",
-	    _device,
-	    &triangleFragShader))
-	{
-		fmt::print("Error when building the triangle fragment shader module");
-	}
-	else
-	{
-		fmt::print("Triangle fragment shader succesfully loaded");
-	}
-
-	VkShaderModule triangleVertexShader;
-	if (!vkutil::loadShaderModule(
-	    "../../shaders/glsl/colored_triangle.vert.spv",
-	    _device,
-	    &triangleVertexShader))
-	{
-		fmt::print("Error when building the triangle vertex shader module");
-	}
-	else
-	{
-		fmt::print("Triangle vertex shader succesfully loaded");
-	}
-
-	// build the pipeline layout that controls the inputs/outputs of the shader
-	// we are not using descriptor sets or other systems yet, so no need to use
-	// anything other than empty default
-	VkPipelineLayoutCreateInfo pipeline_layout_info =
-	vkinit::pipeline_layout_create_info();
-
-	VkPushConstantRange pushConstant {};
-	pushConstant.offset     = 0;
-	pushConstant.size       = sizeof(TrianglePushConstants);
-	pushConstant.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-	pipeline_layout_info.pushConstantRangeCount = 1;
-	pipeline_layout_info.pPushConstantRanges    = &pushConstant;
-	VK_CHECK(vkCreatePipelineLayout(
-	_device, &pipeline_layout_info, nullptr, &_trianglePipelineLayout));
-
-	pcForTriangle.color = glm::vec3(1.0f, 0.0f, 0.0f);
-
-	PipelineBuilder pipelineBuilder;
-
-	// use the triangle layout we created
-	pipelineBuilder._pipelineLayout = _trianglePipelineLayout;
-	// connecting the vertex and pixel shaders to the pipeline
-	pipelineBuilder.setShaders(triangleVertexShader, triangleFragShader);
-	// it will draw triangles
-	pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-	// filled triangles
-	pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
-	// no backface culling
-	pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
-	// no multisampling
-	pipelineBuilder.setMultisamplingNone();
-	// no blending
-	pipelineBuilder.disableBlending();
-	// no depth testing
-	//pipelineBuilder.disableDepthtest();
-	pipelineBuilder.enableDepthtest(true,VK_COMPARE_OP_GREATER_OR_EQUAL);
-
-	// connect the image format we will draw into, from draw image
-	pipelineBuilder.setColorAttachmentFormat(_drawImage.imageFormat);
-	pipelineBuilder.setDepthFormat(_depthImage.imageFormat);
-
-	// finally build the pipeline
-	_trianglePipeline = pipelineBuilder.buildPipeline(_device);
-
-	// clean structures
-	vkDestroyShaderModule(_device, triangleFragShader, nullptr);
-	vkDestroyShaderModule(_device, triangleVertexShader, nullptr);
-
-	_mainDeletionQueue.push_function(
-	[&]()
-	{
-		vkDestroyPipelineLayout(_device, _trianglePipelineLayout, nullptr);
-		vkDestroyPipeline(_device, _trianglePipeline, nullptr);
-	});
-}
-
 void AgniEngine::initDefaultData()
 {
 	std::array<Vertex, 4> rect_vertices;
@@ -1120,7 +1033,7 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 	vkinit::rendering_info(_drawExtent, &colorAttachment, &depthAttachment);
 	vkCmdBeginRendering(cmd, &renderInfo);
 
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _trianglePipeline);
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipeline);
 
 	// set dynamic viewport and scissor
 	VkViewport viewport = {};
@@ -1140,18 +1053,6 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 	scissor.extent.height = _drawExtent.height;
 
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
-
-	vkCmdPushConstants(cmd,
-	                   _trianglePipelineLayout,
-	                   VK_SHADER_STAGE_FRAGMENT_BIT,
-	                   0,
-	                   sizeof(TrianglePushConstants),
-	                   &pcForTriangle);
-
-	// launch a draw command to draw 3 vertices
-	vkCmdDraw(cmd, 3, 1, 0, 0);
-
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipeline);
 
 	glm::mat4 view = glm::translate(glm::vec3 {0, 0, -5});
 	// camera projection

@@ -121,9 +121,6 @@ public:
 	VkPipeline       _gradientPipeline;
 	VkPipelineLayout _gradientPipelineLayout;
 
-	VkPipeline       _trianglePipeline;
-	VkPipelineLayout _trianglePipelineLayout;
-
 	VkPipelineLayout _meshPipelineLayout;
 	VkPipeline       _meshPipeline;
 
@@ -138,8 +135,6 @@ public:
 	// compute shader effects shinanigans
 	std::vector<ComputeEffect> backgroundEffects;
 	int                        currentBackgroundEffect {0};
-
-	TrianglePushConstants pcForTriangle;
 
 
 	// initializes everything in the engine
@@ -180,7 +175,6 @@ private:
 	void initPipelines();
 	void initBackgroundPipelines();
 
-	void initTrianglePipeline();
 	void initDefaultData();
 	void initMeshPipeline();
 	void drawGeometry(VkCommandBuffer cmd);
