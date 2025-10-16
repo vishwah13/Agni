@@ -160,6 +160,10 @@ void AgniEngine::draw()
 	                        _drawImage.image,
 	                        VK_IMAGE_LAYOUT_GENERAL,
 	                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	vkutil::transitionImage(cmd,
+	                        _depthImage.image,
+	                        VK_IMAGE_LAYOUT_UNDEFINED,
+	                        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
 	drawGeometry(cmd);
 
@@ -475,6 +479,7 @@ void AgniEngine::initSwapchain()
 
 	createSwapchain(_windowExtent.width, _windowExtent.height);
 
+	// draw image
 	// draw image size will match the window
 	VkExtent3D drawImageExtent = {_windowExtent.width, _windowExtent.height, 1};
 	// hardcoding the draw format to 16 bit float
@@ -511,12 +516,39 @@ void AgniEngine::initSwapchain()
 	VK_CHECK(
 	vkCreateImageView(_device, &rview_info, nullptr, &_drawImage.imageView));
 
+	// depth image
+	_depthImage.imageFormat = VK_FORMAT_D32_SFLOAT;
+	_depthImage.imageExtent = drawImageExtent;
+	VkImageUsageFlags depthImageUsages {};
+	depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+	VkImageCreateInfo dimg_info = vkinit::image_create_info(
+	_depthImage.imageFormat, depthImageUsages, drawImageExtent);
+
+	// allocate and create the image
+	vmaCreateImage(_allocator,
+	               &dimg_info,
+	               &rimg_allocinfo,
+	               &_depthImage.image,
+	               &_depthImage.allocation,
+	               nullptr);
+
+	// build a image-view for the draw image to use for rendering
+	VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(
+	_depthImage.imageFormat, _depthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+	VK_CHECK(
+	vkCreateImageView(_device, &dview_info, nullptr, &_depthImage.imageView));
+
 	// add to deletion queues
 	_mainDeletionQueue.push_function(
 	[=]()
 	{
 		vkDestroyImageView(_device, _drawImage.imageView, nullptr);
 		vmaDestroyImage(_allocator, _drawImage.image, _drawImage.allocation);
+
+		vkDestroyImageView(_device, _depthImage.imageView, nullptr);
+		vmaDestroyImage(_allocator, _depthImage.image, _depthImage.allocation);
 	});
 }
 
@@ -937,11 +969,12 @@ void AgniEngine::initTrianglePipeline()
 	// no blending
 	pipelineBuilder.disableBlending();
 	// no depth testing
-	pipelineBuilder.disableDepthtest();
+	//pipelineBuilder.disableDepthtest();
+	pipelineBuilder.enableDepthtest(true,VK_COMPARE_OP_GREATER_OR_EQUAL);
 
 	// connect the image format we will draw into, from draw image
 	pipelineBuilder.setColorAttachmentFormat(_drawImage.imageFormat);
-	pipelineBuilder.setDepthFormat(VK_FORMAT_UNDEFINED);
+	pipelineBuilder.setDepthFormat(_depthImage.imageFormat);
 
 	// finally build the pipeline
 	_trianglePipeline = pipelineBuilder.buildPipeline(_device);
@@ -1053,11 +1086,12 @@ void AgniEngine::initMeshPipeline()
 	// no blending
 	pipelineBuilder.disableBlending();
 
-	pipelineBuilder.disableDepthtest();
+	//pipelineBuilder.disableDepthtest();
+	pipelineBuilder.enableDepthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
 	// connect the image format we will draw into, from draw image
 	pipelineBuilder.setColorAttachmentFormat(_drawImage.imageFormat);
-	pipelineBuilder.setDepthFormat(VK_FORMAT_UNDEFINED);
+	pipelineBuilder.setDepthFormat(_depthImage.imageFormat);
 
 	// finally build the pipeline
 	_meshPipeline = pipelineBuilder.buildPipeline(_device);
@@ -1079,9 +1113,11 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 	// begin a render pass  connected to our draw image
 	VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(
 	_drawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	VkRenderingAttachmentInfo depthAttachment = vkinit::depth_attachment_info(
+	_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
 	VkRenderingInfo renderInfo =
-	vkinit::rendering_info(_drawExtent, &colorAttachment, nullptr);
+	vkinit::rendering_info(_drawExtent, &colorAttachment, &depthAttachment);
 	vkCmdBeginRendering(cmd, &renderInfo);
 
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _trianglePipeline);
