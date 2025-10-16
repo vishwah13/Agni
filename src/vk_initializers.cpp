@@ -153,6 +153,7 @@ VkRenderingAttachmentInfo vkinit::depth_attachment_info(
     depthAttachment.imageLayout = layout;
     depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    // we are going to use depth 0 as the “far” value, and depth 1 as the near value.
     depthAttachment.clearValue.depthStencil.depth = 0.f;
 
     return depthAttachment;
