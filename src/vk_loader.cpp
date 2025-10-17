@@ -17,7 +17,7 @@
 std::optional<std::vector<std::shared_ptr<MeshAsset>>>
 loadGltfMeshes(AgniEngine* engine, std::filesystem::path filePath)
 {
-	std::cout << "Loading GLTF: " << filePath << std::endl;
+	std::cout << "Loading GLTF: " << filePath << "\n" << std::endl;
 
 	fastgltf::Parser parser {};
 

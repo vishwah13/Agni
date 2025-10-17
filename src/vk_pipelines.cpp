@@ -242,3 +242,36 @@ void PipelineBuilder::enableDepthtest(bool depthWriteEnable, VkCompareOp op)
 	_depthStencil.minDepthBounds        = 0.f;
 	_depthStencil.maxDepthBounds        = 1.f;
 }
+
+// formula for blending in vulkan: outColor = srcColor * srcColorBlendFactor
+// <op> dstColor * dstColorBlendFactor;
+// For additive : outColor = srcColor.rgb * srcColor.a + dstColor.rgb * 1.0
+void PipelineBuilder::enableBlendingAdditive()
+{
+	_colorBlendAttachment.colorWriteMask =
+	VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+	VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	_colorBlendAttachment.blendEnable         = VK_TRUE;
+	_colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+	_colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+	_colorBlendAttachment.colorBlendOp        = VK_BLEND_OP_ADD;
+	_colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	_colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+	_colorBlendAttachment.alphaBlendOp        = VK_BLEND_OP_ADD;
+}
+
+// For alphablend : outColor = srcColor.rgb * srcColor.a + dstColor.rgb * (1.0 - srcColor.a)
+void PipelineBuilder::enableBlendingAlphablend()
+{
+	_colorBlendAttachment.colorWriteMask =
+	VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+	VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	_colorBlendAttachment.blendEnable         = VK_TRUE;
+	_colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+	_colorBlendAttachment.dstColorBlendFactor =
+	VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	_colorBlendAttachment.colorBlendOp        = VK_BLEND_OP_ADD;
+	_colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	_colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+	_colorBlendAttachment.alphaBlendOp        = VK_BLEND_OP_ADD;
+}
