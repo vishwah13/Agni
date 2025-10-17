@@ -47,7 +47,8 @@ void AgniEngine::init()
 	// We initialize SDL and create a window with it.
 	SDL_Init(SDL_INIT_VIDEO);
 
-	SDL_WindowFlags window_flags = (SDL_WindowFlags) (SDL_WINDOW_VULKAN);
+	SDL_WindowFlags window_flags =
+	(SDL_WindowFlags) (SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
 
 	_window = SDL_CreateWindow(
 	"Agni", _windowExtent.width, _windowExtent.height, window_flags);
@@ -124,12 +125,17 @@ void AgniEngine::draw()
 
 	// request image from the swapchain
 	uint32_t swapchainImageIndex;
-	VK_CHECK(vkAcquireNextImageKHR(_device,
-	                               _swapchain,
-	                               1000000000,
-	                               getCurrentFrame()._swapchainSemaphore,
-	                               nullptr,
-	                               &swapchainImageIndex));
+	VkResult e = vkAcquireNextImageKHR(_device,
+	                                   _swapchain,
+	                                   1000000000,
+	                                   getCurrentFrame()._swapchainSemaphore,
+	                                   nullptr,
+	                                   &swapchainImageIndex);
+	if (e == VK_ERROR_OUT_OF_DATE_KHR)
+	{
+		resizeRequested = true;
+		return;
+	}
 
 	VkCommandBuffer cmd = getCurrentFrame()._mainCommandBuffer;
 
@@ -142,8 +148,12 @@ void AgniEngine::draw()
 	VkCommandBufferBeginInfo cmdBeginInfo = vkinit::command_buffer_begin_info(
 	VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
-	_drawExtent.width  = _drawImage.imageExtent.width;
-	_drawExtent.height = _drawImage.imageExtent.height;
+	_drawExtent.width =
+	std::min(_swapchainExtent.width, _drawImage.imageExtent.width) *
+	renderScale;
+	_drawExtent.height =
+	std::min(_swapchainExtent.height, _drawImage.imageExtent.height) *
+	renderScale;
 
 	// start the command buffer recording
 	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
@@ -240,7 +250,11 @@ void AgniEngine::draw()
 
 	presentInfo.pImageIndices = &swapchainImageIndex;
 
-	VK_CHECK(vkQueuePresentKHR(_graphicsQueue, &presentInfo));
+	VkResult presentResult = vkQueuePresentKHR(_graphicsQueue, &presentInfo);
+	if (presentResult == VK_ERROR_OUT_OF_DATE_KHR)
+	{
+		resizeRequested = true;
+	}
 
 	// increase the number of frames drawn
 	_frameNumber++;
@@ -377,6 +391,11 @@ void AgniEngine::run()
 			continue;
 		}
 
+		if (resizeRequested)
+		{
+			resizeSwapchain();
+		}
+
 		// imgui new frame
 		ImGui_ImplVulkan_NewFrame();
 		ImGui_ImplSDL3_NewFrame();
@@ -384,6 +403,7 @@ void AgniEngine::run()
 
 		if (ImGui::Begin("background"))
 		{
+			ImGui::SliderFloat("Render Scale", &renderScale, 0.3f, 1.f);
 
 			ComputeEffect& selected =
 			backgroundEffects[currentBackgroundEffect];
@@ -644,6 +664,22 @@ void AgniEngine::createSwapchain(uint32_t width, uint32_t height)
 	_swapchain           = vkbSwapchain.swapchain;
 	_swapchainImages     = vkbSwapchain.get_images().value();
 	_swapchainImageViews = vkbSwapchain.get_image_views().value();
+}
+
+void AgniEngine::resizeSwapchain()
+{
+	vkDeviceWaitIdle(_device);
+
+	destroySwapchain();
+
+	int w, h;
+	SDL_GetWindowSize(_window, &w, &h);
+	_windowExtent.width  = w;
+	_windowExtent.height = h;
+
+	createSwapchain(_windowExtent.width, _windowExtent.height);
+
+	resizeRequested = false;
 }
 
 void AgniEngine::destroySwapchain()
@@ -917,7 +953,8 @@ void AgniEngine::initMeshPipeline()
 	    _device,
 	    &triangleFragShader))
 	{
-		fmt::print("Error when building the triangle fragment shader module. \n");
+		fmt::print(
+		"Error when building the triangle fragment shader module. \n");
 	}
 	else
 	{
@@ -972,7 +1009,7 @@ void AgniEngine::initMeshPipeline()
 
 	// enable blending
 	pipelineBuilder.enableBlendingAdditive();
-	//pipelineBuilder.enableBlendingAlphablend();
+	// pipelineBuilder.enableBlendingAlphablend();
 
 	// connect the image format we will draw into, from draw image
 	pipelineBuilder.setColorAttachmentFormat(_drawImage.imageFormat);

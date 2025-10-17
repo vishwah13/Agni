@@ -21,7 +21,10 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
 
-
+// it's not very good now it just gives an error code, need to improve it
+// later
+// need something like this:
+// https://github.com/SaschaWillems/Vulkan/blob/master/base/VulkanTools.h
 #define VK_CHECK(x)                                                           \
 	do                                                                        \
 	{                                                                         \

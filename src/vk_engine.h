@@ -75,7 +75,7 @@ public:
 	bool       _isInitialized {false};
 	int        _frameNumber {0};
 	bool       stop_rendering {false};
-	VkExtent2D _windowExtent {1700, 900};
+	VkExtent2D _windowExtent {1920, 1080};
 
 	struct SDL_Window* _window {nullptr};
 
@@ -97,6 +97,7 @@ public:
 	std::vector<VkImage>     _swapchainImages;
 	std::vector<VkImageView> _swapchainImageViews;
 	VkExtent2D               _swapchainExtent;
+	bool                     resizeRequested {false};
 
 	FrameData _frames[FRAME_OVERLAP];
 
@@ -112,6 +113,7 @@ public:
 	AllocatedImage _drawImage;
 	AllocatedImage _depthImage;
 	VkExtent2D     _drawExtent;
+	float          renderScale = 1.f;
 
 	DescriptorAllocator globalDescriptorAllocator;
 
@@ -163,6 +165,7 @@ private:
 	void initSyncStructures();
 
 	void createSwapchain(uint32_t width, uint32_t height);
+	void resizeSwapchain();
 	void destroySwapchain();
 
 	void initVMA();
