@@ -917,11 +917,11 @@ void AgniEngine::initMeshPipeline()
 	    _device,
 	    &triangleFragShader))
 	{
-		fmt::print("Error when building the triangle fragment shader module");
+		fmt::print("Error when building the triangle fragment shader module. \n");
 	}
 	else
 	{
-		fmt::print("Triangle fragment shader succesfully loaded");
+		fmt::print("Triangle fragment shader succesfully loaded. \n");
 	}
 
 	VkShaderModule triangleVertexShader;
@@ -930,11 +930,11 @@ void AgniEngine::initMeshPipeline()
 	    _device,
 	    &triangleVertexShader))
 	{
-		fmt::print("Error when building the triangle vertex shader module");
+		fmt::print("Error when building the triangle vertex shader module. \n");
 	}
 	else
 	{
-		fmt::print("Triangle vertex shader succesfully loaded");
+		fmt::print("Triangle vertex shader succesfully loaded. \n");
 	}
 
 	VkPushConstantRange bufferRange {};
@@ -969,6 +969,10 @@ void AgniEngine::initMeshPipeline()
 
 	// pipelineBuilder.disableDepthtest();
 	pipelineBuilder.enableDepthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
+
+	// enable blending
+	pipelineBuilder.enableBlendingAdditive();
+	//pipelineBuilder.enableBlendingAlphablend();
 
 	// connect the image format we will draw into, from draw image
 	pipelineBuilder.setColorAttachmentFormat(_drawImage.imageFormat);
