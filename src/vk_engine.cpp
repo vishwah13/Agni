@@ -121,6 +121,7 @@ void AgniEngine::draw()
 	_device, 1, &getCurrentFrame()._renderFence, true, 1000000000));
 
 	getCurrentFrame()._deletionQueue.flush();
+	getCurrentFrame()._frameDescriptors.clearPools(_device);
 	VK_CHECK(vkResetFences(_device, 1, &getCurrentFrame()._renderFence));
 
 	// request image from the swapchain
@@ -737,21 +738,47 @@ void AgniEngine::initDescriptors()
 	_drawImageDescriptors =
 	globalDescriptorAllocator.allocate(_device, _drawImageDescriptorLayout);
 
-	VkDescriptorImageInfo imgInfo {};
-	imgInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-	imgInfo.imageView   = _drawImage.imageView;
+	{
+		DescriptorLayoutBuilder builder;
+		builder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		_singleImageDescriptorLayout =
+		builder.build(_device, VK_SHADER_STAGE_FRAGMENT_BIT);
+	}
 
-	VkWriteDescriptorSet drawImageWrite = {};
-	drawImageWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	drawImageWrite.pNext = nullptr;
+	{
+		DescriptorLayoutBuilder builder;
+		builder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+		_gpuSceneDataDescriptorLayout = builder.build(
+		_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+	}
 
-	drawImageWrite.dstBinding      = 0;
-	drawImageWrite.dstSet          = _drawImageDescriptors;
-	drawImageWrite.descriptorCount = 1;
-	drawImageWrite.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-	drawImageWrite.pImageInfo      = &imgInfo;
+	DescriptorWriter writer;
+	writer.writeImage(0,
+	                  _drawImage.imageView,
+	                  VK_NULL_HANDLE,
+	                  VK_IMAGE_LAYOUT_GENERAL,
+	                  VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
-	vkUpdateDescriptorSets(_device, 1, &drawImageWrite, 0, nullptr);
+	writer.updateSet(_device, _drawImageDescriptors);
+
+	
+
+	for (int i = 0; i < FRAME_OVERLAP; i++)
+	{
+		// create a descriptor pool
+		std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> frame_sizes = {
+		{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3},
+		{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3},
+		{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3},
+		{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4},
+		};
+
+		_frames[i]._frameDescriptors = DescriptorAllocatorGrowable {};
+		_frames[i]._frameDescriptors.init(_device, 1000, frame_sizes);
+
+		_mainDeletionQueue.push_function(
+		[&, i]() { _frames[i]._frameDescriptors.destroyPools(_device); });
+	}
 
 	// adding vkDestroyDescriptorPool to the deletion queue
 	_mainDeletionQueue.push_function(
@@ -760,6 +787,10 @@ void AgniEngine::initDescriptors()
 		globalDescriptorAllocator.destroyPool(_device);
 		vkDestroyDescriptorSetLayout(
 		_device, _drawImageDescriptorLayout, nullptr);
+		vkDestroyDescriptorSetLayout(
+		_device, _singleImageDescriptorLayout, nullptr);
+		vkDestroyDescriptorSetLayout(
+		_device, _gpuSceneDataDescriptorLayout, nullptr);
 	});
 }
 
@@ -943,13 +974,71 @@ void AgniEngine::initImgui()
 void AgniEngine::initDefaultData()
 {
 	testMeshes = loadGltfMeshes(this, "../../assets/basicmesh.glb").value();
+
+	// 3 default textures, white, grey, black. 1 pixel each
+	uint32_t white = glm::packUnorm4x8(glm::vec4(1, 1, 1, 1));
+	_whiteImage    = createImage((void*) &white,
+                              VkExtent3D {1, 1, 1},
+                              VK_FORMAT_R8G8B8A8_UNORM,
+                              VK_IMAGE_USAGE_SAMPLED_BIT);
+
+	uint32_t grey = glm::packUnorm4x8(glm::vec4(0.66f, 0.66f, 0.66f, 1));
+	_greyImage    = createImage((void*) &grey,
+                             VkExtent3D {1, 1, 1},
+                             VK_FORMAT_R8G8B8A8_UNORM,
+                             VK_IMAGE_USAGE_SAMPLED_BIT);
+
+	uint32_t black = glm::packUnorm4x8(glm::vec4(0, 0, 0, 0));
+	_blackImage    = createImage((void*) &black,
+                              VkExtent3D {1, 1, 1},
+                              VK_FORMAT_R8G8B8A8_UNORM,
+                              VK_IMAGE_USAGE_SAMPLED_BIT);
+
+	// checkerboard image
+	uint32_t magenta = glm::packUnorm4x8(glm::vec4(1, 0, 1, 1));
+	std::array<uint32_t, 16 * 16> pixels; // for 16x16 checkerboard texture
+	for (int x = 0; x < 16; x++)
+	{
+		for (int y = 0; y < 16; y++)
+		{
+			pixels[y * 16 + x] = ((x % 2) ^ (y % 2)) ? magenta : black;
+		}
+	}
+	_errorCheckerboardImage = createImage(pixels.data(),
+	                                      VkExtent3D {16, 16, 1},
+	                                      VK_FORMAT_R8G8B8A8_UNORM,
+	                                      VK_IMAGE_USAGE_SAMPLED_BIT);
+
+	VkSamplerCreateInfo sampl = {.sType =
+	                             VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+
+	sampl.magFilter = VK_FILTER_NEAREST;
+	sampl.minFilter = VK_FILTER_NEAREST;
+
+	vkCreateSampler(_device, &sampl, nullptr, &_defaultSamplerNearest);
+
+	sampl.magFilter = VK_FILTER_LINEAR;
+	sampl.minFilter = VK_FILTER_LINEAR;
+	vkCreateSampler(_device, &sampl, nullptr, &_defaultSamplerLinear);
+
+	_mainDeletionQueue.push_function(
+	[&]()
+	{
+		vkDestroySampler(_device, _defaultSamplerNearest, nullptr);
+		vkDestroySampler(_device, _defaultSamplerLinear, nullptr);
+
+		destroyImage(_whiteImage);
+		destroyImage(_greyImage);
+		destroyImage(_blackImage);
+		destroyImage(_errorCheckerboardImage);
+	});
 }
 
 void AgniEngine::initMeshPipeline()
 {
 	VkShaderModule triangleFragShader;
 	if (!vkutil::loadShaderModule(
-	    "../../shaders/glsl/colored_triangle_mesh.frag.spv",
+	    "../../shaders/glsl/tex_image.frag.spv",
 	    _device,
 	    &triangleFragShader))
 	{
@@ -983,7 +1072,8 @@ void AgniEngine::initMeshPipeline()
 	vkinit::pipeline_layout_create_info();
 	pipeline_layout_info.pPushConstantRanges    = &bufferRange;
 	pipeline_layout_info.pushConstantRangeCount = 1;
-
+	pipeline_layout_info.pSetLayouts    = &_singleImageDescriptorLayout;
+	pipeline_layout_info.setLayoutCount = 1;
 	VK_CHECK(vkCreatePipelineLayout(
 	_device, &pipeline_layout_info, nullptr, &_meshPipelineLayout));
 
@@ -1004,11 +1094,11 @@ void AgniEngine::initMeshPipeline()
 	// no blending
 	pipelineBuilder.disableBlending();
 
-	// pipelineBuilder.disableDepthtest();
+	pipelineBuilder.disableDepthtest();
 	pipelineBuilder.enableDepthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
 	// enable blending
-	pipelineBuilder.enableBlendingAdditive();
+	//pipelineBuilder.enableBlendingAdditive();
 	// pipelineBuilder.enableBlendingAlphablend();
 
 	// connect the image format we will draw into, from draw image
@@ -1043,6 +1133,29 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 	vkCmdBeginRendering(cmd, &renderInfo);
 
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipeline);
+
+	// bind a texture
+	VkDescriptorSet imageSet = getCurrentFrame()._frameDescriptors.allocate(
+	_device, _singleImageDescriptorLayout);
+	{
+		DescriptorWriter writer;
+		writer.writeImage(0,
+		                   _errorCheckerboardImage.imageView,
+		                   _defaultSamplerNearest,
+		                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		                   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
+		writer.updateSet(_device, imageSet);
+	}
+
+	vkCmdBindDescriptorSets(cmd,
+	                        VK_PIPELINE_BIND_POINT_GRAPHICS,
+	                        _meshPipelineLayout,
+	                        0,
+	                        1,
+	                        &imageSet,
+	                        0,
+	                        nullptr);
 
 	// set dynamic viewport and scissor
 	VkViewport viewport = {};
@@ -1098,6 +1211,39 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 	                 0,
 	                 0);
 
+	// this is not the best way to do it. it's just one way to do it. It would
+	// be better to hold the buffers cached in our FrameData structure, but we
+	// will be doing it this way to show how. There are cases with dynamic draws
+	// and passes where you might want to do it this way.
+	//  allocate a new uniform buffer for the scene data
+	AllocatedBuffer gpuSceneDataBuffer =
+	createBuffer(sizeof(GPUSceneData),
+	             VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+	             VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+	// add it to the deletion queue of this frame so it gets deleted once its
+	// been used
+	getCurrentFrame()._deletionQueue.push_function(
+	[=, this]() { destroyBuffer(gpuSceneDataBuffer); });
+
+	// write the buffer
+	GPUSceneData* sceneUniformData =
+	(GPUSceneData*) gpuSceneDataBuffer.allocation->GetMappedData();
+	*sceneUniformData = sceneData;
+
+	// create a descriptor set that binds that buffer and update it
+	VkDescriptorSet globalDescriptor =
+	getCurrentFrame()._frameDescriptors.allocate(_device,
+	                                             _gpuSceneDataDescriptorLayout);
+
+	DescriptorWriter writer;
+	writer.writeBuffer(0,
+	                   gpuSceneDataBuffer.buffer,
+	                   sizeof(GPUSceneData),
+	                   0,
+	                   VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+	writer.updateSet(_device, globalDescriptor);
+
 	vkCmdEndRendering(cmd);
 }
 
@@ -1132,6 +1278,118 @@ AllocatedBuffer AgniEngine::createBuffer(size_t             allocSize,
 void AgniEngine::destroyBuffer(const AllocatedBuffer& buffer)
 {
 	vmaDestroyBuffer(_allocator, buffer.buffer, buffer.allocation);
+}
+
+AllocatedImage AgniEngine::createImage(VkExtent3D        size,
+                                       VkFormat          format,
+                                       VkImageUsageFlags usage,
+                                       bool              mipmapped)
+{
+	AllocatedImage newImage;
+	newImage.imageFormat = format;
+	newImage.imageExtent = size;
+
+	VkImageCreateInfo img_info = vkinit::image_create_info(format, usage, size);
+	if (mipmapped)
+	{
+		img_info.mipLevels = static_cast<uint32_t>(std::floor(
+		                     std::log2(std::max(size.width, size.height)))) +
+		                     1;
+	}
+
+	// always allocate images on dedicated GPU memory
+	VmaAllocationCreateInfo allocinfo = {};
+	allocinfo.usage                   = VMA_MEMORY_USAGE_GPU_ONLY;
+	allocinfo.requiredFlags =
+	VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+	// allocate and create the image
+	VK_CHECK(vmaCreateImage(_allocator,
+	                        &img_info,
+	                        &allocinfo,
+	                        &newImage.image,
+	                        &newImage.allocation,
+	                        nullptr));
+
+	// if the format is a depth format, we will need to have it use the correct
+	// aspect flag
+	VkImageAspectFlags aspectFlag = VK_IMAGE_ASPECT_COLOR_BIT;
+	if (format == VK_FORMAT_D32_SFLOAT)
+	{
+		aspectFlag = VK_IMAGE_ASPECT_DEPTH_BIT;
+	}
+
+	// build a image-view for the image
+	VkImageViewCreateInfo view_info =
+	vkinit::imageview_create_info(format, newImage.image, aspectFlag);
+	view_info.subresourceRange.levelCount = img_info.mipLevels;
+
+	VK_CHECK(
+	vkCreateImageView(_device, &view_info, nullptr, &newImage.imageView));
+
+	return newImage;
+}
+
+AllocatedImage AgniEngine::createImage(void*             data,
+                                       VkExtent3D        size,
+                                       VkFormat          format,
+                                       VkImageUsageFlags usage,
+                                       bool              mipmapped)
+{
+	size_t          data_size    = size.depth * size.width * size.height * 4;
+	AllocatedBuffer uploadbuffer = createBuffer(
+	data_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+	memcpy(uploadbuffer.info.pMappedData, data, data_size);
+
+	AllocatedImage new_image = createImage(
+	size,
+	format,
+	usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+	mipmapped);
+
+	immediateSubmit(
+	[&](VkCommandBuffer cmd)
+	{
+		vkutil::transitionImage(cmd,
+		                        new_image.image,
+		                        VK_IMAGE_LAYOUT_UNDEFINED,
+		                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+		VkBufferImageCopy copyRegion = {};
+		copyRegion.bufferOffset      = 0;
+		copyRegion.bufferRowLength   = 0;
+		copyRegion.bufferImageHeight = 0;
+
+		copyRegion.imageSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+		copyRegion.imageSubresource.mipLevel       = 0;
+		copyRegion.imageSubresource.baseArrayLayer = 0;
+		copyRegion.imageSubresource.layerCount     = 1;
+		copyRegion.imageExtent                     = size;
+
+		// copy the buffer into the image
+		vkCmdCopyBufferToImage(cmd,
+		                       uploadbuffer.buffer,
+		                       new_image.image,
+		                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		                       1,
+		                       &copyRegion);
+
+		vkutil::transitionImage(cmd,
+		                        new_image.image,
+		                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	});
+
+	destroyBuffer(uploadbuffer);
+
+	return new_image;
+}
+
+void AgniEngine::destroyImage(const AllocatedImage& img)
+{
+	vkDestroyImageView(_device, img.imageView, nullptr);
+	vmaDestroyImage(_allocator, img.image, img.allocation);
 }
 
 // Note that this pattern is not very efficient, as we are waiting for the GPU
