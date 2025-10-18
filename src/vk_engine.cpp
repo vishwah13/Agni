@@ -523,11 +523,8 @@ void AgniEngine::initSwapchain()
 	_mainDeletionQueue.push_function(
 	[=]()
 	{
-		vkDestroyImageView(_device, _drawImage.imageView, nullptr);
-		vmaDestroyImage(_allocator, _drawImage.image, _drawImage.allocation);
-
-		vkDestroyImageView(_device, _depthImage.imageView, nullptr);
-		vmaDestroyImage(_allocator, _depthImage.image, _depthImage.allocation);
+		destroyImage(_drawImage);
+		destroyImage(_depthImage);
 	});
 }
 
