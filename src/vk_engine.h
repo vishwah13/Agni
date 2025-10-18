@@ -117,7 +117,7 @@ public:
 	VkExtent2D     _drawExtent;
 	float          renderScale = 1.f;
 
-	DescriptorAllocator globalDescriptorAllocator;
+	DescriptorAllocatorGrowable globalDescriptorAllocator;
 
 	VkDescriptorSet       _drawImageDescriptors;
 	VkDescriptorSetLayout _drawImageDescriptorLayout;
