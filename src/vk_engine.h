@@ -44,6 +44,8 @@ struct FrameData
 	VkFence     _renderFence;
 
 	DeletionQueue _deletionQueue;
+	// To allocate descriptor sets at runtime.
+	DescriptorAllocatorGrowable _frameDescriptors;
 };
 
 struct ComputePushConstants
@@ -137,6 +139,9 @@ public:
 	std::vector<ComputeEffect> backgroundEffects;
 	int                        currentBackgroundEffect {0};
 
+	GPUSceneData          sceneData;
+	VkDescriptorSetLayout _gpuSceneDataDescriptorLayout;
+
 
 	// initializes everything in the engine
 	void init();
@@ -159,6 +164,16 @@ public:
 	                          std::span<Vertex>   vertices);
 
 private:
+	AllocatedImage _whiteImage;
+	AllocatedImage _blackImage;
+	AllocatedImage _greyImage;
+	AllocatedImage _errorCheckerboardImage;
+
+	VkSampler _defaultSamplerLinear;
+	VkSampler _defaultSamplerNearest;
+
+	VkDescriptorSetLayout _singleImageDescriptorLayout;
+
 	void initVulkan();
 	void initSwapchain();
 	void initCommands();
@@ -187,4 +202,15 @@ private:
 	                             VmaMemoryUsage     memoryUsage);
 
 	void destroyBuffer(const AllocatedBuffer& buffer);
+
+	AllocatedImage createImage(VkExtent3D        size,
+	                           VkFormat          format,
+	                           VkImageUsageFlags usage,
+	                           bool              mipmapped = false);
+	AllocatedImage createImage(void*             data,
+	                           VkExtent3D        size,
+	                           VkFormat          format,
+	                           VkImageUsageFlags usage,
+	                           bool              mipmapped = false);
+	void           destroyImage(const AllocatedImage& img);
 };
