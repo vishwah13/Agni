@@ -500,12 +500,9 @@ void AgniEngine::initSwapchain()
 
 	createSwapchain(_windowExtent.width, _windowExtent.height);
 
-	// draw image
-	// draw image size will match the window
+	// draw and depth image creation.
+	// draw and depth image size will match the window
 	VkExtent3D drawImageExtent = {_windowExtent.width, _windowExtent.height, 1};
-	// hardcoding the draw format to 16 bit float
-	_drawImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
-	_drawImage.imageExtent = drawImageExtent;
 
 	VkImageUsageFlags drawImageUsages {};
 	drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
@@ -513,53 +510,14 @@ void AgniEngine::initSwapchain()
 	drawImageUsages |= VK_IMAGE_USAGE_STORAGE_BIT;
 	drawImageUsages |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-	VkImageCreateInfo rimg_info = vkinit::image_create_info(
-	_drawImage.imageFormat, drawImageUsages, drawImageExtent);
-
-	// for the draw image, we want to allocate it from gpu local memory
-	VmaAllocationCreateInfo rimg_allocinfo = {};
-	rimg_allocinfo.usage                   = VMA_MEMORY_USAGE_GPU_ONLY;
-	rimg_allocinfo.requiredFlags =
-	VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-	// allocate and create the image
-	vmaCreateImage(_allocator,
-	               &rimg_info,
-	               &rimg_allocinfo,
-	               &_drawImage.image,
-	               &_drawImage.allocation,
-	               nullptr);
-
-	// build a image-view for the draw image to use for rendering
-	VkImageViewCreateInfo rview_info = vkinit::imageview_create_info(
-	_drawImage.imageFormat, _drawImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
-
-	VK_CHECK(
-	vkCreateImageView(_device, &rview_info, nullptr, &_drawImage.imageView));
-
-	// depth image
-	_depthImage.imageFormat = VK_FORMAT_D32_SFLOAT;
-	_depthImage.imageExtent = drawImageExtent;
 	VkImageUsageFlags depthImageUsages {};
 	depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
-	VkImageCreateInfo dimg_info = vkinit::image_create_info(
-	_depthImage.imageFormat, depthImageUsages, drawImageExtent);
+	_drawImage = createImage(
+	drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageUsages);
 
-	// allocate and create the image
-	vmaCreateImage(_allocator,
-	               &dimg_info,
-	               &rimg_allocinfo,
-	               &_depthImage.image,
-	               &_depthImage.allocation,
-	               nullptr);
-
-	// build a image-view for the draw image to use for rendering
-	VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(
-	_depthImage.imageFormat, _depthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
-
-	VK_CHECK(
-	vkCreateImageView(_device, &dview_info, nullptr, &_depthImage.imageView));
+	_depthImage =
+	createImage(drawImageExtent, VK_FORMAT_D32_SFLOAT, depthImageUsages);
 
 	// add to deletion queues
 	_mainDeletionQueue.push_function(
