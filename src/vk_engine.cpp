@@ -722,10 +722,10 @@ void AgniEngine::initDescriptors()
 {
 
 	// create a descriptor pool that will hold 10 sets with 1 image each
-	std::vector<DescriptorAllocator::PoolSizeRatio> sizes = {
+	std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> sizes = {
 	{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1}};
 
-	globalDescriptorAllocator.initPool(_device, 10, sizes);
+	globalDescriptorAllocator.init(_device, 10, sizes);
 
 	// make the descriptor set layout for our compute draw
 	{
@@ -761,7 +761,6 @@ void AgniEngine::initDescriptors()
 
 	writer.updateSet(_device, _drawImageDescriptors);
 
-	
 
 	for (int i = 0; i < FRAME_OVERLAP; i++)
 	{
@@ -784,7 +783,7 @@ void AgniEngine::initDescriptors()
 	_mainDeletionQueue.push_function(
 	[&]()
 	{
-		globalDescriptorAllocator.destroyPool(_device);
+		globalDescriptorAllocator.destroyPools(_device);
 		vkDestroyDescriptorSetLayout(
 		_device, _drawImageDescriptorLayout, nullptr);
 		vkDestroyDescriptorSetLayout(
@@ -1038,9 +1037,7 @@ void AgniEngine::initMeshPipeline()
 {
 	VkShaderModule triangleFragShader;
 	if (!vkutil::loadShaderModule(
-	    "../../shaders/glsl/tex_image.frag.spv",
-	    _device,
-	    &triangleFragShader))
+	    "../../shaders/glsl/tex_image.frag.spv", _device, &triangleFragShader))
 	{
 		fmt::print(
 		"Error when building the triangle fragment shader module. \n");
@@ -1072,8 +1069,8 @@ void AgniEngine::initMeshPipeline()
 	vkinit::pipeline_layout_create_info();
 	pipeline_layout_info.pPushConstantRanges    = &bufferRange;
 	pipeline_layout_info.pushConstantRangeCount = 1;
-	pipeline_layout_info.pSetLayouts    = &_singleImageDescriptorLayout;
-	pipeline_layout_info.setLayoutCount = 1;
+	pipeline_layout_info.pSetLayouts            = &_singleImageDescriptorLayout;
+	pipeline_layout_info.setLayoutCount         = 1;
 	VK_CHECK(vkCreatePipelineLayout(
 	_device, &pipeline_layout_info, nullptr, &_meshPipelineLayout));
 
@@ -1098,7 +1095,7 @@ void AgniEngine::initMeshPipeline()
 	pipelineBuilder.enableDepthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
 	// enable blending
-	//pipelineBuilder.enableBlendingAdditive();
+	// pipelineBuilder.enableBlendingAdditive();
 	// pipelineBuilder.enableBlendingAlphablend();
 
 	// connect the image format we will draw into, from draw image
@@ -1140,10 +1137,10 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 	{
 		DescriptorWriter writer;
 		writer.writeImage(0,
-		                   _errorCheckerboardImage.imageView,
-		                   _defaultSamplerNearest,
-		                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		                   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		                  _errorCheckerboardImage.imageView,
+		                  _defaultSamplerNearest,
+		                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		                  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
 		writer.updateSet(_device, imageSet);
 	}
