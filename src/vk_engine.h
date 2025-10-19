@@ -71,6 +71,68 @@ struct ComputeEffect
 	ComputePushConstants data;
 };
 
+struct GLTFMetallic_Roughness
+{
+	MaterialPipeline opaquePipeline;
+	MaterialPipeline transparentPipeline;
+
+	VkDescriptorSetLayout materialLayout;
+
+	struct MaterialConstants
+	{
+		glm::vec4 colorFactors;
+		glm::vec4 metal_rough_factors;
+		// padding, we need it anyway for uniform buffers
+		glm::vec4 extra[14];
+	};
+
+	struct MaterialResources
+	{
+		AllocatedImage colorImage;
+		VkSampler      colorSampler;
+		AllocatedImage metalRoughImage;
+		VkSampler      metalRoughSampler;
+		VkBuffer       dataBuffer;
+		uint32_t       dataBufferOffset;
+	};
+
+	DescriptorWriter writer;
+
+	void buildPipelines(AgniEngine* engine);
+	void clearResources(VkDevice device);
+
+	MaterialInstance
+	writeMaterial(VkDevice                     device,
+	              MaterialPass                 pass,
+	              const MaterialResources&     resources,
+	              DescriptorAllocatorGrowable& descriptorAllocator);
+};
+
+struct MeshNode : public Node
+{
+
+	std::shared_ptr<MeshAsset> mesh;
+
+	virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx) override;
+};
+
+struct RenderObject
+{
+	uint32_t indexCount;
+	uint32_t firstIndex;
+	VkBuffer indexBuffer;
+
+	MaterialInstance* material;
+
+	glm::mat4       transform;
+	VkDeviceAddress vertexBufferAddress;
+};
+
+struct DrawContext
+{
+	std::vector<RenderObject> OpaqueSurfaces;
+};
+
 class AgniEngine
 {
 public:
@@ -164,15 +226,24 @@ public:
 	                          std::span<Vertex>   vertices);
 
 private:
+	// default textures
 	AllocatedImage _whiteImage;
 	AllocatedImage _blackImage;
 	AllocatedImage _greyImage;
 	AllocatedImage _errorCheckerboardImage;
 
+	// default sampleres
 	VkSampler _defaultSamplerLinear;
 	VkSampler _defaultSamplerNearest;
 
+	// default materials
+	MaterialInstance       defaultData;
+	GLTFMetallic_Roughness metalRoughMaterial;
+
 	VkDescriptorSetLayout _singleImageDescriptorLayout;
+
+	DrawContext                                            mainDrawContext;
+	std::unordered_map<std::string, std::shared_ptr<Node>> loadedNodes;
 
 	void initVulkan();
 	void initSwapchain();
@@ -195,6 +266,8 @@ private:
 	void initDefaultData();
 	void initMeshPipeline();
 	void drawGeometry(VkCommandBuffer cmd);
+
+	void updateScene();
 
 	// creating and destroying buffers can go in their own class later ??
 	AllocatedBuffer createBuffer(size_t             allocSize,
