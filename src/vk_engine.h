@@ -187,9 +187,6 @@ public:
 	VkPipeline       _gradientPipeline;
 	VkPipelineLayout _gradientPipelineLayout;
 
-	VkPipelineLayout _meshPipelineLayout;
-	VkPipeline       _meshPipeline;
-
 	std::vector<std::shared_ptr<MeshAsset>> testMeshes;
 
 	// immediate submit structures for ImGui
@@ -264,7 +261,6 @@ private:
 	void initBackgroundPipelines();
 
 	void initDefaultData();
-	void initMeshPipeline();
 	void drawGeometry(VkCommandBuffer cmd);
 
 	void updateScene();

@@ -756,7 +756,6 @@ void AgniEngine::initPipelines()
 {
 
 	initBackgroundPipelines();
-	initMeshPipeline();
 
 	metalRoughMaterial.buildPipelines(this);
 }
@@ -1041,90 +1040,6 @@ void AgniEngine::initDefaultData()
 	});
 }
 
-void AgniEngine::initMeshPipeline()
-{
-	VkShaderModule triangleFragShader;
-	if (!vkutil::loadShaderModule(
-	    "../../shaders/glsl/tex_image.frag.spv", _device, &triangleFragShader))
-	{
-		fmt::print(
-		"Error when building the triangle fragment shader module. \n");
-	}
-	else
-	{
-		fmt::print("Triangle fragment shader succesfully loaded. \n");
-	}
-
-	VkShaderModule triangleVertexShader;
-	if (!vkutil::loadShaderModule(
-	    "../../shaders/glsl/colored_triangle_mesh.vert.spv",
-	    _device,
-	    &triangleVertexShader))
-	{
-		fmt::print("Error when building the triangle vertex shader module. \n");
-	}
-	else
-	{
-		fmt::print("Triangle vertex shader succesfully loaded. \n");
-	}
-
-	VkPushConstantRange bufferRange {};
-	bufferRange.offset     = 0;
-	bufferRange.size       = sizeof(GPUDrawPushConstants);
-	bufferRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-
-	VkPipelineLayoutCreateInfo pipeline_layout_info =
-	vkinit::pipeline_layout_create_info();
-	pipeline_layout_info.pPushConstantRanges    = &bufferRange;
-	pipeline_layout_info.pushConstantRangeCount = 1;
-	pipeline_layout_info.pSetLayouts            = &_singleImageDescriptorLayout;
-	pipeline_layout_info.setLayoutCount         = 1;
-	VK_CHECK(vkCreatePipelineLayout(
-	_device, &pipeline_layout_info, nullptr, &_meshPipelineLayout));
-
-	PipelineBuilder pipelineBuilder;
-
-	// use the triangle layout we created
-	pipelineBuilder._pipelineLayout = _meshPipelineLayout;
-	// connecting the vertex and pixel shaders to the pipeline
-	pipelineBuilder.setShaders(triangleVertexShader, triangleFragShader);
-	// it will draw triangles
-	pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-	// filled triangles
-	pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
-	// no backface culling
-	pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
-	// no multisampling
-	pipelineBuilder.setMultisamplingNone();
-	// no blending
-	pipelineBuilder.disableBlending();
-
-	pipelineBuilder.disableDepthtest();
-	pipelineBuilder.enableDepthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
-
-	// enable blending
-	// pipelineBuilder.enableBlendingAdditive();
-	// pipelineBuilder.enableBlendingAlphablend();
-
-	// connect the image format we will draw into, from draw image
-	pipelineBuilder.setColorAttachmentFormat(_drawImage.imageFormat);
-	pipelineBuilder.setDepthFormat(_depthImage.imageFormat);
-
-	// finally build the pipeline
-	_meshPipeline = pipelineBuilder.buildPipeline(_device);
-
-	// clean structures
-	vkDestroyShaderModule(_device, triangleFragShader, nullptr);
-	vkDestroyShaderModule(_device, triangleVertexShader, nullptr);
-
-	_mainDeletionQueue.push_function(
-	[&]()
-	{
-		vkDestroyPipelineLayout(_device, _meshPipelineLayout, nullptr);
-		vkDestroyPipeline(_device, _meshPipeline, nullptr);
-	});
-}
-
 void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 {
 	// begin a render pass  connected to our draw image
@@ -1136,31 +1051,6 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 	VkRenderingInfo renderInfo =
 	vkinit::rendering_info(_drawExtent, &colorAttachment, &depthAttachment);
 	vkCmdBeginRendering(cmd, &renderInfo);
-
-	// vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipeline);
-
-	//// bind a texture
-	// VkDescriptorSet imageSet = getCurrentFrame()._frameDescriptors.allocate(
-	//_device, _singleImageDescriptorLayout);
-	//{
-	//	DescriptorWriter writer;
-	//	writer.writeImage(0,
-	//	                  _errorCheckerboardImage.imageView,
-	//	                  _defaultSamplerNearest,
-	//	                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-	//	                  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-
-	//	writer.updateSet(_device, imageSet);
-	//}
-
-	// vkCmdBindDescriptorSets(cmd,
-	//                         VK_PIPELINE_BIND_POINT_GRAPHICS,
-	//                         _meshPipelineLayout,
-	//                         0,
-	//                         1,
-	//                         &imageSet,
-	//                         0,
-	//                         nullptr);
 
 	// set dynamic viewport and scissor
 	VkViewport viewport = {};
@@ -1180,41 +1070,6 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 	scissor.extent.height = _drawExtent.height;
 
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
-
-	// glm::mat4 view = glm::translate(glm::vec3 {0, 0, -5});
-	//// camera projection
-	// glm::mat4 projection =
-	// glm::perspective(glm::radians(70.f),
-	//                  (float) _drawExtent.width / (float) _drawExtent.height,
-	//                  10000.f,
-	//                  0.1f);
-
-	//// invert the Y direction on projection matrix so that we are more similar
-	//// to opengl and gltf axis
-	// projection[1][1] *= -1;
-
-	// GPUDrawPushConstants push_constants;
-	// push_constants.worldMatrix = projection * view;
-	// push_constants.vertexBuffer =
-	// testMeshes[2]->meshBuffers.vertexBufferAddress;
-
-	// vkCmdPushConstants(cmd,
-	//                    _meshPipelineLayout,
-	//                    VK_SHADER_STAGE_VERTEX_BIT,
-	//                    0,
-	//                    sizeof(GPUDrawPushConstants),
-	//                    &push_constants);
-	// vkCmdBindIndexBuffer(cmd,
-	//                      testMeshes[2]->meshBuffers.indexBuffer.buffer,
-	//                      0,
-	//                      VK_INDEX_TYPE_UINT32);
-
-	// vkCmdDrawIndexed(cmd,
-	//                  testMeshes[2]->surfaces[0].count,
-	//                  1,
-	//                  testMeshes[2]->surfaces[0].startIndex,
-	//                  0,
-	//                  0);
 
 
 	// this is not the best way to do it. it's just one way to do it. It would
