@@ -144,7 +144,7 @@ loadGltfMeshes(AgniEngine* engine, std::filesystem::path filePath)
 		}
 
 		// display the vertex normals for debbugging
-		constexpr bool OverrideColors = true;
+		constexpr bool OverrideColors = false;
 		if (OverrideColors)
 		{
 			for (Vertex& vtx : vertices)
