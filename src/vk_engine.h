@@ -4,6 +4,7 @@
 #pragma once
 
 #include "vk_mem_alloc.h"
+#include <camera.h>
 #include <deque>
 #include <functional>
 #include <vector>
@@ -139,7 +140,7 @@ public:
 	bool       _isInitialized {false};
 	int        _frameNumber {0};
 	bool       stop_rendering {false};
-	VkExtent2D _windowExtent {1920, 1080};
+	VkExtent2D _windowExtent {1600, 900};
 
 	struct SDL_Window* _window {nullptr};
 
@@ -200,6 +201,8 @@ public:
 
 	GPUSceneData          sceneData;
 	VkDescriptorSetLayout _gpuSceneDataDescriptorLayout;
+
+	Camera mainCamera;
 
 
 	// initializes everything in the engine

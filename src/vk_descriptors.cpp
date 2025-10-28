@@ -49,7 +49,7 @@ void DescriptorAllocatorGrowable::init(VkDevice                 device,
 {
 	ratios.clear();
 
-	for (auto r : poolRatios)
+	for (const auto& r : poolRatios)
 	{
 		ratios.push_back(r);
 	}
