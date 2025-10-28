@@ -367,6 +367,10 @@ void AgniEngine::run()
 			if (e.type == SDL_EVENT_QUIT)
 				bQuit = true;
 
+			// give SDL event to camera object to process keyboard/mouse
+			// movement for camera
+			mainCamera.processSDLEvent(e);
+
 			if (e.type == SDL_EVENT_WINDOW_MINIMIZED)
 			{
 				stop_rendering = true;
@@ -932,6 +936,15 @@ void AgniEngine::initImgui()
 
 void AgniEngine::initDefaultData()
 {
+	// initialize the main camera
+	mainCamera.velocity = glm::vec3(0.f);
+	mainCamera.position = glm::vec3(0, 0, 5);
+
+	mainCamera.pitch = 0;
+	mainCamera.yaw   = 0;
+	mainCamera.speed = .1f;
+	mainCamera.mouseSensitivity = 0.3f;
+
 	testMeshes = loadGltfMeshes(this, "../../assets/basicmesh.glb").value();
 
 	// 3 default textures, white, grey, black. 1 pixel each
@@ -1151,11 +1164,11 @@ void AgniEngine::updateScene()
 {
 	mainDrawContext.OpaqueSurfaces.clear();
 
-	loadedNodes["Suzanne"]->Draw(glm::mat4 {1.f}, mainDrawContext);
-
-	sceneData.view = glm::translate(glm::vec3 {0, 0, -5});
+	mainCamera.update();
+	// camera view
+	glm::mat4 view = mainCamera.getViewMatrix();
 	// camera projection
-	sceneData.proj =
+	glm::mat4 projection =
 	glm::perspective(glm::radians(70.f),
 	                 (float) _windowExtent.width / (float) _windowExtent.height,
 	                 10000.f,
@@ -1163,8 +1176,18 @@ void AgniEngine::updateScene()
 
 	// invert the Y direction on projection matrix so that we are more similar
 	// to opengl and gltf axis
-	sceneData.proj[1][1] *= -1;
-	sceneData.viewproj = sceneData.proj * sceneData.view;
+	projection[1][1] *= -1;
+
+	loadedNodes["Suzanne"]->Draw(glm::mat4 {1.f}, mainDrawContext);
+
+	sceneData.view = view;
+	// camera projection
+	sceneData.proj = projection;
+
+	// invert the Y direction on projection matrix so that we are more similar
+	// to opengl and gltf axis
+	//sceneData.proj[1][1] *= -1;
+	sceneData.viewproj = projection * view;
 
 	// some default lighting parameters
 	sceneData.ambientColor      = glm::vec4(.1f);
