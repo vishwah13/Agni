@@ -77,6 +77,8 @@ void AgniEngine::cleanup()
 	{
 		vkDeviceWaitIdle(_device);
 
+		loadedScenes.clear();
+
 		for (int i = 0; i < FRAME_OVERLAP; i++)
 		{
 			vkDestroyCommandPool(_device, _frames[i]._commandPool, nullptr);
@@ -938,11 +940,11 @@ void AgniEngine::initDefaultData()
 {
 	// initialize the main camera
 	mainCamera.velocity = glm::vec3(0.f);
-	mainCamera.position = glm::vec3(0, 0, 5);
+	mainCamera.position = glm::vec3(30.f, -00.f, -085.f);
 
-	mainCamera.pitch = 0;
-	mainCamera.yaw   = 0;
-	mainCamera.speed = .1f;
+	mainCamera.pitch            = 0;
+	mainCamera.yaw              = 0;
+	mainCamera.speed            = .1f;
 	mainCamera.mouseSensitivity = 0.3f;
 
 	testMeshes = loadGltfMeshes(this, "../../assets/basicmesh.glb").value();
@@ -1036,6 +1038,13 @@ void AgniEngine::initDefaultData()
 
 		loadedNodes[m->name] = std::move(newNode);
 	}
+
+	std::string structurePath = {"../../assets/structure.glb"};
+	auto        structureFile = loadGltf(this, structurePath);
+
+	assert(structureFile.has_value());
+
+	loadedScenes["structure"] = *structureFile;
 
 	_mainDeletionQueue.push_function([=, this]()
 	                                 { destroyBuffer(materialConstants); });
@@ -1179,6 +1188,7 @@ void AgniEngine::updateScene()
 	projection[1][1] *= -1;
 
 	loadedNodes["Suzanne"]->Draw(glm::mat4 {1.f}, mainDrawContext);
+	loadedScenes["structure"]->Draw(glm::mat4 {1.f}, mainDrawContext);
 
 	sceneData.view = view;
 	// camera projection
@@ -1186,7 +1196,7 @@ void AgniEngine::updateScene()
 
 	// invert the Y direction on projection matrix so that we are more similar
 	// to opengl and gltf axis
-	//sceneData.proj[1][1] *= -1;
+	// sceneData.proj[1][1] *= -1;
 	sceneData.viewproj = projection * view;
 
 	// some default lighting parameters
@@ -1194,7 +1204,7 @@ void AgniEngine::updateScene()
 	sceneData.sunlightColor     = glm::vec4(1.f);
 	sceneData.sunlightDirection = glm::vec4(0, 1, 0.5, 1.f);
 }
-
+// maybe put these func in separate class or make it private later !!!!
 AllocatedBuffer AgniEngine::createBuffer(size_t             allocSize,
                                          VkBufferUsageFlags usage,
                                          VmaMemoryUsage     memoryUsage)
