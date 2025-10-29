@@ -224,8 +224,6 @@ public:
 
 	GPUMeshBuffers uploadMesh(std::span<uint32_t> indices,
 	                          std::span<Vertex>   vertices);
-
-private:
 	// default textures
 	AllocatedImage _whiteImage;
 	AllocatedImage _blackImage;
@@ -240,10 +238,18 @@ private:
 	MaterialInstance       defaultData;
 	GLTFMetallic_Roughness metalRoughMaterial;
 
+	// creating and destroying buffers can go in their own class later ??
+	AllocatedBuffer createBuffer(size_t             allocSize,
+	                             VkBufferUsageFlags usage,
+	                             VmaMemoryUsage     memoryUsage);
+
+private:
 	VkDescriptorSetLayout _singleImageDescriptorLayout;
 
 	DrawContext                                            mainDrawContext;
 	std::unordered_map<std::string, std::shared_ptr<Node>> loadedNodes;
+
+	std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>> loadedScenes;
 
 	void initVulkan();
 	void initSwapchain();
@@ -268,10 +274,6 @@ private:
 
 	void updateScene();
 
-	// creating and destroying buffers can go in their own class later ??
-	AllocatedBuffer createBuffer(size_t             allocSize,
-	                             VkBufferUsageFlags usage,
-	                             VmaMemoryUsage     memoryUsage);
 
 	void destroyBuffer(const AllocatedBuffer& buffer);
 
