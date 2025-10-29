@@ -16,6 +16,8 @@ public:
 	// camera sensitivity
 	float mouseSensitivity {0.5f};
 
+	bool rightMousePressed = false;
+
 	glm::mat4 getViewMatrix();
 	glm::mat4 getRotationMatrix();
 

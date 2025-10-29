@@ -66,16 +66,29 @@ void Camera::processSDLEvent(SDL_Event& e)
 		}
 	}
 
-	if (e.type == SDL_EVENT_MOUSE_MOTION)
+	if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
+	    e.button.button == SDL_BUTTON_RIGHT)
+	{
+		rightMousePressed = true;
+	}
+	if (e.type == SDL_EVENT_MOUSE_BUTTON_UP &&
+	    e.button.button == SDL_BUTTON_RIGHT)
+	{
+		rightMousePressed = false;
+	}
+
+	if (e.type == SDL_EVENT_MOUSE_MOTION && rightMousePressed)
 	{
 		yaw += (float) (e.motion.xrel / 200.f) * mouseSensitivity;
 		pitch -= (float) (e.motion.yrel / 200.f) * mouseSensitivity;
 	}
 }
 
-// need to pass deltaTime (time between frames) and multiply the velocity by that.
+// need to pass deltaTime (time between frames) and multiply the velocity by
+// that.
 void Camera::update()
 {
 	glm::mat4 cameraRotation = getRotationMatrix();
-	position += glm::vec3(cameraRotation * glm::vec4(velocity * 0.5f, 0.f)) * speed;
+	position +=
+	glm::vec3(cameraRotation * glm::vec4(velocity * 0.5f, 0.f)) * speed;
 }
