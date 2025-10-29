@@ -572,4 +572,23 @@ void LoadedGLTF::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
 	}
 }
 
-void LoadedGLTF::clearAll() {}
+void LoadedGLTF::clearAll()
+{
+	VkDevice dv = creator->_device;
+
+	descriptorPool.destroyPools(dv);
+	creator->destroyBuffer(materialDataBuffer);
+
+	for (auto& [k, v] : meshes)
+	{
+
+		creator->destroyBuffer(v->meshBuffers.indexBuffer);
+		creator->destroyBuffer(v->meshBuffers.vertexBuffer);
+	}
+
+
+	for (auto& sampler : samplers)
+	{
+		vkDestroySampler(dv, sampler, nullptr);
+	}
+}

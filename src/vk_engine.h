@@ -243,6 +243,8 @@ public:
 	                             VkBufferUsageFlags usage,
 	                             VmaMemoryUsage     memoryUsage);
 
+	void destroyBuffer(const AllocatedBuffer& buffer);
+
 private:
 	VkDescriptorSetLayout _singleImageDescriptorLayout;
 
@@ -274,8 +276,6 @@ private:
 
 	void updateScene();
 
-
-	void destroyBuffer(const AllocatedBuffer& buffer);
 
 	AllocatedImage createImage(VkExtent3D        size,
 	                           VkFormat          format,
