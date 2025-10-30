@@ -24,6 +24,8 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/transform.hpp>
 
+#include "Debug.h"
+
 
 #ifdef NDEBUG
 constexpr bool bUseValidationLayers = false;
@@ -69,6 +71,8 @@ void AgniEngine::init()
 
 	// everything went fine
 	_isInitialized = true;
+
+	PrintAllocationMetrics();
 }
 
 void AgniEngine::cleanup()
@@ -109,6 +113,8 @@ void AgniEngine::cleanup()
 
 	// clear engine pointer
 	loadedEngine = nullptr;
+
+	PrintAllocationMetrics();
 }
 
 void AgniEngine::draw()
