@@ -92,12 +92,6 @@ void AgniEngine::cleanup()
 			_frames[i]._deletionQueue.flush();
 		}
 
-		for (auto& mesh : testMeshes)
-		{
-			destroyBuffer(mesh->meshBuffers.indexBuffer);
-			destroyBuffer(mesh->meshBuffers.vertexBuffer);
-		}
-
 		metalRoughMaterial.clearResources(_device);
 
 		// flush the global deletion queue
@@ -947,8 +941,6 @@ void AgniEngine::initDefaultData()
 	mainCamera.speed            = .1f;
 	mainCamera.mouseSensitivity = 0.3f;
 
-	testMeshes = loadGltfMeshes(this, "../../assets/basicmesh.glb").value();
-
 	// 3 default textures, white, grey, black. 1 pixel each
 	uint32_t white = glm::packUnorm4x8(glm::vec4(1, 1, 1, 1));
 	_whiteImage    = createImage((void*) &white,
@@ -1022,22 +1014,6 @@ void AgniEngine::initDefaultData()
 	                                               MaterialPass::MainColor,
 	                                               materialResources,
 	                                               globalDescriptorAllocator);
-
-	for (auto& m : testMeshes)
-	{
-		std::shared_ptr<MeshNode> newNode = std::make_shared<MeshNode>();
-		newNode->mesh                     = m;
-
-		newNode->localTransform = glm::mat4 {1.f};
-		newNode->worldTransform = glm::mat4 {1.f};
-
-		for (auto& s : newNode->mesh->surfaces)
-		{
-			s.material = std::make_shared<GLTFMaterial>(defaultData);
-		}
-
-		loadedNodes[m->name] = std::move(newNode);
-	}
 
 	std::string structurePath = {"../../assets/structure.glb"};
 	auto        structureFile = loadGltf(this, structurePath);
@@ -1187,7 +1163,6 @@ void AgniEngine::updateScene()
 	// to opengl and gltf axis
 	projection[1][1] *= -1;
 
-	loadedNodes["Suzanne"]->Draw(glm::mat4 {1.f}, mainDrawContext);
 	loadedScenes["structure"]->Draw(glm::mat4 {1.f}, mainDrawContext);
 
 	sceneData.view = view;

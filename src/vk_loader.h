@@ -27,9 +27,6 @@ struct MeshAsset
 // forward declaration
 class AgniEngine;
 
-std::optional<std::vector<std::shared_ptr<MeshAsset>>>
-loadGltfMeshes(AgniEngine* engine, std::filesystem::path filePath);
-
 
 struct LoadedGLTF : public IRenderable
 {

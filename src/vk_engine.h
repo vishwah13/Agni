@@ -188,8 +188,6 @@ public:
 	VkPipeline       _gradientPipeline;
 	VkPipelineLayout _gradientPipelineLayout;
 
-	std::vector<std::shared_ptr<MeshAsset>> testMeshes;
-
 	// immediate submit structures for ImGui
 	VkFence         _immFence;
 	VkCommandBuffer _immCommandBuffer;
@@ -249,8 +247,6 @@ private:
 	VkDescriptorSetLayout _singleImageDescriptorLayout;
 
 	DrawContext                                            mainDrawContext;
-	std::unordered_map<std::string, std::shared_ptr<Node>> loadedNodes;
-
 	std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>> loadedScenes;
 
 	void initVulkan();
