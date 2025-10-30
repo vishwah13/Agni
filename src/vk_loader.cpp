@@ -59,9 +59,6 @@ loadImage(AgniEngine* engine, fastgltf::Asset& asset, fastgltf::Image& image)
 
 	int width, height, nrChannels;
 
-	// Debug: Check what type the variant holds
-    fmt::print("Image data variant index: {}\n", image.data.index());
-
 	std::visit(
 	fastgltf::visitor {
 	[](auto& arg) {},
@@ -132,9 +129,6 @@ loadImage(AgniEngine* engine, fastgltf::Asset& asset, fastgltf::Image& image)
 	{
 		auto& bufferView = asset.bufferViews[view.bufferViewIndex];
 		auto& buffer     = asset.buffers[bufferView.bufferIndex];
-
-		// Debug: Check what type the variant holds
-		fmt::print("buffer data variant index: {}\n", buffer.data.index());
 
 		std::visit(
 		fastgltf::visitor {
