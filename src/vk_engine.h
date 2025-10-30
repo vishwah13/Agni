@@ -243,6 +243,17 @@ public:
 
 	void destroyBuffer(const AllocatedBuffer& buffer);
 
+	AllocatedImage createImage(VkExtent3D        size,
+	                           VkFormat          format,
+	                           VkImageUsageFlags usage,
+	                           bool              mipmapped = false);
+	AllocatedImage createImage(void*             data,
+	                           VkExtent3D        size,
+	                           VkFormat          format,
+	                           VkImageUsageFlags usage,
+	                           bool              mipmapped = false);
+	void           destroyImage(const AllocatedImage& img);
+
 private:
 	VkDescriptorSetLayout _singleImageDescriptorLayout;
 
@@ -273,14 +284,5 @@ private:
 	void updateScene();
 
 
-	AllocatedImage createImage(VkExtent3D        size,
-	                           VkFormat          format,
-	                           VkImageUsageFlags usage,
-	                           bool              mipmapped = false);
-	AllocatedImage createImage(void*             data,
-	                           VkExtent3D        size,
-	                           VkFormat          format,
-	                           VkImageUsageFlags usage,
-	                           bool              mipmapped = false);
-	void           destroyImage(const AllocatedImage& img);
+	
 };
