@@ -174,6 +174,37 @@ loadImage(AgniEngine* engine, fastgltf::Asset& asset, fastgltf::Image& image)
 				fmt::print("Failed to load image from buffer: {}\n",
 				           stbi_failure_reason());
 			}
+		},
+		[&](fastgltf::sources::Vector& vector)
+		{
+			unsigned char* data = stbi_load_from_memory(
+			reinterpret_cast<const stbi_uc*>(vector.bytes.data()) +
+			bufferView.byteOffset,
+			static_cast<int>(bufferView.byteLength),
+			&width,
+			&height,
+			&nrChannels,
+			4);
+			if (data)
+			{
+				VkExtent3D imagesize;
+				imagesize.width  = width;
+				imagesize.height = height;
+				imagesize.depth  = 1;
+
+				newImage = engine->createImage(data,
+				                               imagesize,
+				                               VK_FORMAT_R8G8B8A8_UNORM,
+				                               VK_IMAGE_USAGE_SAMPLED_BIT,
+				                               false);
+
+				stbi_image_free(data);
+			}
+			else
+			{
+				fmt::print("Failed to load image from buffer: {}\n",
+				           stbi_failure_reason());
+			}
 		}},
 		buffer.data);
 	},
