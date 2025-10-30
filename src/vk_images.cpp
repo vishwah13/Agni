@@ -1,5 +1,7 @@
 #include <vk_images.h>
 #include <vk_initializers.h>
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 // TO-DO: better pipline barrier sync
 // https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples

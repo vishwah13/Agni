@@ -52,6 +52,146 @@ VkSamplerMipmapMode extractMipmapMode(fastgltf::Filter filter)
 	}
 }
 
+std::optional<AllocatedImage>
+loadImage(AgniEngine* engine, fastgltf::Asset& asset, fastgltf::Image& image)
+{
+	AllocatedImage newImage {};
+
+	int width, height, nrChannels;
+
+	// Debug: Check what type the variant holds
+    fmt::print("Image data variant index: {}\n", image.data.index());
+
+	std::visit(
+	fastgltf::visitor {
+	[](auto& arg) {},
+	[&](fastgltf::sources::URI& filePath)
+	{
+		assert(filePath.fileByteOffset ==
+		       0); // We don't support offsets with stbi.
+		assert(filePath.uri.isLocalPath()); // We're only capable of loading
+		                                    // local files.
+
+		const std::string path(filePath.uri.path().begin(),
+		                       filePath.uri.path().end()); // Thanks C++.
+		unsigned char*    data =
+		stbi_load(path.c_str(), &width, &height, &nrChannels, 4);
+		if (data)
+		{
+			VkExtent3D imagesize;
+			imagesize.width  = width;
+			imagesize.height = height;
+			imagesize.depth  = 1;
+
+			newImage = engine->createImage(data,
+			                               imagesize,
+			                               VK_FORMAT_R8G8B8A8_UNORM,
+			                               VK_IMAGE_USAGE_SAMPLED_BIT,
+			                               false);
+
+			stbi_image_free(data);
+		}
+		else
+		{
+			fmt::print("Failed to load image: {} - Reason: {}\n",
+			           path,
+			           stbi_failure_reason());
+		}
+	},
+	[&](fastgltf::sources::Vector& vector)
+	{
+		unsigned char* data = stbi_load_from_memory(
+		reinterpret_cast<const stbi_uc*>(vector.bytes.data()),
+		static_cast<int>(vector.bytes.size()),
+		&width,
+		&height,
+		&nrChannels,
+		4);
+		if (data)
+		{
+			VkExtent3D imagesize;
+			imagesize.width  = width;
+			imagesize.height = height;
+			imagesize.depth  = 1;
+
+			newImage = engine->createImage(data,
+			                               imagesize,
+			                               VK_FORMAT_R8G8B8A8_UNORM,
+			                               VK_IMAGE_USAGE_SAMPLED_BIT,
+			                               false);
+
+			stbi_image_free(data);
+		}
+		else
+		{
+			fmt::print("Failed to load image from memory: {}\n",
+			           stbi_failure_reason());
+		}
+	},
+	[&](fastgltf::sources::BufferView& view)
+	{
+		auto& bufferView = asset.bufferViews[view.bufferViewIndex];
+		auto& buffer     = asset.buffers[bufferView.bufferIndex];
+
+		// Debug: Check what type the variant holds
+		fmt::print("buffer data variant index: {}\n", buffer.data.index());
+
+		std::visit(
+		fastgltf::visitor {
+		// We only care about VectorWithMime here, because we
+		// specify LoadExternalBuffers, meaning all buffers
+		// are already loaded into a vector.
+		// but only sources::Array ended up working here?
+		// still need to have other variants handled
+		[](auto& arg) {},
+		[&](fastgltf::sources::Array& vector)
+		{
+			unsigned char* data = stbi_load_from_memory(
+			reinterpret_cast<const stbi_uc*>(vector.bytes.data()) +
+			bufferView.byteOffset,
+			static_cast<int>(bufferView.byteLength),
+			&width,
+			&height,
+			&nrChannels,
+			4);
+			if (data)
+			{
+				VkExtent3D imagesize;
+				imagesize.width  = width;
+				imagesize.height = height;
+				imagesize.depth  = 1;
+
+				newImage = engine->createImage(data,
+				                               imagesize,
+				                               VK_FORMAT_R8G8B8A8_UNORM,
+				                               VK_IMAGE_USAGE_SAMPLED_BIT,
+				                               false);
+
+				stbi_image_free(data);
+			}
+			else
+			{
+				fmt::print("Failed to load image from buffer: {}\n",
+				           stbi_failure_reason());
+			}
+		}},
+		buffer.data);
+	},
+	},
+	image.data);
+
+	// if any of the attempts to load the data failed, we havent written the
+	// image so handle is null
+	if (newImage.image == VK_NULL_HANDLE)
+	{
+		return {};
+	}
+	else
+	{
+		return newImage;
+	}
+}
+
 std::optional<std::shared_ptr<LoadedGLTF>>
 loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 {
@@ -67,7 +207,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 	fastgltf::Options::DontRequireValidAssetMember |
 	fastgltf::Options::AllowDouble | fastgltf::Options::LoadGLBBuffers |
 	fastgltf::Options::LoadExternalBuffers;
-	// fastgltf::Options::LoadExternalImages;
+	fastgltf::Options::LoadExternalImages;
 
 	auto data = fastgltf::GltfDataBuffer::FromPath(filePath);
 
@@ -162,8 +302,21 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 	// load all textures
 	for (fastgltf::Image& image : gltf.images)
 	{
+		std::optional<AllocatedImage> img = loadImage(engine, gltf, image);
 
-		images.push_back(engine->_errorCheckerboardImage);
+		if (img.has_value())
+		{
+			images.push_back(*img);
+			file.images[image.name.c_str()] = *img;
+		}
+		else
+		{
+			// we failed to load, so lets give the slot a default white texture
+			// to not completely break loading
+			images.push_back(engine->_errorCheckerboardImage);
+			std::cout << "gltf failed to load texture " << image.name
+			          << std::endl;
+		}
 	}
 
 	// create buffer to hold the material data
@@ -436,6 +589,17 @@ void LoadedGLTF::clearAll()
 
 		creator->destroyBuffer(v->meshBuffers.indexBuffer);
 		creator->destroyBuffer(v->meshBuffers.vertexBuffer);
+	}
+
+	for (auto& [k, v] : images)
+	{
+
+		if (v.image == creator->_errorCheckerboardImage.image)
+		{
+			// dont destroy the default images
+			continue;
+		}
+		creator->destroyImage(v);
 	}
 
 
