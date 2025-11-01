@@ -1110,9 +1110,8 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 	writer.updateSet(_device, globalDescriptor);
 
 
-	for (const RenderObject& draw : mainDrawContext.OpaqueSurfaces)
+	auto draw = [&](const RenderObject& draw)
 	{
-
 		vkCmdBindPipeline(cmd,
 		                  VK_PIPELINE_BIND_POINT_GRAPHICS,
 		                  draw.material->pipeline->pipeline);
@@ -1146,6 +1145,16 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 		                   &pushConstants);
 
 		vkCmdDrawIndexed(cmd, draw.indexCount, 1, draw.firstIndex, 0, 0);
+	};
+
+	for (auto& r : mainDrawContext.OpaqueSurfaces)
+	{
+		draw(r);
+	}
+
+	for (auto& r : mainDrawContext.TransparentSurfaces)
+	{
+		draw(r);
 	}
 
 	vkCmdEndRendering(cmd);
@@ -1154,6 +1163,7 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 void AgniEngine::updateScene()
 {
 	mainDrawContext.OpaqueSurfaces.clear();
+	mainDrawContext.TransparentSurfaces.clear();
 
 	mainCamera.update();
 	// camera view
