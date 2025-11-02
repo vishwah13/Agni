@@ -14,6 +14,15 @@
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 
+struct EngineStats
+{
+	float frametime;
+	int   triangleCount;
+	int   drawcallCount;
+	float sceneUpdateTime;
+	float meshDrawTime;
+};
+
 struct DeletionQueue
 {
 	std::deque<std::function<void()>> deletors;
@@ -142,6 +151,8 @@ public:
 	int        _frameNumber {0};
 	bool       stop_rendering {false};
 	VkExtent2D _windowExtent {1600, 900};
+
+	EngineStats stats;
 
 	struct SDL_Window* _window {nullptr};
 
