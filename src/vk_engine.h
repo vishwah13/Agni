@@ -133,9 +133,9 @@ struct RenderObject
 	VkBuffer indexBuffer;
 
 	MaterialInstance* material;
-
-	glm::mat4       transform;
-	VkDeviceAddress vertexBufferAddress;
+	Bounds            bounds;
+	glm::mat4         transform;
+	VkDeviceAddress   vertexBufferAddress;
 };
 
 struct DrawContext
@@ -269,7 +269,7 @@ public:
 private:
 	VkDescriptorSetLayout _singleImageDescriptorLayout;
 
-	DrawContext                                            mainDrawContext;
+	DrawContext mainDrawContext;
 	std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>> loadedScenes;
 
 	void initVulkan();
@@ -294,7 +294,4 @@ private:
 	void drawGeometry(VkCommandBuffer cmd);
 
 	void updateScene();
-
-
-	
 };
