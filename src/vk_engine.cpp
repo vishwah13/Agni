@@ -1072,6 +1072,41 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 	// begin clock
 	auto start = std::chrono::system_clock::now();
 
+	std::vector<uint32_t> opaqueDraws;
+	opaqueDraws.reserve(mainDrawContext.OpaqueSurfaces.size());
+	for (uint32_t i = 0; i < mainDrawContext.OpaqueSurfaces.size(); i++)
+	{
+		opaqueDraws.push_back(i);
+	}
+	// std::algorithms has a very handy sort function we can use to sort the
+	// opaqueDraws vector. We give it a lambda that defines a < operator, and
+	// it sorts it efficiently for us.
+
+	// We will first index the draw array, and check if the material is the
+	// same, and if it is, sort by indexBuffer. But if its not, then we directly
+	// compare the material pointer. Another way of doing this is that we would
+	// calculate a sort key , and then our opaqueDraws would be something like
+	// 20 bits draw index, and 44 bits for sort key/hash. That way would be
+	// faster than this as it can be sorted through faster methods.
+	
+	//  sort the opaque surfaces by material and mesh
+	std::sort(opaqueDraws.begin(),
+	          opaqueDraws.end(),
+	          [&](const auto& iA, const auto& iB)
+	          {
+		          const RenderObject& A = mainDrawContext.OpaqueSurfaces[iA];
+		          const RenderObject& B = mainDrawContext.OpaqueSurfaces[iB];
+		          if (A.material == B.material)
+		          {
+			          return A.indexBuffer < B.indexBuffer;
+		          }
+		          else
+		          {
+			          return A.material < B.material;
+		          }
+	          });
+
+
 	// begin a render pass  connected to our draw image
 	VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(
 	_drawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
@@ -1081,26 +1116,6 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 	VkRenderingInfo renderInfo =
 	vkinit::rendering_info(_drawExtent, &colorAttachment, &depthAttachment);
 	vkCmdBeginRendering(cmd, &renderInfo);
-
-	// set dynamic viewport and scissor
-	VkViewport viewport = {};
-	viewport.x          = 0;
-	viewport.y          = 0;
-	viewport.width      = static_cast<float>(_drawExtent.width);
-	viewport.height     = static_cast<float>(_drawExtent.height);
-	viewport.minDepth   = 0.f;
-	viewport.maxDepth   = 1.f;
-
-	vkCmdSetViewport(cmd, 0, 1, &viewport);
-
-	VkRect2D scissor      = {};
-	scissor.offset.x      = 0;
-	scissor.offset.y      = 0;
-	scissor.extent.width  = _drawExtent.width;
-	scissor.extent.height = _drawExtent.height;
-
-	vkCmdSetScissor(cmd, 0, 1, &scissor);
-
 
 	// this is not the best way to do it. it's just one way to do it. It would
 	// be better to hold the buffers cached in our FrameData structure, but we
@@ -1135,51 +1150,96 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 	                   VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 	writer.updateSet(_device, globalDescriptor);
 
+	// keep track of what state we are binding, and only call it again if we
+	// have to as it changes with the draw.
+	// this is the state we will try to skip
+	MaterialPipeline* lastPipeline    = nullptr;
+	MaterialInstance* lastMaterial    = nullptr;
+	VkBuffer          lastIndexBuffer = VK_NULL_HANDLE;
 
-	auto draw = [&](const RenderObject& draw)
+
+	auto draw = [&](const RenderObject& r)
 	{
-		vkCmdBindPipeline(cmd,
-		                  VK_PIPELINE_BIND_POINT_GRAPHICS,
-		                  draw.material->pipeline->pipeline);
-		vkCmdBindDescriptorSets(cmd,
-		                        VK_PIPELINE_BIND_POINT_GRAPHICS,
-		                        draw.material->pipeline->layout,
-		                        0,
-		                        1,
-		                        &globalDescriptor,
-		                        0,
-		                        nullptr);
-		vkCmdBindDescriptorSets(cmd,
-		                        VK_PIPELINE_BIND_POINT_GRAPHICS,
-		                        draw.material->pipeline->layout,
-		                        1,
-		                        1,
-		                        &draw.material->materialSet,
-		                        0,
-		                        nullptr);
+		if (r.material != lastMaterial)
+		{
+			lastMaterial = r.material;
 
-		vkCmdBindIndexBuffer(cmd, draw.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+			// rebind pipeline and descriptors if the material changed
+			if (r.material->pipeline != lastPipeline)
+			{
 
-		GPUDrawPushConstants pushConstants;
-		pushConstants.vertexBuffer = draw.vertexBufferAddress;
-		pushConstants.worldMatrix  = draw.transform;
+				lastPipeline = r.material->pipeline;
+				vkCmdBindPipeline(cmd,
+				                  VK_PIPELINE_BIND_POINT_GRAPHICS,
+				                  r.material->pipeline->pipeline);
+				vkCmdBindDescriptorSets(cmd,
+				                        VK_PIPELINE_BIND_POINT_GRAPHICS,
+				                        r.material->pipeline->layout,
+				                        0,
+				                        1,
+				                        &globalDescriptor,
+				                        0,
+				                        nullptr);
+
+				// set dynamic viewport and scissor
+				VkViewport viewport = {};
+				viewport.x          = 0;
+				viewport.y          = 0;
+				viewport.width      = static_cast<float>(_drawExtent.width);
+				viewport.height     = static_cast<float>(_drawExtent.height);
+				viewport.minDepth   = 0.f;
+				viewport.maxDepth   = 1.f;
+
+				vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+				VkRect2D scissor      = {};
+				scissor.offset.x      = 0;
+				scissor.offset.y      = 0;
+				scissor.extent.width  = _drawExtent.width;
+				scissor.extent.height = _drawExtent.height;
+
+				vkCmdSetScissor(cmd, 0, 1, &scissor);
+			}
+
+			vkCmdBindDescriptorSets(cmd,
+			                        VK_PIPELINE_BIND_POINT_GRAPHICS,
+			                        r.material->pipeline->layout,
+			                        1,
+			                        1,
+			                        &r.material->materialSet,
+			                        0,
+			                        nullptr);
+		}
+
+		// rebind index buffer if needed
+		if (r.indexBuffer != lastIndexBuffer)
+		{
+			lastIndexBuffer = r.indexBuffer;
+			vkCmdBindIndexBuffer(cmd, r.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+		}
+
+		// calculate final mesh matrix
+		GPUDrawPushConstants push_constants;
+		push_constants.worldMatrix  = r.transform;
+		push_constants.vertexBuffer = r.vertexBufferAddress;
+
 		vkCmdPushConstants(cmd,
-		                   draw.material->pipeline->layout,
+		                   r.material->pipeline->layout,
 		                   VK_SHADER_STAGE_VERTEX_BIT,
 		                   0,
 		                   sizeof(GPUDrawPushConstants),
-		                   &pushConstants);
+		                   &push_constants);
 
-		vkCmdDrawIndexed(cmd, draw.indexCount, 1, draw.firstIndex, 0, 0);
+		vkCmdDrawIndexed(cmd, r.indexCount, 1, r.firstIndex, 0, 0);
 
 		// add counters for triangles and draws
 		stats.drawcallCount++;
-		stats.triangleCount += draw.indexCount / 3;
+		stats.triangleCount += r.indexCount / 3;
 	};
 
-	for (auto& r : mainDrawContext.OpaqueSurfaces)
+	for (auto& r : opaqueDraws)
 	{
-		draw(r);
+		draw(mainDrawContext.OpaqueSurfaces[r]);
 	}
 
 	for (auto& r : mainDrawContext.TransparentSurfaces)
