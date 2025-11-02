@@ -33,6 +33,51 @@ constexpr bool bUseValidationLayers = false;
 constexpr bool bUseValidationLayers = true;
 #endif
 
+bool isVisible(const RenderObject& obj, const glm::mat4& viewproj)
+{
+	std::array<glm::vec3, 8> corners {
+	glm::vec3 {1, 1, 1},
+	glm::vec3 {1, 1, -1},
+	glm::vec3 {1, -1, 1},
+	glm::vec3 {1, -1, -1},
+	glm::vec3 {-1, 1, 1},
+	glm::vec3 {-1, 1, -1},
+	glm::vec3 {-1, -1, 1},
+	glm::vec3 {-1, -1, -1},
+	};
+
+	glm::mat4 matrix = viewproj * obj.transform;
+
+	glm::vec3 min = {1.5, 1.5, 1.5};
+	glm::vec3 max = {-1.5, -1.5, -1.5};
+
+	for (int c = 0; c < 8; c++)
+	{
+		// project each corner into clip space
+		glm::vec4 v =
+		matrix *
+		glm::vec4(obj.bounds.origin + (corners[c] * obj.bounds.extents), 1.f);
+
+		// perspective correction
+		v.x = v.x / v.w;
+		v.y = v.y / v.w;
+		v.z = v.z / v.w;
+
+		min = glm::min(glm::vec3 {v.x, v.y, v.z}, min);
+		max = glm::max(glm::vec3 {v.x, v.y, v.z}, max);
+	}
+
+	// check the clip space box is within the view
+	if (min.z > 1.f || max.z < 0.f || min.x > 1.f || max.x < -1.f ||
+	    min.y > 1.f || max.y < -1.f)
+	{
+		return false;
+	}
+	else
+	{
+		return true;
+	}
+}
 
 AgniEngine* loadedEngine = nullptr;
 
@@ -1074,9 +1119,23 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 
 	std::vector<uint32_t> opaqueDraws;
 	opaqueDraws.reserve(mainDrawContext.OpaqueSurfaces.size());
+	std::vector<uint32_t> transparentDraws;
+	transparentDraws.reserve(mainDrawContext.TransparentSurfaces.size());
+
 	for (uint32_t i = 0; i < mainDrawContext.OpaqueSurfaces.size(); i++)
 	{
-		opaqueDraws.push_back(i);
+		if (isVisible(mainDrawContext.OpaqueSurfaces[i], sceneData.viewproj))
+		{
+			opaqueDraws.push_back(i);
+		}
+	}
+	for (uint32_t i = 0; i < mainDrawContext.TransparentSurfaces.size(); i++)
+	{
+		if (isVisible(mainDrawContext.TransparentSurfaces[i],
+		              sceneData.viewproj))
+		{
+			transparentDraws.push_back(i);
+		}
 	}
 	// std::algorithms has a very handy sort function we can use to sort the
 	// opaqueDraws vector. We give it a lambda that defines a < operator, and
@@ -1088,7 +1147,7 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 	// calculate a sort key , and then our opaqueDraws would be something like
 	// 20 bits draw index, and 44 bits for sort key/hash. That way would be
 	// faster than this as it can be sorted through faster methods.
-	
+
 	//  sort the opaque surfaces by material and mesh
 	std::sort(opaqueDraws.begin(),
 	          opaqueDraws.end(),
@@ -1104,6 +1163,28 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 		          {
 			          return A.material < B.material;
 		          }
+	          });
+
+	//  sort the transparent surfaces by distance from bounds to the camera
+	std::sort(transparentDraws.begin(),
+	          transparentDraws.end(),
+	          [&](const auto& iA, const auto& iB)
+	          {
+		          const RenderObject& A =
+		          mainDrawContext.TransparentSurfaces[iA];
+		          const RenderObject& B =
+		          mainDrawContext.TransparentSurfaces[iB];
+		          // Calculate distance from camera to object center
+		          glm::vec3 centerA =
+		          glm::vec3(A.transform * glm::vec4(A.bounds.origin, 1.0f));
+		          glm::vec3 centerB =
+		          glm::vec3(B.transform * glm::vec4(B.bounds.origin, 1.0f));
+
+		          float distA = glm::length(mainCamera.position - centerA);
+		          float distB = glm::length(mainCamera.position - centerB);
+
+		          // Sort back to front (larger distance first)
+		          return distA > distB;
 	          });
 
 
@@ -1242,9 +1323,9 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 		draw(mainDrawContext.OpaqueSurfaces[r]);
 	}
 
-	for (auto& r : mainDrawContext.TransparentSurfaces)
+	for (auto& r : transparentDraws)
 	{
-		draw(r);
+		draw(mainDrawContext.TransparentSurfaces[r]);
 	}
 
 	vkCmdEndRendering(cmd);
@@ -1654,11 +1735,11 @@ void MeshNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
 	for (auto& s : mesh->surfaces)
 	{
 		RenderObject def;
-		def.indexCount  = s.count;
-		def.firstIndex  = s.startIndex;
-		def.indexBuffer = mesh->meshBuffers.indexBuffer.buffer;
-		def.material    = &s.material->data;
-
+		def.indexCount          = s.count;
+		def.firstIndex          = s.startIndex;
+		def.indexBuffer         = mesh->meshBuffers.indexBuffer.buffer;
+		def.material            = &s.material->data;
+		def.bounds              = s.bounds;
 		def.transform           = nodeMatrix;
 		def.vertexBufferAddress = mesh->meshBuffers.vertexBufferAddress;
 
