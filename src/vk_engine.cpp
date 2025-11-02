@@ -362,6 +362,9 @@ void AgniEngine::run()
 	// main loop
 	while (!bQuit)
 	{
+		// begin clock
+		auto start = std::chrono::system_clock::now();
+
 		// Handle events on queue
 		while (SDL_PollEvent(&e) != 0)
 		{
@@ -412,6 +415,16 @@ void AgniEngine::run()
 		ImGui_ImplSDL3_NewFrame();
 		ImGui::NewFrame();
 
+		if (ImGui::Begin("Stats"))
+		{
+			ImGui::Text("frametime %f ms", stats.frametime);
+			ImGui::Text("draw time %f ms", stats.meshDrawTime);
+			ImGui::Text("update time %f ms", stats.sceneUpdateTime);
+			ImGui::Text("triangles %i", stats.triangleCount);
+			ImGui::Text("draws %i", stats.drawcallCount);
+		}
+		ImGui::End();
+
 		if (ImGui::Begin("background"))
 		{
 			ImGui::SliderFloat("Render Scale", &renderScale, 0.3f, 1.f);
@@ -439,6 +452,13 @@ void AgniEngine::run()
 		ImGui::Render();
 
 		draw();
+
+		// get clock again to compare with start clock
+		auto end = std::chrono::system_clock::now();
+		// convert to microseconds (integer), and then come back to miliseconds
+		auto elapsed =
+		std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+		stats.frametime = elapsed.count() / 1000.f; // in milliseconds
 	}
 }
 
@@ -1046,6 +1066,12 @@ void AgniEngine::initDefaultData()
 
 void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 {
+	// reset counters
+	stats.drawcallCount = 0;
+	stats.triangleCount = 0;
+	// begin clock
+	auto start = std::chrono::system_clock::now();
+
 	// begin a render pass  connected to our draw image
 	VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(
 	_drawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
@@ -1145,6 +1171,10 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 		                   &pushConstants);
 
 		vkCmdDrawIndexed(cmd, draw.indexCount, 1, draw.firstIndex, 0, 0);
+
+		// add counters for triangles and draws
+		stats.drawcallCount++;
+		stats.triangleCount += draw.indexCount / 3;
 	};
 
 	for (auto& r : mainDrawContext.OpaqueSurfaces)
@@ -1158,10 +1188,20 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 	}
 
 	vkCmdEndRendering(cmd);
+
+	auto end = std::chrono::system_clock::now();
+
+	// convert to microseconds (integer), and then come back to miliseconds
+	auto elapsed =
+	std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+	stats.meshDrawTime = elapsed.count() / 1000.f;
 }
 
 void AgniEngine::updateScene()
 {
+	// begin clock
+	auto start = std::chrono::system_clock::now();
+
 	mainDrawContext.OpaqueSurfaces.clear();
 	mainDrawContext.TransparentSurfaces.clear();
 
@@ -1194,6 +1234,13 @@ void AgniEngine::updateScene()
 	sceneData.ambientColor      = glm::vec4(.1f);
 	sceneData.sunlightColor     = glm::vec4(1.f);
 	sceneData.sunlightDirection = glm::vec4(0, 1, 0.5, 1.f);
+
+	auto end = std::chrono::system_clock::now();
+
+	// convert to microseconds (integer), and then come back to miliseconds
+	auto elapsed =
+	std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+	stats.sceneUpdateTime = elapsed.count() / 1000.f;
 }
 // maybe put these func in separate class or make it private later !!!!
 AllocatedBuffer AgniEngine::createBuffer(size_t             allocSize,
