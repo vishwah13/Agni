@@ -1478,7 +1478,7 @@ void GLTFMetallic_Roughness::buildPipelines(AgniEngine* engine)
 
 	// create the transparent variant
 	pipelineBuilder.enableBlendingAdditive();
-
+	// turning off depth buffer writes for transparent objects
 	pipelineBuilder.enableDepthtest(false, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
 	transparentPipeline.pipeline =
