@@ -52,8 +52,10 @@ VkSamplerMipmapMode extractMipmapMode(fastgltf::Filter filter)
 	}
 }
 
-std::optional<AllocatedImage>
-loadImage(AgniEngine* engine, fastgltf::Asset& asset, fastgltf::Image& image)
+std::optional<AllocatedImage> loadImage(AgniEngine*      engine,
+                                        fastgltf::Asset& asset,
+                                        fastgltf::Image& image,
+                                        bool             mipmapped = false)
 {
 	AllocatedImage newImage {};
 
@@ -84,7 +86,7 @@ loadImage(AgniEngine* engine, fastgltf::Asset& asset, fastgltf::Image& image)
 			                               imagesize,
 			                               VK_FORMAT_R8G8B8A8_UNORM,
 			                               VK_IMAGE_USAGE_SAMPLED_BIT,
-			                               false);
+			                               mipmapped);
 
 			stbi_image_free(data);
 		}
@@ -115,7 +117,7 @@ loadImage(AgniEngine* engine, fastgltf::Asset& asset, fastgltf::Image& image)
 			                               imagesize,
 			                               VK_FORMAT_R8G8B8A8_UNORM,
 			                               VK_IMAGE_USAGE_SAMPLED_BIT,
-			                               false);
+			                               mipmapped);
 
 			stbi_image_free(data);
 		}
@@ -159,7 +161,7 @@ loadImage(AgniEngine* engine, fastgltf::Asset& asset, fastgltf::Image& image)
 				                               imagesize,
 				                               VK_FORMAT_R8G8B8A8_UNORM,
 				                               VK_IMAGE_USAGE_SAMPLED_BIT,
-				                               false);
+				                               mipmapped);
 
 				stbi_image_free(data);
 			}
@@ -190,7 +192,7 @@ loadImage(AgniEngine* engine, fastgltf::Asset& asset, fastgltf::Image& image)
 				                               imagesize,
 				                               VK_FORMAT_R8G8B8A8_UNORM,
 				                               VK_IMAGE_USAGE_SAMPLED_BIT,
-				                               false);
+				                               mipmapped);
 
 				stbi_image_free(data);
 			}
@@ -327,7 +329,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 	// load all textures
 	for (fastgltf::Image& image : gltf.images)
 	{
-		std::optional<AllocatedImage> img = loadImage(engine, gltf, image);
+		std::optional<AllocatedImage> img = loadImage(engine, gltf, image,true);
 
 		if (img.has_value())
 		{
