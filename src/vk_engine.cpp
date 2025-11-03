@@ -1512,10 +1512,20 @@ AllocatedImage AgniEngine::createImage(void*             data,
 		                       1,
 		                       &copyRegion);
 
-		vkutil::transitionImage(cmd,
-		                        new_image.image,
-		                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		if (mipmapped)
+		{
+			vkutil::generateMipmaps(cmd,
+			                        new_image.image,
+			                        VkExtent2D {new_image.imageExtent.width,
+			                                    new_image.imageExtent.height});
+		}
+		else
+		{
+			vkutil::transitionImage(cmd,
+			                        new_image.image,
+			                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		}
 	});
 
 	destroyBuffer(uploadbuffer);
