@@ -24,6 +24,8 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/transform.hpp>
 
+#include "stb_image.h"
+
 #include "Debug.h"
 
 
@@ -142,6 +144,7 @@ void AgniEngine::cleanup()
 		}
 
 		metalRoughMaterial.clearResources(_device);
+		skybox.clearResources(_device);
 
 		// flush the global deletion queue
 		_mainDeletionQueue.flush();
@@ -213,14 +216,15 @@ void AgniEngine::draw()
 	// transition our main draw image into general layout so we can write into
 	// it we will overwrite it all so we dont care about what was the older
 	// layout
-	vkutil::transitionImage(
-	cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+	//vkutil::transitionImage(
+	//cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
-	drawBackground(cmd);
+	//// drawing the compute shader based background
+	//drawBackground(cmd);
 
 	vkutil::transitionImage(cmd,
 	                        _drawImage.image,
-	                        VK_IMAGE_LAYOUT_GENERAL,
+	                        VK_IMAGE_LAYOUT_UNDEFINED,
 	                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	vkutil::transitionImage(cmd,
 	                        _depthImage.image,
@@ -830,6 +834,8 @@ void AgniEngine::initPipelines()
 	initBackgroundPipelines();
 
 	metalRoughMaterial.buildPipelines(this);
+
+	skybox.buildPipelines(this);
 }
 
 void AgniEngine::initBackgroundPipelines()
@@ -1094,6 +1100,89 @@ void AgniEngine::initDefaultData()
 
 	loadedScenes["structure"] = *structureFile;
 
+	// Initialize skybox
+	// Load cubemap faces (order: right, left, top, bottom, front, back for Vulkan)
+	std::array<std::string, 6> cubemapFaces = {
+	"../../assets/skybox/right.jpg",   // +X
+	"../../assets/skybox/left.jpg",    // -X
+	"../../assets/skybox/top.jpg",     // +Y
+	"../../assets/skybox/bottom.jpg",  // -Y
+	"../../assets/skybox/front.jpg",   // +Z
+	"../../assets/skybox/back.jpg"     // -Z
+	};
+
+	_cubemapImage = createCubemap(
+	cubemapFaces, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, false);
+
+	// Create sampler for cubemap
+	VkSamplerCreateInfo cubemapSampler = {
+	.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+	cubemapSampler.magFilter  = VK_FILTER_LINEAR;
+	cubemapSampler.minFilter  = VK_FILTER_LINEAR;
+	cubemapSampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	cubemapSampler.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	cubemapSampler.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+
+	
+	vkCreateSampler(_device, &cubemapSampler, nullptr, &_cubemapSamplerHandle);
+
+	// Create skybox material resources
+	Skybox::MaterialResources skyboxResources;
+	skyboxResources.cubemapImage   = _cubemapImage;
+	skyboxResources.cubemapSampler = _cubemapSamplerHandle;
+
+	// Write skybox material
+	skybox.skyboxMaterial = new MaterialInstance(
+	skybox.writeMaterial(_device, skyboxResources, globalDescriptorAllocator));
+
+	// Create cube mesh for skybox (large cube around camera)
+	std::vector<Vertex> cubeVertices = {
+	// Positions are used as texture coordinates in the shader
+	// Front face (+Z)
+	{{-1.0f, -1.0f, 1.0f}, 0, {0, 0, 1}, 0, {1, 1, 1, 1}},
+	{{1.0f, -1.0f, 1.0f}, 0, {0, 0, 1}, 0, {1, 1, 1, 1}},
+	{{1.0f, 1.0f, 1.0f}, 0, {0, 0, 1}, 0, {1, 1, 1, 1}},
+	{{-1.0f, 1.0f, 1.0f}, 0, {0, 0, 1}, 0, {1, 1, 1, 1}},
+	// Back face (-Z)
+	{{1.0f, -1.0f, -1.0f}, 0, {0, 0, -1}, 0, {1, 1, 1, 1}},
+	{{-1.0f, -1.0f, -1.0f}, 0, {0, 0, -1}, 0, {1, 1, 1, 1}},
+	{{-1.0f, 1.0f, -1.0f}, 0, {0, 0, -1}, 0, {1, 1, 1, 1}},
+	{{1.0f, 1.0f, -1.0f}, 0, {0, 0, -1}, 0, {1, 1, 1, 1}},
+	// Top face (+Y)
+	{{-1.0f, 1.0f, 1.0f}, 0, {0, 1, 0}, 0, {1, 1, 1, 1}},
+	{{1.0f, 1.0f, 1.0f}, 0, {0, 1, 0}, 0, {1, 1, 1, 1}},
+	{{1.0f, 1.0f, -1.0f}, 0, {0, 1, 0}, 0, {1, 1, 1, 1}},
+	{{-1.0f, 1.0f, -1.0f}, 0, {0, 1, 0}, 0, {1, 1, 1, 1}},
+	// Bottom face (-Y)
+	{{-1.0f, -1.0f, -1.0f}, 0, {0, -1, 0}, 0, {1, 1, 1, 1}},
+	{{1.0f, -1.0f, -1.0f}, 0, {0, -1, 0}, 0, {1, 1, 1, 1}},
+	{{1.0f, -1.0f, 1.0f}, 0, {0, -1, 0}, 0, {1, 1, 1, 1}},
+	{{-1.0f, -1.0f, 1.0f}, 0, {0, -1, 0}, 0, {1, 1, 1, 1}},
+	// Right face (+X)
+	{{1.0f, -1.0f, 1.0f}, 0, {1, 0, 0}, 0, {1, 1, 1, 1}},
+	{{1.0f, -1.0f, -1.0f}, 0, {1, 0, 0}, 0, {1, 1, 1, 1}},
+	{{1.0f, 1.0f, -1.0f}, 0, {1, 0, 0}, 0, {1, 1, 1, 1}},
+	{{1.0f, 1.0f, 1.0f}, 0, {1, 0, 0}, 0, {1, 1, 1, 1}},
+	// Left face (-X)
+	{{-1.0f, -1.0f, -1.0f}, 0, {-1, 0, 0}, 0, {1, 1, 1, 1}},
+	{{-1.0f, -1.0f, 1.0f}, 0, {-1, 0, 0}, 0, {1, 1, 1, 1}},
+	{{-1.0f, 1.0f, 1.0f}, 0, {-1, 0, 0}, 0, {1, 1, 1, 1}},
+	{{-1.0f, 1.0f, -1.0f}, 0, {-1, 0, 0}, 0, {1, 1, 1, 1}},
+	};
+
+	std::vector<uint32_t> cubeIndices = {
+	0,  1,  2,  2,  3,  0,  // Front
+	4,  5,  6,  6,  7,  4,  // Back
+	8,  9,  10, 10, 11, 8,  // Top
+	12, 13, 14, 14, 15, 12, // Bottom
+	16, 17, 18, 18, 19, 16, // Right
+	20, 21, 22, 22, 23, 20  // Left
+	};
+
+	skybox.meshBuffers = uploadMesh(cubeIndices, cubeVertices);
+	skybox.indexCount  = static_cast<uint32_t>(cubeIndices.size());
+	skybox.firstIndex  = 0;
+
 	_mainDeletionQueue.push_function([=, this]()
 	                                 { destroyBuffer(materialConstants); });
 
@@ -1107,6 +1196,13 @@ void AgniEngine::initDefaultData()
 		destroyImage(_greyImage);
 		destroyImage(_blackImage);
 		destroyImage(_errorCheckerboardImage);
+
+		// Cleanup skybox resources
+		vkDestroySampler(_device, _cubemapSamplerHandle, nullptr);
+		destroyImage(_cubemapImage);
+		destroyBuffer(skybox.meshBuffers.indexBuffer);
+		destroyBuffer(skybox.meshBuffers.vertexBuffer);
+		delete skybox.skyboxMaterial;
 	});
 }
 
@@ -1329,6 +1425,9 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 		draw(mainDrawContext.TransparentSurfaces[r]);
 	}
 
+	// Draw skybox last (after all geometry)
+	skybox.Draw(cmd, globalDescriptor, _drawExtent);
+
 	vkCmdEndRendering(cmd);
 
 	auto end = std::chrono::system_clock::now();
@@ -1540,6 +1639,163 @@ void AgniEngine::destroyImage(const AllocatedImage& img)
 	vmaDestroyImage(_allocator, img.image, img.allocation);
 }
 
+AllocatedImage
+AgniEngine::createCubemap(const std::array<std::string, 6>& faceFiles,
+                          VkFormat                          format,
+                          VkImageUsageFlags                 usage,
+                          bool                              mipmapped)
+{
+	// Load all 6 faces
+	std::array<stbi_uc*, 6> faceData;
+	int                     width, height, channels;
+
+	// Load first face to get dimensions
+	faceData[0] = stbi_load(faceFiles[0].c_str(), &width, &height, &channels, 4);
+	if (!faceData[0])
+	{
+		fmt::println("Failed to load cubemap face: {}", faceFiles[0]);
+		throw std::runtime_error("Failed to load cubemap face");
+	}
+
+	// Load remaining faces (ensure they match dimensions)
+	for (int i = 1; i < 6; i++)
+	{
+		int w, h, c;
+		faceData[i] = stbi_load(faceFiles[i].c_str(), &w, &h, &c, 4);
+		if (!faceData[i] || w != width || h != height)
+		{
+			fmt::println("Failed to load or dimension mismatch for cubemap face: {}",
+			             faceFiles[i]);
+			// Clean up loaded faces
+			for (int j = 0; j <= i; j++)
+			{
+				if (faceData[j])
+					stbi_image_free(faceData[j]);
+			}
+			throw std::runtime_error("Failed to load cubemap face");
+		}
+	}
+
+	// Calculate total size for all 6 faces
+	size_t faceSize = width * height * 4; // 4 bytes per pixel (RGBA)
+	size_t totalSize = faceSize * 6;
+
+	// Create staging buffer
+	AllocatedBuffer uploadBuffer = createBuffer(
+	totalSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+	// Copy all faces into staging buffer
+	uint8_t* bufferData = (uint8_t*) uploadBuffer.info.pMappedData;
+	for (int i = 0; i < 6; i++)
+	{
+		memcpy(bufferData + (i * faceSize), faceData[i], faceSize);
+		stbi_image_free(faceData[i]);
+	}
+
+	// Create cubemap image
+	AllocatedImage cubemap;
+	cubemap.imageFormat = format;
+	cubemap.imageExtent = {(uint32_t) width, (uint32_t) height, 1};
+
+	VkImageCreateInfo img_info = vkinit::image_create_info(
+	format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, cubemap.imageExtent);
+
+	// Set cubemap-specific flags
+	img_info.arrayLayers = 6;
+	img_info.flags       = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+
+	if (mipmapped)
+	{
+		img_info.mipLevels = static_cast<uint32_t>(
+		                     std::floor(std::log2(std::max(width, height)))) +
+		                     1;
+	}
+
+	// Allocate image on GPU
+	VmaAllocationCreateInfo allocInfo = {};
+	allocInfo.usage                   = VMA_MEMORY_USAGE_GPU_ONLY;
+	allocInfo.requiredFlags =
+	VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+	VK_CHECK(vmaCreateImage(_allocator,
+	                        &img_info,
+	                        &allocInfo,
+	                        &cubemap.image,
+	                        &cubemap.allocation,
+	                        nullptr));
+
+	// Create image view for cubemap
+	VkImageViewCreateInfo view_info = vkinit::imageview_create_info(
+	format, cubemap.image, VK_IMAGE_ASPECT_COLOR_BIT);
+	view_info.viewType                        = VK_IMAGE_VIEW_TYPE_CUBE;
+	view_info.subresourceRange.layerCount     = 6;
+	view_info.subresourceRange.levelCount     = img_info.mipLevels;
+
+	VK_CHECK(
+	vkCreateImageView(_device, &view_info, nullptr, &cubemap.imageView));
+
+	// Upload data to GPU
+	immediateSubmit(
+	[&](VkCommandBuffer cmd)
+	{
+		// Transition to transfer dst
+		VkImageMemoryBarrier2 barrier {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
+		barrier.srcStageMask               = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+		barrier.srcAccessMask              = 0;
+		barrier.dstStageMask               = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+		barrier.dstAccessMask              = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+		barrier.oldLayout                  = VK_IMAGE_LAYOUT_UNDEFINED;
+		barrier.newLayout                  = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		barrier.image                      = cubemap.image;
+		barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+		barrier.subresourceRange.baseMipLevel   = 0;
+		barrier.subresourceRange.levelCount     = img_info.mipLevels;
+		barrier.subresourceRange.baseArrayLayer = 0;
+		barrier.subresourceRange.layerCount     = 6;
+
+		VkDependencyInfo depInfo {.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
+		depInfo.imageMemoryBarrierCount = 1;
+		depInfo.pImageMemoryBarriers    = &barrier;
+		vkCmdPipelineBarrier2(cmd, &depInfo);
+
+		// Copy each face from buffer to image
+		for (uint32_t face = 0; face < 6; face++)
+		{
+			VkBufferImageCopy copyRegion               = {};
+			copyRegion.bufferOffset                    = face * faceSize;
+			copyRegion.bufferRowLength                 = 0;
+			copyRegion.bufferImageHeight               = 0;
+			copyRegion.imageSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+			copyRegion.imageSubresource.mipLevel       = 0;
+			copyRegion.imageSubresource.baseArrayLayer = face;
+			copyRegion.imageSubresource.layerCount     = 1;
+			copyRegion.imageExtent = {(uint32_t) width, (uint32_t) height, 1};
+
+			vkCmdCopyBufferToImage(cmd,
+			                       uploadBuffer.buffer,
+			                       cubemap.image,
+			                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			                       1,
+			                       &copyRegion);
+		}
+
+		// Transition to shader read
+		barrier.srcStageMask  = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+		barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+		barrier.dstStageMask  = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+		barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
+		barrier.oldLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		barrier.newLayout     = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+		vkCmdPipelineBarrier2(cmd, &depInfo);
+	});
+
+	destroyBuffer(uploadBuffer);
+
+	return cubemap;
+}
+
 // Note that this pattern is not very efficient, as we are waiting for the GPU
 // command to fully execute before continuing with our CPU side logic. This is
 // something people generally put on a background thread, whose sole job is to
@@ -1744,16 +2000,16 @@ void Skybox::buildPipelines(AgniEngine* engine)
 
 	VkShaderModule skyFragShader;
 	if (!vkutil::loadShaderModule(
-	    "../../shaders/glsl/sky.frag.spv", engine->_device, &skyFragShader))
+	    "../../shaders/glsl/skybox.frag.spv", engine->_device, &skyFragShader))
 	{
-		fmt::println("Error when building the triangle fragment shader module");
+		fmt::println("Error when building the skybox fragment shader module");
 	}
 
 	VkShaderModule skyVertexShader;
 	if (!vkutil::loadShaderModule(
-	    "../../shaders/glsl/sky.vert.spv", engine->_device, &skyVertexShader))
+	    "../../shaders/glsl/skybox.vert.spv", engine->_device, &skyVertexShader))
 	{
-		fmt::println("Error when building the triangle vertex shader module");
+		fmt::println("Error when building the skybox vertex shader module");
 	}
 
 	VkPushConstantRange matrixRange {};
@@ -1792,8 +2048,8 @@ void Skybox::buildPipelines(AgniEngine* engine)
 	pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
 	pipelineBuilder.setMultisamplingNone();
 	pipelineBuilder.disableBlending();
-	// turning off depth buffer writes for skybox
-	pipelineBuilder.enableDepthtest(false, VK_COMPARE_OP_LESS_OR_EQUAL);
+	// turning off depth buffer writes for skybox, but enable depth test with reversed-Z
+	pipelineBuilder.enableDepthtest(false, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
 	// render format
 	pipelineBuilder.setColorAttachmentFormat(engine->_drawImage.imageFormat);
@@ -1839,6 +2095,70 @@ Skybox::writeMaterial(VkDevice                     device,
 	writer.updateSet(device, matData.materialSet);
 
 	return matData;
+}
+
+void Skybox::Draw(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptor, VkExtent2D drawExtent)
+{
+	// Bind skybox pipeline
+	vkCmdBindPipeline(
+	cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, skyboxPipeline.pipeline);
+
+	// Set dynamic viewport and scissor
+	VkViewport viewport = {};
+	viewport.x          = 0;
+	viewport.y          = 0;
+	viewport.width      = static_cast<float>(drawExtent.width);
+	viewport.height     = static_cast<float>(drawExtent.height);
+	viewport.minDepth   = 0.f;
+	viewport.maxDepth   = 1.f;
+
+	vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+	VkRect2D scissor      = {};
+	scissor.offset.x      = 0;
+	scissor.offset.y      = 0;
+	scissor.extent.width  = drawExtent.width;
+	scissor.extent.height = drawExtent.height;
+
+	vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+	// Bind scene descriptor (set 0)
+	vkCmdBindDescriptorSets(cmd,
+	                        VK_PIPELINE_BIND_POINT_GRAPHICS,
+	                        skyboxPipeline.layout,
+	                        0,
+	                        1,
+	                        &sceneDescriptor,
+	                        0,
+	                        nullptr);
+
+	// Bind skybox material descriptor (set 1)
+	vkCmdBindDescriptorSets(cmd,
+	                        VK_PIPELINE_BIND_POINT_GRAPHICS,
+	                        skyboxPipeline.layout,
+	                        1,
+	                        1,
+	                        &skyboxMaterial->materialSet,
+	                        0,
+	                        nullptr);
+
+	// Bind index buffer
+	vkCmdBindIndexBuffer(
+	cmd, meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+	// Push constants for vertex buffer address
+	SkyBoxPushConstants skyboxPush;
+	skyboxPush.vertexBufferAddress = meshBuffers.vertexBufferAddress;
+
+	vkCmdPushConstants(cmd,
+	                   skyboxPipeline.layout,
+	                   VK_SHADER_STAGE_VERTEX_BIT,
+	                   0,
+	                   sizeof(SkyBoxPushConstants),
+	                   &skyboxPush);
+
+	// Draw skybox
+	vkCmdDrawIndexed(cmd, indexCount, 1, firstIndex, 0, 0);
 }
 
 
