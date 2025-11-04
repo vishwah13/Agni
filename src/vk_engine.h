@@ -169,6 +169,8 @@ struct Skybox
 	writeMaterial(VkDevice                     device,
 	              const MaterialResources&     resources,
 	              DescriptorAllocatorGrowable& descriptorAllocator);
+
+	void Draw(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptor, VkExtent2D drawExtent);
 };
 
 struct SkyBoxPushConstants
@@ -276,9 +278,15 @@ public:
 	VkSampler _defaultSamplerLinear;
 	VkSampler _defaultSamplerNearest;
 
+	AllocatedImage _cubemapImage;
+	VkSampler _cubemapSamplerHandle;
+
 	// default materials
 	MaterialInstance       defaultData;
 	GLTFMetallic_Roughness metalRoughMaterial;
+
+	// skybox
+	Skybox skybox;
 
 	// creating and destroying buffers can go in their own class later ??
 	AllocatedBuffer createBuffer(size_t             allocSize,
@@ -297,6 +305,11 @@ public:
 	                           VkImageUsageFlags usage,
 	                           bool              mipmapped = false);
 	void           destroyImage(const AllocatedImage& img);
+
+	AllocatedImage createCubemap(const std::array<std::string, 6>& faceFiles,
+	                             VkFormat                          format,
+	                             VkImageUsageFlags                 usage,
+	                             bool                              mipmapped = false);
 
 private:
 	VkDescriptorSetLayout _singleImageDescriptorLayout;

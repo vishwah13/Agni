@@ -44,8 +44,8 @@ void main()
     // Transform position with projection and rotation-only view
     vec4 clipPos = sceneData.proj * viewNoTranslation * vec4(v.position, 1.0);
 
-    // Ensure skybox is always at far plane
-    gl_Position = clipPos.xyww;
+    // Ensure skybox is always at far plane (reversed-Z: far=0.0, near=1.0)
+    gl_Position = vec4(clipPos.xy, 0.0, clipPos.w);
 
     // Use position as texture coordinate direction
     outTexCoord = v.position;
