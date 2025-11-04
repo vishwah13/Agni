@@ -144,6 +144,23 @@ struct DrawContext
 	std::vector<RenderObject> TransparentSurfaces;
 };
 
+struct Skybox
+{
+	std::array<AllocatedImage, 6> cubemap;
+
+	uint32_t       indexCount;
+	uint32_t       firstIndex;
+	GPUMeshBuffers meshBuffers;
+
+	VkDescriptorSetLayout skyboxMaterialLayout;
+	MaterialInstance*     skyboxMaterial;
+};
+
+struct SkyBoxPushConstants
+{
+	VkDeviceAddress vertexBufferAddress;
+};
+
 class AgniEngine
 {
 public:
