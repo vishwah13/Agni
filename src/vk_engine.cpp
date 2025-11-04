@@ -753,7 +753,8 @@ void AgniEngine::initDescriptors()
 
 	// create a descriptor pool that will hold 10 sets with 1 image each
 	std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> sizes = {
-	{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1}};
+	{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1},
+	{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}};
 
 	globalDescriptorAllocator.init(_device, 10, sizes);
 

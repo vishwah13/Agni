@@ -146,7 +146,8 @@ struct DrawContext
 
 struct Skybox
 {
-	std::array<AllocatedImage, 6> cubemap;
+	AllocatedImage cubemapImage;
+	VkSampler      cubemapSampler;
 
 	uint32_t       indexCount;
 	uint32_t       firstIndex;
@@ -154,6 +155,15 @@ struct Skybox
 
 	VkDescriptorSetLayout skyboxMaterialLayout;
 	MaterialInstance*     skyboxMaterial;
+
+	DescriptorWriter writer;
+
+	void buildPipelines(AgniEngine* engine);
+	void clearResources(VkDevice device);
+
+	MaterialInstance
+	writeMaterial(VkDevice                     device,
+	              DescriptorAllocatorGrowable& descriptorAllocator);
 };
 
 struct SkyBoxPushConstants
