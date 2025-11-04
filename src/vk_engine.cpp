@@ -1739,6 +1739,109 @@ DescriptorAllocatorGrowable& descriptorAllocator)
 	return matData;
 }
 
+void Skybox::buildPipelines(AgniEngine* engine)
+{
+
+	VkShaderModule skyFragShader;
+	if (!vkutil::loadShaderModule(
+	    "../../shaders/glsl/sky.frag.spv", engine->_device, &skyFragShader))
+	{
+		fmt::println("Error when building the triangle fragment shader module");
+	}
+
+	VkShaderModule skyVertexShader;
+	if (!vkutil::loadShaderModule(
+	    "../../shaders/glsl/sky.vert.spv", engine->_device, &skyVertexShader))
+	{
+		fmt::println("Error when building the triangle vertex shader module");
+	}
+
+	VkPushConstantRange matrixRange {};
+	matrixRange.offset     = 0;
+	matrixRange.size       = sizeof(SkyBoxPushConstants);
+	matrixRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+	DescriptorLayoutBuilder layoutBuilder;
+	layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
+	skyboxMaterialLayout = layoutBuilder.build(
+	engine->_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+
+	VkDescriptorSetLayout layouts[] = {engine->_gpuSceneDataDescriptorLayout,
+	                                   skyboxMaterialLayout};
+
+	VkPipelineLayoutCreateInfo mesh_layout_info =
+	vkinit::pipeline_layout_create_info();
+	mesh_layout_info.setLayoutCount         = 2;
+	mesh_layout_info.pSetLayouts            = layouts;
+	mesh_layout_info.pPushConstantRanges    = &matrixRange;
+	mesh_layout_info.pushConstantRangeCount = 1;
+
+	VkPipelineLayout newLayout;
+	VK_CHECK(vkCreatePipelineLayout(
+	engine->_device, &mesh_layout_info, nullptr, &newLayout));
+
+	skyboxPipeline.layout = newLayout;
+
+	// build the stage-create-info for both vertex and fragment stages. This
+	// lets the pipeline know the shader modules per stage
+	PipelineBuilder pipelineBuilder;
+	pipelineBuilder.setShaders(skyVertexShader, skyFragShader);
+	pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
+	pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+	pipelineBuilder.setMultisamplingNone();
+	pipelineBuilder.disableBlending();
+	// turning off depth buffer writes for skybox
+	pipelineBuilder.enableDepthtest(false, VK_COMPARE_OP_LESS_OR_EQUAL);
+
+	// render format
+	pipelineBuilder.setColorAttachmentFormat(engine->_drawImage.imageFormat);
+	pipelineBuilder.setDepthFormat(engine->_depthImage.imageFormat);
+
+	// use the triangle layout we created
+	pipelineBuilder._pipelineLayout = newLayout;
+
+	// finally build the pipeline
+	skyboxPipeline.pipeline = pipelineBuilder.buildPipeline(engine->_device);
+
+	vkDestroyShaderModule(engine->_device, skyFragShader, nullptr);
+	vkDestroyShaderModule(engine->_device, skyVertexShader, nullptr);
+}
+
+void Skybox::clearResources(VkDevice device)
+{
+	vkDestroyDescriptorSetLayout(device, skyboxMaterialLayout, nullptr);
+	vkDestroyPipelineLayout(device, skyboxPipeline.layout, nullptr);
+	vkDestroyPipeline(device, skyboxPipeline.pipeline, nullptr);
+}
+
+MaterialInstance
+Skybox::writeMaterial(VkDevice                     device,
+                      const MaterialResources&     resources,
+                      DescriptorAllocatorGrowable& descriptorAllocator)
+{
+	MaterialInstance matData;
+	matData.passType = MaterialPass::Other;
+
+	matData.materialSet =
+	descriptorAllocator.allocate(device, skyboxMaterialLayout);
+
+
+	writer.clear();
+	writer.writeImage(/*binding*/ 0,
+	                  resources.cubemapImage.imageView,
+	                  resources.cubemapSampler,
+	                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+	                  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
+	// use the materialSet and update it here.
+	writer.updateSet(device, matData.materialSet);
+
+	return matData;
+}
+
+
 void MeshNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
 {
 	glm::mat4 nodeMatrix = topMatrix * worldTransform;

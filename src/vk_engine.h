@@ -146,13 +146,11 @@ struct DrawContext
 
 struct Skybox
 {
-	AllocatedImage cubemapImage;
-	VkSampler      cubemapSampler;
-
 	uint32_t       indexCount;
 	uint32_t       firstIndex;
 	GPUMeshBuffers meshBuffers;
 
+	MaterialPipeline      skyboxPipeline;
 	VkDescriptorSetLayout skyboxMaterialLayout;
 	MaterialInstance*     skyboxMaterial;
 
@@ -161,8 +159,15 @@ struct Skybox
 	void buildPipelines(AgniEngine* engine);
 	void clearResources(VkDevice device);
 
+	struct MaterialResources
+	{
+		AllocatedImage cubemapImage;
+		VkSampler      cubemapSampler;
+	};
+
 	MaterialInstance
 	writeMaterial(VkDevice                     device,
+	              const MaterialResources&     resources,
 	              DescriptorAllocatorGrowable& descriptorAllocator);
 };
 
