@@ -194,6 +194,18 @@ void PipelineBuilder::setMultisamplingNone()
 	_multisampling.alphaToOneEnable      = VK_FALSE;
 }
 
+void PipelineBuilder::enableMultisampling(VkSampleCountFlagBits numSample)
+{
+	_multisampling.sampleShadingEnable = VK_TRUE;
+	// multisampling defaulted to no multisampling (1 sample per pixel)
+	_multisampling.rasterizationSamples = numSample;
+	_multisampling.minSampleShading     = 1.0f;
+	_multisampling.pSampleMask          = nullptr;
+	// no alpha to coverage either
+	_multisampling.alphaToCoverageEnable = VK_FALSE;
+	_multisampling.alphaToOneEnable      = VK_FALSE;
+}
+
 void PipelineBuilder::disableBlending()
 {
 	// default write mask
@@ -260,7 +272,8 @@ void PipelineBuilder::enableBlendingAdditive()
 	_colorBlendAttachment.alphaBlendOp        = VK_BLEND_OP_ADD;
 }
 
-// For alphablend : outColor = srcColor.rgb * srcColor.a + dstColor.rgb * (1.0 - srcColor.a)
+// For alphablend : outColor = srcColor.rgb * srcColor.a + dstColor.rgb * (1.0 -
+// srcColor.a)
 void PipelineBuilder::enableBlendingAlphablend()
 {
 	_colorBlendAttachment.colorWriteMask =

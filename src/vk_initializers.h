@@ -34,6 +34,12 @@ namespace vkinit
 	VkClearValue* clear,
 	VkImageLayout layout /*= VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL*/);
 
+	VkRenderingAttachmentInfo
+	attachment_info_msaa(VkImageView   msaaView,
+	                     VkImageView   resolveView,
+	                     VkClearValue* clear,
+	                     VkImageLayout layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
 	VkRenderingAttachmentInfo depth_attachment_info(
 	VkImageView   view,
 	VkImageLayout layout /*= VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL*/);
@@ -67,11 +73,13 @@ namespace vkinit
 	VkDescriptorBufferInfo
 	buffer_info(VkBuffer buffer, VkDeviceSize offset, VkDeviceSize range);
 
-	VkImageCreateInfo image_create_info(VkFormat           format,
-	                                    VkImageUsageFlags  usageFlags,
-	                                    VkExtent3D         extent,
-	                                    VkImageCreateFlags createFlags = 0,
-	                                    uint32_t           arrayLayers = 1);
+	VkImageCreateInfo
+	image_create_info(VkFormat              format,
+	                  VkImageUsageFlags     usageFlags,
+	                  VkExtent3D            extent,
+	                  VkImageCreateFlags    createFlags = 0,
+	                  uint32_t              arrayLayers = 1,
+	                  VkSampleCountFlagBits numSamples = VK_SAMPLE_COUNT_1_BIT);
 	VkImageViewCreateInfo
 	                           imageview_create_info(VkFormat           format,
 	                                                 VkImage            image,

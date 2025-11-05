@@ -40,6 +40,7 @@ public:
 	void setPolygonMode(VkPolygonMode mode);
 	void setCullMode(VkCullModeFlags cullMode, VkFrontFace frontFace);
 	void setMultisamplingNone();
+	void enableMultisampling(VkSampleCountFlagBits numSample);
 	void disableBlending();
 	void setColorAttachmentFormat(VkFormat format);
 	void setDepthFormat(VkFormat format);
