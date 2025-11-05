@@ -228,7 +228,7 @@ void AgniEngine::draw()
 	                        VK_IMAGE_LAYOUT_UNDEFINED,
 	                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	vkutil::transitionImage(cmd,
-	                        _msaaDepthImage.image,
+	                        _depthImage.image,
 	                        VK_IMAGE_LAYOUT_UNDEFINED,
 	                        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
@@ -632,14 +632,11 @@ void AgniEngine::initSwapchain()
 	_drawImage = createImage(
 	drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageUsages);
 
-	_depthImage =
-	createImage(drawImageExtent, VK_FORMAT_D32_SFLOAT, depthImageUsages);
-
 	// Create MSAA images with multisampling enabled
 	_msaaColorImage = createImage(
 	drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageUsages, false, msaaSamples);
 
-	_msaaDepthImage =
+	_depthImage =
 	createImage(drawImageExtent, VK_FORMAT_D32_SFLOAT, depthImageUsages, false, msaaSamples);
 
 	// add to deletion queues
@@ -647,9 +644,8 @@ void AgniEngine::initSwapchain()
 	[=]()
 	{
 		destroyImage(_drawImage);
-		destroyImage(_depthImage);
 		destroyImage(_msaaColorImage);
-		destroyImage(_msaaDepthImage);
+		destroyImage(_depthImage);
 	});
 }
 
@@ -753,9 +749,8 @@ void AgniEngine::resizeSwapchain()
 
 	// Destroy old images
 	destroyImage(_drawImage);
-	destroyImage(_depthImage);
 	destroyImage(_msaaColorImage);
-	destroyImage(_msaaDepthImage);
+	destroyImage(_depthImage);
 
 	// Destroy and rebuild pipelines with new MSAA settings
 	metalRoughMaterial.clearResources(_device);
@@ -785,14 +780,11 @@ void AgniEngine::resizeSwapchain()
 	_drawImage = createImage(
 	drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageUsages);
 
-	_depthImage =
-	createImage(drawImageExtent, VK_FORMAT_D32_SFLOAT, depthImageUsages);
-
 	// Create MSAA images with multisampling enabled
 	_msaaColorImage = createImage(
 	drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageUsages, false, msaaSamples);
 
-	_msaaDepthImage =
+	_depthImage =
 	createImage(drawImageExtent, VK_FORMAT_D32_SFLOAT, depthImageUsages, false, msaaSamples);
 
 	// Rebuild pipelines with new MSAA settings
@@ -1374,7 +1366,7 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 	VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info_msaa(
 	_msaaColorImage.imageView, _drawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	VkRenderingAttachmentInfo depthAttachment = vkinit::depth_attachment_info(
-	_msaaDepthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+	_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
 	VkRenderingInfo renderInfo =
 	vkinit::rendering_info(_drawExtent, &colorAttachment, &depthAttachment);
@@ -2011,7 +2003,7 @@ void GLTFMetallic_Roughness::buildPipelines(AgniEngine* engine)
 
 	// render format
 	pipelineBuilder.setColorAttachmentFormat(engine->_msaaColorImage.imageFormat);
-	pipelineBuilder.setDepthFormat(engine->_msaaDepthImage.imageFormat);
+	pipelineBuilder.setDepthFormat(engine->_depthImage.imageFormat);
 
 	// use the triangle layout we created
 	pipelineBuilder._pipelineLayout = newLayout;
@@ -2141,7 +2133,7 @@ void Skybox::buildPipelines(AgniEngine* engine)
 
 	// render format
 	pipelineBuilder.setColorAttachmentFormat(engine->_msaaColorImage.imageFormat);
-	pipelineBuilder.setDepthFormat(engine->_msaaDepthImage.imageFormat);
+	pipelineBuilder.setDepthFormat(engine->_depthImage.imageFormat);
 
 	// use the triangle layout we created
 	pipelineBuilder._pipelineLayout = newLayout;

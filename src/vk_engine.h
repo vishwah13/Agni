@@ -222,14 +222,13 @@ public:
 
 	// draw resources
 	AllocatedImage _drawImage;
-	AllocatedImage _depthImage;
+	AllocatedImage        _depthImage;
 	VkExtent2D     _drawExtent;
 	float          renderScale = 1.f;
 
 	// MSAA resources
 	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_4_BIT;
 	AllocatedImage        _msaaColorImage;
-	AllocatedImage        _msaaDepthImage;
 
 	DescriptorAllocatorGrowable globalDescriptorAllocator;
 
