@@ -222,14 +222,21 @@ void AgniEngine::draw()
 	//// drawing the compute shader based background
 	//drawBackground(cmd);
 
+	// Transition MSAA images for rendering
+	vkutil::transitionImage(cmd,
+	                        _msaaColorImage.image,
+	                        VK_IMAGE_LAYOUT_UNDEFINED,
+	                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	vkutil::transitionImage(cmd,
+	                        _msaaDepthImage.image,
+	                        VK_IMAGE_LAYOUT_UNDEFINED,
+	                        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
+	// Transition resolve target (draw image) for resolve operation
 	vkutil::transitionImage(cmd,
 	                        _drawImage.image,
 	                        VK_IMAGE_LAYOUT_UNDEFINED,
 	                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	vkutil::transitionImage(cmd,
-	                        _depthImage.image,
-	                        VK_IMAGE_LAYOUT_UNDEFINED,
-	                        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
 	drawGeometry(cmd);
 
@@ -478,6 +485,36 @@ void AgniEngine::run()
 		{
 			ImGui::SliderFloat("Render Scale", &renderScale, 0.3f, 1.f);
 
+			// MSAA sample count selector
+			const char* msaaSampleNames[] = {"1x (No MSAA)", "2x MSAA", "4x MSAA", "8x MSAA"};
+			int currentMsaaIndex = 0;
+			switch (msaaSamples)
+			{
+			case VK_SAMPLE_COUNT_1_BIT: currentMsaaIndex = 0; break;
+			case VK_SAMPLE_COUNT_2_BIT: currentMsaaIndex = 1; break;
+			case VK_SAMPLE_COUNT_4_BIT: currentMsaaIndex = 2; break;
+			case VK_SAMPLE_COUNT_8_BIT: currentMsaaIndex = 3; break;
+			default: currentMsaaIndex = 2; break;
+			}
+
+			if (ImGui::Combo("MSAA Samples", &currentMsaaIndex, msaaSampleNames, 4))
+			{
+				VkSampleCountFlagBits newSamples = VK_SAMPLE_COUNT_1_BIT;
+				switch (currentMsaaIndex)
+				{
+				case 0: newSamples = VK_SAMPLE_COUNT_1_BIT; break;
+				case 1: newSamples = VK_SAMPLE_COUNT_2_BIT; break;
+				case 2: newSamples = VK_SAMPLE_COUNT_4_BIT; break;
+				case 3: newSamples = VK_SAMPLE_COUNT_8_BIT; break;
+				}
+				if (newSamples != msaaSamples)
+				{
+					msaaSamples = newSamples;
+					// Request resize to recreate images and pipelines with new sample count
+					resizeRequested = true;
+				}
+			}
+
 			ComputeEffect& selected =
 			backgroundEffects[currentBackgroundEffect];
 
@@ -598,12 +635,21 @@ void AgniEngine::initSwapchain()
 	_depthImage =
 	createImage(drawImageExtent, VK_FORMAT_D32_SFLOAT, depthImageUsages);
 
+	// Create MSAA images with multisampling enabled
+	_msaaColorImage = createImage(
+	drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageUsages, false, msaaSamples);
+
+	_msaaDepthImage =
+	createImage(drawImageExtent, VK_FORMAT_D32_SFLOAT, depthImageUsages, false, msaaSamples);
+
 	// add to deletion queues
 	_mainDeletionQueue.push_function(
 	[=]()
 	{
 		destroyImage(_drawImage);
 		destroyImage(_depthImage);
+		destroyImage(_msaaColorImage);
+		destroyImage(_msaaDepthImage);
 	});
 }
 
@@ -705,6 +751,16 @@ void AgniEngine::resizeSwapchain()
 {
 	vkDeviceWaitIdle(_device);
 
+	// Destroy old images
+	destroyImage(_drawImage);
+	destroyImage(_depthImage);
+	destroyImage(_msaaColorImage);
+	destroyImage(_msaaDepthImage);
+
+	// Destroy and rebuild pipelines with new MSAA settings
+	metalRoughMaterial.clearResources(_device);
+	skybox.clearResources(_device);
+
 	destroySwapchain();
 
 	int w, h;
@@ -713,6 +769,35 @@ void AgniEngine::resizeSwapchain()
 	_windowExtent.height = h;
 
 	createSwapchain(_windowExtent.width, _windowExtent.height);
+
+	// Recreate images with potentially new MSAA sample count
+	VkExtent3D drawImageExtent = {_windowExtent.width, _windowExtent.height, 1};
+
+	VkImageUsageFlags drawImageUsages {};
+	drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	drawImageUsages |= VK_IMAGE_USAGE_STORAGE_BIT;
+	drawImageUsages |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+	VkImageUsageFlags depthImageUsages {};
+	depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+	_drawImage = createImage(
+	drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageUsages);
+
+	_depthImage =
+	createImage(drawImageExtent, VK_FORMAT_D32_SFLOAT, depthImageUsages);
+
+	// Create MSAA images with multisampling enabled
+	_msaaColorImage = createImage(
+	drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageUsages, false, msaaSamples);
+
+	_msaaDepthImage =
+	createImage(drawImageExtent, VK_FORMAT_D32_SFLOAT, depthImageUsages, false, msaaSamples);
+
+	// Rebuild pipelines with new MSAA settings
+	metalRoughMaterial.buildPipelines(this);
+	skybox.buildPipelines(this);
 
 	resizeRequested = false;
 }
@@ -1285,11 +1370,11 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 	          });
 
 
-	// begin a render pass  connected to our draw image
-	VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(
-	_drawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	// begin a render pass with MSAA images that resolve to draw image
+	VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info_msaa(
+	_msaaColorImage.imageView, _drawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	VkRenderingAttachmentInfo depthAttachment = vkinit::depth_attachment_info(
-	_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+	_msaaDepthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
 	VkRenderingInfo renderInfo =
 	vkinit::rendering_info(_drawExtent, &colorAttachment, &depthAttachment);
@@ -1517,16 +1602,17 @@ void AgniEngine::destroyBuffer(const AllocatedBuffer& buffer)
 	vmaDestroyBuffer(_allocator, buffer.buffer, buffer.allocation);
 }
 
-AllocatedImage AgniEngine::createImage(VkExtent3D        size,
-                                       VkFormat          format,
-                                       VkImageUsageFlags usage,
-                                       bool              mipmapped)
+AllocatedImage AgniEngine::createImage(VkExtent3D            size,
+                                       VkFormat              format,
+                                       VkImageUsageFlags     usage,
+                                       bool                  mipmapped,
+                                       VkSampleCountFlagBits numSamples)
 {
 	AllocatedImage newImage;
 	newImage.imageFormat = format;
 	newImage.imageExtent = size;
 
-	VkImageCreateInfo img_info = vkinit::image_create_info(format, usage, size);
+	VkImageCreateInfo img_info = vkinit::image_create_info(format, usage, size, 0, 1, numSamples);
 	if (mipmapped)
 	{
 		img_info.mipLevels = static_cast<uint32_t>(std::floor(
@@ -1567,11 +1653,12 @@ AllocatedImage AgniEngine::createImage(VkExtent3D        size,
 	return newImage;
 }
 
-AllocatedImage AgniEngine::createImage(void*             data,
-                                       VkExtent3D        size,
-                                       VkFormat          format,
-                                       VkImageUsageFlags usage,
-                                       bool              mipmapped)
+AllocatedImage AgniEngine::createImage(void*                 data,
+                                       VkExtent3D            size,
+                                       VkFormat              format,
+                                       VkImageUsageFlags     usage,
+                                       bool                  mipmapped,
+                                       VkSampleCountFlagBits numSamples)
 {
 	size_t          data_size    = size.depth * size.width * size.height * 4;
 	AllocatedBuffer uploadbuffer = createBuffer(
@@ -1583,7 +1670,8 @@ AllocatedImage AgniEngine::createImage(void*             data,
 	size,
 	format,
 	usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-	mipmapped);
+	mipmapped,
+	numSamples);
 
 	immediateSubmit(
 	[&](VkCommandBuffer cmd)
@@ -1917,13 +2005,13 @@ void GLTFMetallic_Roughness::buildPipelines(AgniEngine* engine)
 	pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 	pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
 	pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
-	pipelineBuilder.setMultisamplingNone();
+	pipelineBuilder.enableMultisampling(engine->msaaSamples);
 	pipelineBuilder.disableBlending();
 	pipelineBuilder.enableDepthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
 	// render format
-	pipelineBuilder.setColorAttachmentFormat(engine->_drawImage.imageFormat);
-	pipelineBuilder.setDepthFormat(engine->_depthImage.imageFormat);
+	pipelineBuilder.setColorAttachmentFormat(engine->_msaaColorImage.imageFormat);
+	pipelineBuilder.setDepthFormat(engine->_msaaDepthImage.imageFormat);
 
 	// use the triangle layout we created
 	pipelineBuilder._pipelineLayout = newLayout;
@@ -2046,14 +2134,14 @@ void Skybox::buildPipelines(AgniEngine* engine)
 	pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 	pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
 	pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
-	pipelineBuilder.setMultisamplingNone();
+	pipelineBuilder.enableMultisampling(engine->msaaSamples);
 	pipelineBuilder.disableBlending();
 	// turning off depth buffer writes for skybox, but enable depth test with reversed-Z
 	pipelineBuilder.enableDepthtest(false, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
 	// render format
-	pipelineBuilder.setColorAttachmentFormat(engine->_drawImage.imageFormat);
-	pipelineBuilder.setDepthFormat(engine->_depthImage.imageFormat);
+	pipelineBuilder.setColorAttachmentFormat(engine->_msaaColorImage.imageFormat);
+	pipelineBuilder.setDepthFormat(engine->_msaaDepthImage.imageFormat);
 
 	// use the triangle layout we created
 	pipelineBuilder._pipelineLayout = newLayout;

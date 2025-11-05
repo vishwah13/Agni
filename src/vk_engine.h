@@ -226,6 +226,11 @@ public:
 	VkExtent2D     _drawExtent;
 	float          renderScale = 1.f;
 
+	// MSAA resources
+	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_4_BIT;
+	AllocatedImage        _msaaColorImage;
+	AllocatedImage        _msaaDepthImage;
+
 	DescriptorAllocatorGrowable globalDescriptorAllocator;
 
 	VkDescriptorSet       _drawImageDescriptors;
@@ -295,15 +300,17 @@ public:
 
 	void destroyBuffer(const AllocatedBuffer& buffer);
 
-	AllocatedImage createImage(VkExtent3D        size,
-	                           VkFormat          format,
-	                           VkImageUsageFlags usage,
-	                           bool              mipmapped = false);
-	AllocatedImage createImage(void*             data,
-	                           VkExtent3D        size,
-	                           VkFormat          format,
-	                           VkImageUsageFlags usage,
-	                           bool              mipmapped = false);
+	AllocatedImage createImage(VkExtent3D            size,
+	                           VkFormat              format,
+	                           VkImageUsageFlags     usage,
+	                           bool                  mipmapped = false,
+	                           VkSampleCountFlagBits numSamples = VK_SAMPLE_COUNT_1_BIT);
+	AllocatedImage createImage(void*                 data,
+	                           VkExtent3D            size,
+	                           VkFormat              format,
+	                           VkImageUsageFlags     usage,
+	                           bool                  mipmapped = false,
+	                           VkSampleCountFlagBits numSamples = VK_SAMPLE_COUNT_1_BIT);
 	void           destroyImage(const AllocatedImage& img);
 
 	AllocatedImage createCubemap(const std::array<std::string, 6>& faceFiles,

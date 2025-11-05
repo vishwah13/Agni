@@ -151,6 +151,34 @@ VkImageLayout layout /*= VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL*/)
 
 	return colorAttachment;
 }
+
+VkRenderingAttachmentInfo vkinit::attachment_info_msaa(
+VkImageView   msaaView,
+VkImageView   resolveView,
+VkClearValue* clear,
+VkImageLayout layout)
+{
+	VkRenderingAttachmentInfo colorAttachment {};
+	colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+	colorAttachment.pNext = nullptr;
+
+	colorAttachment.imageView   = msaaView;
+	colorAttachment.imageLayout = layout;
+	colorAttachment.loadOp =
+	clear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	if (clear)
+	{
+		colorAttachment.clearValue = *clear;
+	}
+
+	// Set resolve mode and resolve image view for MSAA
+	colorAttachment.resolveMode        = VK_RESOLVE_MODE_AVERAGE_BIT;
+	colorAttachment.resolveImageView   = resolveView;
+	colorAttachment.resolveImageLayout = layout;
+
+	return colorAttachment;
+}
 //< color_info
 //> depth_info
 VkRenderingAttachmentInfo vkinit::depth_attachment_info(
@@ -288,11 +316,12 @@ vkinit::buffer_info(VkBuffer buffer, VkDeviceSize offset, VkDeviceSize range)
 }
 
 //> image_set
-VkImageCreateInfo vkinit::image_create_info(VkFormat           format,
-                                            VkImageUsageFlags  usageFlags,
-                                            VkExtent3D         extent,
-                                            VkImageCreateFlags createFlags,
-                                            uint32_t           arrayLayers)
+VkImageCreateInfo vkinit::image_create_info(VkFormat              format,
+                                            VkImageUsageFlags     usageFlags,
+                                            VkExtent3D            extent,
+                                            VkImageCreateFlags    createFlags,
+                                            uint32_t              arrayLayers,
+                                            VkSampleCountFlagBits numSamples)
 {
 	VkImageCreateInfo info = {};
 	info.sType             = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -308,7 +337,7 @@ VkImageCreateInfo vkinit::image_create_info(VkFormat           format,
 
 	// for MSAA. we will not be using it by default, so default it to 1 sample
 	// per pixel.
-	info.samples = VK_SAMPLE_COUNT_1_BIT;
+	info.samples = numSamples;
 
 	// optimal tiling, which means the image is stored on the best gpu format
 	info.tiling = VK_IMAGE_TILING_OPTIMAL;
