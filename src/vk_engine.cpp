@@ -1133,7 +1133,8 @@ void AgniEngine::initDefaultData()
 {
 	// initialize the main camera
 	mainCamera.velocity = glm::vec3(0.f);
-	mainCamera.position = glm::vec3(30.f, -00.f, -085.f);
+	//mainCamera.position = glm::vec3(30.f, -00.f, -085.f); // camera position for structure.glb
+	mainCamera.position = glm::vec3(00.f, 00.f, 1.f); // camera position for helmet or any other small objects
 
 	mainCamera.pitch            = 0;
 	mainCamera.yaw              = 0;
@@ -1215,11 +1216,14 @@ void AgniEngine::initDefaultData()
 	                                               globalDescriptorAllocator);
 
 	std::string structurePath = {"../../assets/structure.glb"};
+	std::string helmetPath = {"../../assets/flighthelmet/helmet.glb"};
 	auto        structureFile = loadGltf(this, structurePath);
+	auto        helmetPathFile = loadGltf(this, helmetPath);
 
 	assert(structureFile.has_value());
 
 	loadedScenes["structure"] = *structureFile;
+	loadedScenes["helmet"] = *helmetPathFile;
 
 	// Initialize skybox
 	// Load cubemap faces (order: right, left, top, bottom, front, back for
@@ -1585,7 +1589,9 @@ void AgniEngine::updateScene()
 	// to opengl and gltf axis
 	projection[1][1] *= -1;
 
-	loadedScenes["structure"]->Draw(glm::mat4 {1.f}, mainDrawContext);
+	//loadedScenes["structure"]->Draw(glm::mat4 {1.f}, mainDrawContext);
+	loadedScenes["helmet"]->Draw(glm::mat4 {1.f}, mainDrawContext);
+	
 
 	sceneData.view = view;
 	// camera projection
