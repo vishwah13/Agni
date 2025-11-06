@@ -472,6 +472,9 @@ void AgniEngine::run()
 		ImGui_ImplSDL3_NewFrame();
 		ImGui::NewFrame();
 
+		ImGui::DockSpaceOverViewport(
+		0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+
 		if (ImGui::Begin("Stats"))
 		{
 			ImGui::Text("frametime %f ms", stats.frametime);
@@ -1091,6 +1094,10 @@ void AgniEngine::initImgui()
 
 	// this initializes the core structures of imgui
 	ImGui::CreateContext();
+
+	// enable docking
+	ImGuiIO& io = ImGui::GetIO();
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
 	// this initializes imgui for SDL
 	ImGui_ImplSDL3_InitForVulkan(_window);
