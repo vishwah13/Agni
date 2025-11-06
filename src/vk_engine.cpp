@@ -216,11 +216,12 @@ void AgniEngine::draw()
 	// transition our main draw image into general layout so we can write into
 	// it we will overwrite it all so we dont care about what was the older
 	// layout
-	//vkutil::transitionImage(
-	//cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+	// vkutil::transitionImage(
+	// cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED,
+	// VK_IMAGE_LAYOUT_GENERAL);
 
 	//// drawing the compute shader based background
-	//drawBackground(cmd);
+	// drawBackground(cmd);
 
 	// Transition MSAA images for rendering
 	vkutil::transitionImage(cmd,
@@ -486,31 +487,52 @@ void AgniEngine::run()
 			ImGui::SliderFloat("Render Scale", &renderScale, 0.3f, 1.f);
 
 			// MSAA sample count selector
-			const char* msaaSampleNames[] = {"1x (No MSAA)", "2x MSAA", "4x MSAA", "8x MSAA"};
+			const char* msaaSampleNames[] = {
+			"1x (No MSAA)", "2x MSAA", "4x MSAA", "8x MSAA"};
 			int currentMsaaIndex = 0;
 			switch (msaaSamples)
 			{
-			case VK_SAMPLE_COUNT_1_BIT: currentMsaaIndex = 0; break;
-			case VK_SAMPLE_COUNT_2_BIT: currentMsaaIndex = 1; break;
-			case VK_SAMPLE_COUNT_4_BIT: currentMsaaIndex = 2; break;
-			case VK_SAMPLE_COUNT_8_BIT: currentMsaaIndex = 3; break;
-			default: currentMsaaIndex = 2; break;
+				case VK_SAMPLE_COUNT_1_BIT:
+					currentMsaaIndex = 0;
+					break;
+				case VK_SAMPLE_COUNT_2_BIT:
+					currentMsaaIndex = 1;
+					break;
+				case VK_SAMPLE_COUNT_4_BIT:
+					currentMsaaIndex = 2;
+					break;
+				case VK_SAMPLE_COUNT_8_BIT:
+					currentMsaaIndex = 3;
+					break;
+				default:
+					currentMsaaIndex = 2;
+					break;
 			}
 
-			if (ImGui::Combo("MSAA Samples", &currentMsaaIndex, msaaSampleNames, 4))
+			if (ImGui::Combo(
+			    "MSAA Samples", &currentMsaaIndex, msaaSampleNames, 4))
 			{
 				VkSampleCountFlagBits newSamples = VK_SAMPLE_COUNT_1_BIT;
 				switch (currentMsaaIndex)
 				{
-				case 0: newSamples = VK_SAMPLE_COUNT_1_BIT; break;
-				case 1: newSamples = VK_SAMPLE_COUNT_2_BIT; break;
-				case 2: newSamples = VK_SAMPLE_COUNT_4_BIT; break;
-				case 3: newSamples = VK_SAMPLE_COUNT_8_BIT; break;
+					case 0:
+						newSamples = VK_SAMPLE_COUNT_1_BIT;
+						break;
+					case 1:
+						newSamples = VK_SAMPLE_COUNT_2_BIT;
+						break;
+					case 2:
+						newSamples = VK_SAMPLE_COUNT_4_BIT;
+						break;
+					case 3:
+						newSamples = VK_SAMPLE_COUNT_8_BIT;
+						break;
 				}
 				if (newSamples != msaaSamples)
 				{
 					msaaSamples = newSamples;
-					// Request resize to recreate images and pipelines with new sample count
+					// Request resize to recreate images and pipelines with new
+					// sample count
 					resizeRequested = true;
 				}
 			}
@@ -626,6 +648,11 @@ void AgniEngine::initSwapchain()
 	drawImageUsages |= VK_IMAGE_USAGE_STORAGE_BIT;
 	drawImageUsages |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
+	VkImageUsageFlags msaaImageUsages {};
+	msaaImageUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	msaaImageUsages |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	msaaImageUsages |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
 	VkImageUsageFlags depthImageUsages {};
 	depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
@@ -633,11 +660,17 @@ void AgniEngine::initSwapchain()
 	drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageUsages);
 
 	// Create MSAA images with multisampling enabled
-	_msaaColorImage = createImage(
-	drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageUsages, false, msaaSamples);
+	_msaaColorImage = createImage(drawImageExtent,
+	                              VK_FORMAT_R16G16B16A16_SFLOAT,
+	                              msaaImageUsages,
+	                              false,
+	                              msaaSamples);
 
-	_depthImage =
-	createImage(drawImageExtent, VK_FORMAT_D32_SFLOAT, depthImageUsages, false, msaaSamples);
+	_depthImage = createImage(drawImageExtent,
+	                          VK_FORMAT_D32_SFLOAT,
+	                          depthImageUsages,
+	                          false,
+	                          msaaSamples);
 
 	// add to deletion queues
 	_mainDeletionQueue.push_function(
@@ -774,6 +807,11 @@ void AgniEngine::resizeSwapchain()
 	drawImageUsages |= VK_IMAGE_USAGE_STORAGE_BIT;
 	drawImageUsages |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
+	VkImageUsageFlags msaaImageUsages {};
+	msaaImageUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	msaaImageUsages |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	msaaImageUsages |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
 	VkImageUsageFlags depthImageUsages {};
 	depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
@@ -781,11 +819,17 @@ void AgniEngine::resizeSwapchain()
 	drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageUsages);
 
 	// Create MSAA images with multisampling enabled
-	_msaaColorImage = createImage(
-	drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageUsages, false, msaaSamples);
+	_msaaColorImage = createImage(drawImageExtent,
+	                              VK_FORMAT_R16G16B16A16_SFLOAT,
+	                              msaaImageUsages,
+	                              false,
+	                              msaaSamples);
 
-	_depthImage =
-	createImage(drawImageExtent, VK_FORMAT_D32_SFLOAT, depthImageUsages, false, msaaSamples);
+	_depthImage = createImage(drawImageExtent,
+	                          VK_FORMAT_D32_SFLOAT,
+	                          depthImageUsages,
+	                          false,
+	                          msaaSamples);
 
 	// Rebuild pipelines with new MSAA settings
 	metalRoughMaterial.buildPipelines(this);
@@ -1178,14 +1222,15 @@ void AgniEngine::initDefaultData()
 	loadedScenes["structure"] = *structureFile;
 
 	// Initialize skybox
-	// Load cubemap faces (order: right, left, top, bottom, front, back for Vulkan)
+	// Load cubemap faces (order: right, left, top, bottom, front, back for
+	// Vulkan)
 	std::array<std::string, 6> cubemapFaces = {
-	"../../assets/skybox/right.jpg",   // +X
-	"../../assets/skybox/left.jpg",    // -X
-	"../../assets/skybox/top.jpg",     // +Y
-	"../../assets/skybox/bottom.jpg",  // -Y
-	"../../assets/skybox/front.jpg",   // +Z
-	"../../assets/skybox/back.jpg"     // -Z
+	"../../assets/skybox/right.jpg",  // +X
+	"../../assets/skybox/left.jpg",   // -X
+	"../../assets/skybox/top.jpg",    // +Y
+	"../../assets/skybox/bottom.jpg", // -Y
+	"../../assets/skybox/front.jpg",  // +Z
+	"../../assets/skybox/back.jpg"    // -Z
 	};
 
 	_cubemapImage = createCubemap(
@@ -1194,13 +1239,13 @@ void AgniEngine::initDefaultData()
 	// Create sampler for cubemap
 	VkSamplerCreateInfo cubemapSampler = {
 	.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
-	cubemapSampler.magFilter  = VK_FILTER_LINEAR;
-	cubemapSampler.minFilter  = VK_FILTER_LINEAR;
+	cubemapSampler.magFilter    = VK_FILTER_LINEAR;
+	cubemapSampler.minFilter    = VK_FILTER_LINEAR;
 	cubemapSampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 	cubemapSampler.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 	cubemapSampler.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 
-	
+
 	vkCreateSampler(_device, &cubemapSampler, nullptr, &_cubemapSamplerHandle);
 
 	// Create skybox material resources
@@ -1363,8 +1408,11 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 
 
 	// begin a render pass with MSAA images that resolve to draw image
-	VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info_msaa(
-	_msaaColorImage.imageView, _drawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	VkRenderingAttachmentInfo colorAttachment =
+	vkinit::attachment_info_msaa(_msaaColorImage.imageView,
+	                             _drawImage.imageView,
+	                             nullptr,
+	                             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	VkRenderingAttachmentInfo depthAttachment = vkinit::depth_attachment_info(
 	_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
@@ -1604,7 +1652,8 @@ AllocatedImage AgniEngine::createImage(VkExtent3D            size,
 	newImage.imageFormat = format;
 	newImage.imageExtent = size;
 
-	VkImageCreateInfo img_info = vkinit::image_create_info(format, usage, size, 0, 1, numSamples);
+	VkImageCreateInfo img_info =
+	vkinit::image_create_info(format, usage, size, 0, 1, numSamples);
 	if (mipmapped)
 	{
 		img_info.mipLevels = static_cast<uint32_t>(std::floor(
@@ -1730,7 +1779,8 @@ AgniEngine::createCubemap(const std::array<std::string, 6>& faceFiles,
 	int                     width, height, channels;
 
 	// Load first face to get dimensions
-	faceData[0] = stbi_load(faceFiles[0].c_str(), &width, &height, &channels, 4);
+	faceData[0] =
+	stbi_load(faceFiles[0].c_str(), &width, &height, &channels, 4);
 	if (!faceData[0])
 	{
 		fmt::println("Failed to load cubemap face: {}", faceFiles[0]);
@@ -1744,8 +1794,9 @@ AgniEngine::createCubemap(const std::array<std::string, 6>& faceFiles,
 		faceData[i] = stbi_load(faceFiles[i].c_str(), &w, &h, &c, 4);
 		if (!faceData[i] || w != width || h != height)
 		{
-			fmt::println("Failed to load or dimension mismatch for cubemap face: {}",
-			             faceFiles[i]);
+			fmt::println(
+			"Failed to load or dimension mismatch for cubemap face: {}",
+			faceFiles[i]);
 			// Clean up loaded faces
 			for (int j = 0; j <= i; j++)
 			{
@@ -1757,7 +1808,7 @@ AgniEngine::createCubemap(const std::array<std::string, 6>& faceFiles,
 	}
 
 	// Calculate total size for all 6 faces
-	size_t faceSize = width * height * 4; // 4 bytes per pixel (RGBA)
+	size_t faceSize  = width * height * 4; // 4 bytes per pixel (RGBA)
 	size_t totalSize = faceSize * 6;
 
 	// Create staging buffer
@@ -1778,7 +1829,9 @@ AgniEngine::createCubemap(const std::array<std::string, 6>& faceFiles,
 	cubemap.imageExtent = {(uint32_t) width, (uint32_t) height, 1};
 
 	VkImageCreateInfo img_info = vkinit::image_create_info(
-	format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, cubemap.imageExtent);
+	format,
+	usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+	cubemap.imageExtent);
 
 	// Set cubemap-specific flags
 	img_info.arrayLayers = 6;
@@ -1786,9 +1839,9 @@ AgniEngine::createCubemap(const std::array<std::string, 6>& faceFiles,
 
 	if (mipmapped)
 	{
-		img_info.mipLevels = static_cast<uint32_t>(
-		                     std::floor(std::log2(std::max(width, height)))) +
-		                     1;
+		img_info.mipLevels =
+		static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) +
+		1;
 	}
 
 	// Allocate image on GPU
@@ -1807,9 +1860,9 @@ AgniEngine::createCubemap(const std::array<std::string, 6>& faceFiles,
 	// Create image view for cubemap
 	VkImageViewCreateInfo view_info = vkinit::imageview_create_info(
 	format, cubemap.image, VK_IMAGE_ASPECT_COLOR_BIT);
-	view_info.viewType                        = VK_IMAGE_VIEW_TYPE_CUBE;
-	view_info.subresourceRange.layerCount     = 6;
-	view_info.subresourceRange.levelCount     = img_info.mipLevels;
+	view_info.viewType                    = VK_IMAGE_VIEW_TYPE_CUBE;
+	view_info.subresourceRange.layerCount = 6;
+	view_info.subresourceRange.levelCount = img_info.mipLevels;
 
 	VK_CHECK(
 	vkCreateImageView(_device, &view_info, nullptr, &cubemap.imageView));
@@ -1821,13 +1874,13 @@ AgniEngine::createCubemap(const std::array<std::string, 6>& faceFiles,
 		// Transition to transfer dst
 		VkImageMemoryBarrier2 barrier {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
-		barrier.srcStageMask               = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-		barrier.srcAccessMask              = 0;
-		barrier.dstStageMask               = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-		barrier.dstAccessMask              = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-		barrier.oldLayout                  = VK_IMAGE_LAYOUT_UNDEFINED;
-		barrier.newLayout                  = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		barrier.image                      = cubemap.image;
+		barrier.srcStageMask  = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+		barrier.srcAccessMask = 0;
+		barrier.dstStageMask  = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+		barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+		barrier.oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
+		barrier.newLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		barrier.image         = cubemap.image;
 		barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
 		barrier.subresourceRange.baseMipLevel   = 0;
 		barrier.subresourceRange.levelCount     = img_info.mipLevels;
@@ -1842,12 +1895,12 @@ AgniEngine::createCubemap(const std::array<std::string, 6>& faceFiles,
 		// Copy each face from buffer to image
 		for (uint32_t face = 0; face < 6; face++)
 		{
-			VkBufferImageCopy copyRegion               = {};
-			copyRegion.bufferOffset                    = face * faceSize;
-			copyRegion.bufferRowLength                 = 0;
-			copyRegion.bufferImageHeight               = 0;
-			copyRegion.imageSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-			copyRegion.imageSubresource.mipLevel       = 0;
+			VkBufferImageCopy copyRegion           = {};
+			copyRegion.bufferOffset                = face * faceSize;
+			copyRegion.bufferRowLength             = 0;
+			copyRegion.bufferImageHeight           = 0;
+			copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			copyRegion.imageSubresource.mipLevel   = 0;
 			copyRegion.imageSubresource.baseArrayLayer = face;
 			copyRegion.imageSubresource.layerCount     = 1;
 			copyRegion.imageExtent = {(uint32_t) width, (uint32_t) height, 1};
@@ -2002,7 +2055,8 @@ void GLTFMetallic_Roughness::buildPipelines(AgniEngine* engine)
 	pipelineBuilder.enableDepthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
 	// render format
-	pipelineBuilder.setColorAttachmentFormat(engine->_msaaColorImage.imageFormat);
+	pipelineBuilder.setColorAttachmentFormat(
+	engine->_msaaColorImage.imageFormat);
 	pipelineBuilder.setDepthFormat(engine->_depthImage.imageFormat);
 
 	// use the triangle layout we created
@@ -2086,8 +2140,9 @@ void Skybox::buildPipelines(AgniEngine* engine)
 	}
 
 	VkShaderModule skyVertexShader;
-	if (!vkutil::loadShaderModule(
-	    "../../shaders/glsl/skybox.vert.spv", engine->_device, &skyVertexShader))
+	if (!vkutil::loadShaderModule("../../shaders/glsl/skybox.vert.spv",
+	                              engine->_device,
+	                              &skyVertexShader))
 	{
 		fmt::println("Error when building the skybox vertex shader module");
 	}
@@ -2128,11 +2183,13 @@ void Skybox::buildPipelines(AgniEngine* engine)
 	pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
 	pipelineBuilder.enableMultisampling(engine->msaaSamples);
 	pipelineBuilder.disableBlending();
-	// turning off depth buffer writes for skybox, but enable depth test with reversed-Z
+	// turning off depth buffer writes for skybox, but enable depth test with
+	// reversed-Z
 	pipelineBuilder.enableDepthtest(false, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
 	// render format
-	pipelineBuilder.setColorAttachmentFormat(engine->_msaaColorImage.imageFormat);
+	pipelineBuilder.setColorAttachmentFormat(
+	engine->_msaaColorImage.imageFormat);
 	pipelineBuilder.setDepthFormat(engine->_depthImage.imageFormat);
 
 	// use the triangle layout we created
@@ -2177,7 +2234,9 @@ Skybox::writeMaterial(VkDevice                     device,
 	return matData;
 }
 
-void Skybox::Draw(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptor, VkExtent2D drawExtent)
+void Skybox::Draw(VkCommandBuffer cmd,
+                  VkDescriptorSet sceneDescriptor,
+                  VkExtent2D      drawExtent)
 {
 	// Bind skybox pipeline
 	vkCmdBindPipeline(

@@ -196,7 +196,7 @@ void PipelineBuilder::setMultisamplingNone()
 
 void PipelineBuilder::enableMultisampling(VkSampleCountFlagBits numSample)
 {
-	_multisampling.sampleShadingEnable = VK_TRUE;
+	_multisampling.sampleShadingEnable = VK_FALSE;
 	// multisampling defaulted to no multisampling (1 sample per pixel)
 	_multisampling.rasterizationSamples = numSample;
 	_multisampling.minSampleShading     = 1.0f;
