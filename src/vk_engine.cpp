@@ -1,6 +1,5 @@
 ﻿//> includes
 #include "vk_engine.h"
-
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 
@@ -24,9 +23,13 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/transform.hpp>
 
+#include "renderdoc_app.h"
 #include "stb_image.h"
 
 #include "Debug.h"
+
+#define NOMINMAX
+#include <windows.h>
 
 
 #ifdef NDEBUG
@@ -34,6 +37,8 @@ constexpr bool bUseValidationLayers = false;
 #else
 constexpr bool bUseValidationLayers = true;
 #endif
+
+RENDERDOC_API_1_1_2* rdoc_api = NULL;
 
 bool isVisible(const RenderObject& obj, const glm::mat4& viewproj)
 {
@@ -92,6 +97,15 @@ void AgniEngine::init()
 	// only one engine initialization is allowed with the application.
 	assert(loadedEngine == nullptr);
 	loadedEngine = this;
+
+	if (HMODULE mod = GetModuleHandleA("renderdoc.dll"))
+	{
+		pRENDERDOC_GetAPI RENDERDOC_GetAPI =
+		(pRENDERDOC_GetAPI) GetProcAddress(mod, "RENDERDOC_GetAPI");
+		int ret =
+		RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void**) &rdoc_api);
+		assert(ret == 1);
+	}
 
 	// We initialize SDL and create a window with it.
 	SDL_Init(SDL_INIT_VIDEO);
@@ -167,6 +181,11 @@ void AgniEngine::cleanup()
 
 void AgniEngine::draw()
 {
+	if (rdoc_api)
+	{
+		rdoc_api->StartFrameCapture(NULL, NULL);
+	}
+		
 
 	updateScene();
 	// wait until the gpu has finished rendering the last frame. Timeout of 1
@@ -322,6 +341,12 @@ void AgniEngine::draw()
 
 	// increase the number of frames drawn
 	_frameNumber++;
+
+	if (rdoc_api)
+	{
+		rdoc_api->EndFrameCapture(NULL, NULL);
+	}
+		
 }
 
 void AgniEngine::drawBackground(VkCommandBuffer cmd)
@@ -1140,8 +1165,10 @@ void AgniEngine::initDefaultData()
 {
 	// initialize the main camera
 	mainCamera.velocity = glm::vec3(0.f);
-	//mainCamera.position = glm::vec3(30.f, -00.f, -085.f); // camera position for structure.glb
-	mainCamera.position = glm::vec3(00.f, 00.f, 1.f); // camera position for helmet or any other small objects
+	// mainCamera.position = glm::vec3(30.f, -00.f, -085.f); // camera position
+	// for structure.glb
+	mainCamera.position = glm::vec3(
+	00.f, 00.f, 1.f); // camera position for helmet or any other small objects
 
 	mainCamera.pitch            = 0;
 	mainCamera.yaw              = 0;
@@ -1222,14 +1249,15 @@ void AgniEngine::initDefaultData()
 	                                               materialResources,
 	                                               globalDescriptorAllocator);
 
-	//std::string structurePath = {"../../assets/structure.glb"};
-	std::string helmetPath = {"../../assets/free_1975_porsche_911_930_turbo.glb"};
-	//auto        structureFile = loadGltf(this, structurePath);
-	auto        helmetPathFile = loadGltf(this, helmetPath);
+	// std::string structurePath = {"../../assets/structure.glb"};
+	std::string helmetPath = {
+	"../../assets/free_1975_porsche_911_930_turbo.glb"};
+	// auto        structureFile = loadGltf(this, structurePath);
+	auto helmetPathFile = loadGltf(this, helmetPath);
 
 	assert(helmetPathFile.has_value());
 
-	//loadedScenes["structure"] = *structureFile;
+	// loadedScenes["structure"] = *structureFile;
 	loadedScenes["helmet"] = *helmetPathFile;
 
 	// Initialize skybox
@@ -1596,9 +1624,9 @@ void AgniEngine::updateScene()
 	// to opengl and gltf axis
 	projection[1][1] *= -1;
 
-	//loadedScenes["structure"]->Draw(glm::mat4 {1.f}, mainDrawContext);
+	// loadedScenes["structure"]->Draw(glm::mat4 {1.f}, mainDrawContext);
 	loadedScenes["helmet"]->Draw(glm::mat4 {1.f}, mainDrawContext);
-	
+
 
 	sceneData.view = view;
 	// camera projection
