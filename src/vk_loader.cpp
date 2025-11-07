@@ -327,14 +327,25 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 	// depend on materials, and materials on textures.
 
 	// load all textures
+	int imageIndex = 0;
 	for (fastgltf::Image& image : gltf.images)
 	{
-		std::optional<AllocatedImage> img = loadImage(engine, gltf, image,true);
+		std::optional<AllocatedImage> img =
+		loadImage(engine, gltf, image, true);
+
+		// Generate a unique name for this image (use name if available,
+		// otherwise use index)
+		std::string imageName = image.name.c_str();
+		if (imageName.empty())
+		{
+			imageName = "image_" + std::to_string(imageIndex);
+		}
 
 		if (img.has_value())
 		{
 			images.push_back(*img);
-			file.images[image.name.c_str()] = *img;
+			file.images[imageName] =
+			*img; // Always store in map with a valid key
 		}
 		else
 		{
@@ -344,6 +355,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 			std::cout << "gltf failed to load texture " << image.name
 			          << std::endl;
 		}
+		imageIndex++;
 	}
 
 	// create buffer to hold the material data

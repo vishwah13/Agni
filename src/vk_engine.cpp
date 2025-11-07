@@ -1222,14 +1222,14 @@ void AgniEngine::initDefaultData()
 	                                               materialResources,
 	                                               globalDescriptorAllocator);
 
-	std::string structurePath = {"../../assets/structure.glb"};
-	std::string helmetPath = {"../../assets/flighthelmet/helmet.glb"};
-	auto        structureFile = loadGltf(this, structurePath);
+	//std::string structurePath = {"../../assets/structure.glb"};
+	std::string helmetPath = {"../../assets/free_1975_porsche_911_930_turbo.glb"};
+	//auto        structureFile = loadGltf(this, structurePath);
 	auto        helmetPathFile = loadGltf(this, helmetPath);
 
-	assert(structureFile.has_value());
+	assert(helmetPathFile.has_value());
 
-	loadedScenes["structure"] = *structureFile;
+	//loadedScenes["structure"] = *structureFile;
 	loadedScenes["helmet"] = *helmetPathFile;
 
 	// Initialize skybox
