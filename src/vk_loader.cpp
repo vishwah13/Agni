@@ -586,6 +586,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 					newvtx.color                  = glm::vec4 {1.f};
 					newvtx.uv_x                   = 0;
 					newvtx.uv_y                   = 0;
+					newvtx.tangent                = {0, 0, 0, 0};
 					vertices[initial_vtx + index] = newvtx;
 				});
 			}
@@ -629,39 +630,53 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 				{ vertices[initial_vtx + index].color = v; });
 			}
 
-			// Generate tangents using MikkTSpace
-			// Create a temporary index buffer for this primitive only
-			std::vector<uint32_t> primitiveIndices;
-			primitiveIndices.reserve(newSurface.count);
-			for (uint32_t i = newSurface.startIndex; i < newSurface.startIndex + newSurface.count; i++)
+			// load tangents if available, otherwise generate them
+			auto tangents = p.findAttribute("TANGENT");
+			if (tangents != p.attributes.end())
 			{
-				primitiveIndices.push_back(indices[i]);
+				// Use tangents from GLTF file
+				fastgltf::iterateAccessorWithIndex<glm::vec4>(
+				gltf,
+				gltf.accessors[(*tangents).accessorIndex],
+				[&](glm::vec4 v, size_t index)
+				{ vertices[initial_vtx + index].tangent = v; });
 			}
-
-			// Setup MikkTSpace interface
-			SMikkTSpaceInterface mikkInterface = {};
-			mikkInterface.m_getNumFaces = mikkGetNumFaces;
-			mikkInterface.m_getNumVerticesOfFace = mikkGetNumVerticesOfFace;
-			mikkInterface.m_getPosition = mikkGetPosition;
-			mikkInterface.m_getNormal = mikkGetNormal;
-			mikkInterface.m_getTexCoord = mikkGetTexCoord;
-			mikkInterface.m_setTSpaceBasic = mikkSetTSpaceBasic;
-
-			// Setup user data
-			MikkTSpaceUserData userData = {};
-			userData.vertices = &vertices;
-			userData.indices = &primitiveIndices;
-			userData.vertexOffset = initial_vtx;
-
-			// Setup context
-			SMikkTSpaceContext mikkContext = {};
-			mikkContext.m_pInterface = &mikkInterface;
-			mikkContext.m_pUserData = &userData;
-
-			// Generate tangents
-			if (!genTangSpaceDefault(&mikkContext))
+			else
 			{
-				fmt::print("Warning: Failed to generate tangents for mesh: {}\n", mesh.name);
+				// Generate tangents using MikkTSpace
+				// Create a temporary index buffer for this primitive only
+				std::vector<uint32_t> primitiveIndices;
+				primitiveIndices.reserve(newSurface.count);
+				for (uint32_t i = newSurface.startIndex; i < newSurface.startIndex + newSurface.count; i++)
+				{
+					primitiveIndices.push_back(indices[i]);
+				}
+
+				// Setup MikkTSpace interface
+				SMikkTSpaceInterface mikkInterface = {};
+				mikkInterface.m_getNumFaces = mikkGetNumFaces;
+				mikkInterface.m_getNumVerticesOfFace = mikkGetNumVerticesOfFace;
+				mikkInterface.m_getPosition = mikkGetPosition;
+				mikkInterface.m_getNormal = mikkGetNormal;
+				mikkInterface.m_getTexCoord = mikkGetTexCoord;
+				mikkInterface.m_setTSpaceBasic = mikkSetTSpaceBasic;
+
+				// Setup user data
+				MikkTSpaceUserData userData = {};
+				userData.vertices = &vertices;
+				userData.indices = &primitiveIndices;
+				userData.vertexOffset = initial_vtx;
+
+				// Setup context
+				SMikkTSpaceContext mikkContext = {};
+				mikkContext.m_pInterface = &mikkInterface;
+				mikkContext.m_pUserData = &userData;
+
+				// Generate tangents
+				if (!genTangSpaceDefault(&mikkContext))
+				{
+					fmt::print("Warning: Failed to generate tangents for mesh: {}\n", mesh.name);
+				}
 			}
 
 			if (p.materialIndex.has_value())
