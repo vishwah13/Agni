@@ -181,11 +181,11 @@ void AgniEngine::cleanup()
 
 void AgniEngine::draw()
 {
-	if (rdoc_api)
+	/*if (rdoc_api)
 	{
 		rdoc_api->StartFrameCapture(NULL, NULL);
-	}
-		
+	}*/
+
 
 	updateScene();
 	// wait until the gpu has finished rendering the last frame. Timeout of 1
@@ -342,11 +342,10 @@ void AgniEngine::draw()
 	// increase the number of frames drawn
 	_frameNumber++;
 
-	if (rdoc_api)
+	/*if (rdoc_api)
 	{
 		rdoc_api->EndFrameCapture(NULL, NULL);
-	}
-		
+	}*/
 }
 
 void AgniEngine::drawBackground(VkCommandBuffer cmd)
@@ -1227,6 +1226,10 @@ void AgniEngine::initDefaultData()
 	materialResources.colorSampler      = _defaultSamplerLinear;
 	materialResources.metalRoughImage   = _whiteImage;
 	materialResources.metalRoughSampler = _defaultSamplerLinear;
+	materialResources.normalImage       = _whiteImage;
+	materialResources.normalSampler     = _defaultSamplerLinear;
+	materialResources.aoImage           = _whiteImage;
+	materialResources.aoSampler         = _defaultSamplerLinear;
 
 	// set the uniform buffer for the material data
 	AllocatedBuffer materialConstants =
@@ -1641,6 +1644,7 @@ void AgniEngine::updateScene()
 	sceneData.ambientColor      = glm::vec4(.1f);
 	sceneData.sunlightColor     = glm::vec4(1.f);
 	sceneData.sunlightDirection = glm::vec4(0, 1, 0.5, 1.f);
+	sceneData.cameraPosition    = mainCamera.position;
 
 	auto end = std::chrono::system_clock::now();
 
@@ -2063,6 +2067,8 @@ void GLTFMetallic_Roughness::buildPipelines(AgniEngine* engine)
 	layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 	layoutBuilder.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 	layoutBuilder.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	layoutBuilder.addBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	layoutBuilder.addBinding(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
 	materialLayout = layoutBuilder.build(
 	engine->_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
@@ -2161,6 +2167,16 @@ DescriptorAllocatorGrowable& descriptorAllocator)
 	writer.writeImage(/*binding*/ 2,
 	                  resources.metalRoughImage.imageView,
 	                  resources.metalRoughSampler,
+	                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+	                  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	writer.writeImage(/*binding*/ 3,
+	                  resources.normalImage.imageView,
+	                  resources.normalSampler,
+	                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+	                  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	writer.writeImage(/*binding*/ 4,
+	                  resources.aoImage.imageView,
+	                  resources.aoSampler,
 	                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	                  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 

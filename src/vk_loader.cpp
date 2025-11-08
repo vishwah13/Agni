@@ -397,6 +397,10 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		materialResources.colorSampler      = engine->_defaultSamplerLinear;
 		materialResources.metalRoughImage   = engine->_whiteImage;
 		materialResources.metalRoughSampler = engine->_defaultSamplerLinear;
+		materialResources.normalImage       = engine->_whiteImage;
+		materialResources.normalSampler     = engine->_defaultSamplerLinear;
+		materialResources.aoImage           = engine->_whiteImage;
+		materialResources.aoSampler         = engine->_defaultSamplerLinear;
 
 		// set the uniform buffer for the material data
 		materialResources.dataBuffer = file.materialDataBuffer.buffer;
@@ -414,6 +418,43 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 
 			materialResources.colorImage   = images[img];
 			materialResources.colorSampler = file.samplers[sampler];
+		}
+		if (mat.pbrData.metallicRoughnessTexture.has_value())
+		{
+			size_t img =
+			gltf
+			.textures[mat.pbrData.metallicRoughnessTexture.value().textureIndex]
+			.imageIndex.value();
+			size_t sampler =
+			gltf
+			.textures[mat.pbrData.metallicRoughnessTexture.value().textureIndex]
+			.samplerIndex.value();
+
+			materialResources.metalRoughImage   = images[img];
+			materialResources.metalRoughSampler = file.samplers[sampler];
+		}
+		if (mat.normalTexture.has_value())
+		{
+			size_t img = gltf.textures[mat.normalTexture.value().textureIndex]
+			             .imageIndex.value();
+			size_t sampler =
+			gltf.textures[mat.normalTexture.value().textureIndex]
+			.samplerIndex.value();
+
+			materialResources.normalImage   = images[img];
+			materialResources.normalSampler = file.samplers[sampler];
+		}
+		if (mat.occlusionTexture.has_value())
+		{
+			size_t img =
+			gltf.textures[mat.occlusionTexture.value().textureIndex]
+			.imageIndex.value();
+			size_t sampler =
+			gltf.textures[mat.occlusionTexture.value().textureIndex]
+			.samplerIndex.value();
+
+			materialResources.aoImage   = images[img];
+			materialResources.aoSampler = file.samplers[sampler];
 		}
 		// build material
 		newMat->data = engine->metalRoughMaterial.writeMaterial(
