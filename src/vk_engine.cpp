@@ -183,7 +183,7 @@ void AgniEngine::draw()
 {
 	/*if (rdoc_api)
 	{
-		rdoc_api->StartFrameCapture(NULL, NULL);
+	    rdoc_api->StartFrameCapture(NULL, NULL);
 	}*/
 
 
@@ -344,7 +344,7 @@ void AgniEngine::draw()
 
 	/*if (rdoc_api)
 	{
-		rdoc_api->EndFrameCapture(NULL, NULL);
+	    rdoc_api->EndFrameCapture(NULL, NULL);
 	}*/
 }
 
@@ -1220,7 +1220,7 @@ void AgniEngine::initDefaultData()
 	sampl.minFilter = VK_FILTER_LINEAR;
 	vkCreateSampler(_device, &sampl, nullptr, &_defaultSamplerLinear);
 
-	GLTFMetallic_Roughness::MaterialResources materialResources;
+	GltfPbrMaterial::MaterialResources materialResources;
 	// default the material textures
 	materialResources.colorImage        = _whiteImage;
 	materialResources.colorSampler      = _defaultSamplerLinear;
@@ -1233,13 +1233,13 @@ void AgniEngine::initDefaultData()
 
 	// set the uniform buffer for the material data
 	AllocatedBuffer materialConstants =
-	createBuffer(sizeof(GLTFMetallic_Roughness::MaterialConstants),
+	createBuffer(sizeof(GltfPbrMaterial::MaterialConstants),
 	             VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 	             VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 	// write the buffer
-	GLTFMetallic_Roughness::MaterialConstants* sceneUniformData =
-	(GLTFMetallic_Roughness::MaterialConstants*)
+	GltfPbrMaterial::MaterialConstants* sceneUniformData =
+	(GltfPbrMaterial::MaterialConstants*)
 	materialConstants.allocation->GetMappedData();
 	sceneUniformData->colorFactors        = glm::vec4 {1, 1, 1, 1};
 	sceneUniformData->metal_rough_factors = glm::vec4 {1, 0.5, 0, 0};
@@ -1303,35 +1303,35 @@ void AgniEngine::initDefaultData()
 	std::vector<Vertex> cubeVertices = {
 	// Positions are used as texture coordinates in the shader
 	// Front face (+Z)
-	{{-1.0f, -1.0f, 1.0f}, 0, {0, 0, 1}, 0, {1, 1, 1, 1}},
-	{{1.0f, -1.0f, 1.0f}, 0, {0, 0, 1}, 0, {1, 1, 1, 1}},
-	{{1.0f, 1.0f, 1.0f}, 0, {0, 0, 1}, 0, {1, 1, 1, 1}},
-	{{-1.0f, 1.0f, 1.0f}, 0, {0, 0, 1}, 0, {1, 1, 1, 1}},
+	{{-1.0f, -1.0f, 1.0f}, 0, {0, 0, 1}, 0, {1, 1, 1, 1}, {1, 1, 1, 1}},
+	{{1.0f, -1.0f, 1.0f}, 0, {0, 0, 1}, 0, {1, 1, 1, 1}, {1, 1, 1, 1}},
+	{{1.0f, 1.0f, 1.0f}, 0, {0, 0, 1}, 0, {1, 1, 1, 1}, {1, 1, 1, 1}},
+	{{-1.0f, 1.0f, 1.0f}, 0, {0, 0, 1}, 0, {1, 1, 1, 1}, {1, 1, 1, 1}},
 	// Back face (-Z)
-	{{1.0f, -1.0f, -1.0f}, 0, {0, 0, -1}, 0, {1, 1, 1, 1}},
-	{{-1.0f, -1.0f, -1.0f}, 0, {0, 0, -1}, 0, {1, 1, 1, 1}},
-	{{-1.0f, 1.0f, -1.0f}, 0, {0, 0, -1}, 0, {1, 1, 1, 1}},
-	{{1.0f, 1.0f, -1.0f}, 0, {0, 0, -1}, 0, {1, 1, 1, 1}},
+	{{1.0f, -1.0f, -1.0f}, 0, {0, 0, -1}, 0, {1, 1, 1, 1}, {1, 1, 1, 1}},
+	{{-1.0f, -1.0f, -1.0f}, 0, {0, 0, -1}, 0, {1, 1, 1, 1}, {1, 1, 1, 1}},
+	{{-1.0f, 1.0f, -1.0f}, 0, {0, 0, -1}, 0, {1, 1, 1, 1}, {1, 1, 1, 1}},
+	{{1.0f, 1.0f, -1.0f}, 0, {0, 0, -1}, 0, {1, 1, 1, 1}, {1, 1, 1, 1}},
 	// Top face (+Y)
-	{{-1.0f, 1.0f, 1.0f}, 0, {0, 1, 0}, 0, {1, 1, 1, 1}},
-	{{1.0f, 1.0f, 1.0f}, 0, {0, 1, 0}, 0, {1, 1, 1, 1}},
-	{{1.0f, 1.0f, -1.0f}, 0, {0, 1, 0}, 0, {1, 1, 1, 1}},
-	{{-1.0f, 1.0f, -1.0f}, 0, {0, 1, 0}, 0, {1, 1, 1, 1}},
+	{{-1.0f, 1.0f, 1.0f}, 0, {0, 1, 0}, 0, {1, 1, 1, 1}, {1, 1, 1, 1}},
+	{{1.0f, 1.0f, 1.0f}, 0, {0, 1, 0}, 0, {1, 1, 1, 1}, {1, 1, 1, 1}},
+	{{1.0f, 1.0f, -1.0f}, 0, {0, 1, 0}, 0, {1, 1, 1, 1}, {1, 1, 1, 1}},
+	{{-1.0f, 1.0f, -1.0f}, 0, {0, 1, 0}, 0, {1, 1, 1, 1}, {1, 1, 1, 1}},
 	// Bottom face (-Y)
-	{{-1.0f, -1.0f, -1.0f}, 0, {0, -1, 0}, 0, {1, 1, 1, 1}},
-	{{1.0f, -1.0f, -1.0f}, 0, {0, -1, 0}, 0, {1, 1, 1, 1}},
-	{{1.0f, -1.0f, 1.0f}, 0, {0, -1, 0}, 0, {1, 1, 1, 1}},
-	{{-1.0f, -1.0f, 1.0f}, 0, {0, -1, 0}, 0, {1, 1, 1, 1}},
+	{{-1.0f, -1.0f, -1.0f}, 0, {0, -1, 0}, 0, {1, 1, 1, 1}, {1, 1, 1, 1}},
+	{{1.0f, -1.0f, -1.0f}, 0, {0, -1, 0}, 0, {1, 1, 1, 1}, {1, 1, 1, 1}},
+	{{1.0f, -1.0f, 1.0f}, 0, {0, -1, 0}, 0, {1, 1, 1, 1}, {1, 1, 1, 1}},
+	{{-1.0f, -1.0f, 1.0f}, 0, {0, -1, 0}, 0, {1, 1, 1, 1}, {1, 1, 1, 1}},
 	// Right face (+X)
-	{{1.0f, -1.0f, 1.0f}, 0, {1, 0, 0}, 0, {1, 1, 1, 1}},
-	{{1.0f, -1.0f, -1.0f}, 0, {1, 0, 0}, 0, {1, 1, 1, 1}},
-	{{1.0f, 1.0f, -1.0f}, 0, {1, 0, 0}, 0, {1, 1, 1, 1}},
-	{{1.0f, 1.0f, 1.0f}, 0, {1, 0, 0}, 0, {1, 1, 1, 1}},
+	{{1.0f, -1.0f, 1.0f}, 0, {1, 0, 0}, 0, {1, 1, 1, 1}, {1, 1, 1, 1}},
+	{{1.0f, -1.0f, -1.0f}, 0, {1, 0, 0}, 0, {1, 1, 1, 1}, {1, 1, 1, 1}},
+	{{1.0f, 1.0f, -1.0f}, 0, {1, 0, 0}, 0, {1, 1, 1, 1}, {1, 1, 1, 1}},
+	{{1.0f, 1.0f, 1.0f}, 0, {1, 0, 0}, 0, {1, 1, 1, 1}, {1, 1, 1, 1}},
 	// Left face (-X)
-	{{-1.0f, -1.0f, -1.0f}, 0, {-1, 0, 0}, 0, {1, 1, 1, 1}},
-	{{-1.0f, -1.0f, 1.0f}, 0, {-1, 0, 0}, 0, {1, 1, 1, 1}},
-	{{-1.0f, 1.0f, 1.0f}, 0, {-1, 0, 0}, 0, {1, 1, 1, 1}},
-	{{-1.0f, 1.0f, -1.0f}, 0, {-1, 0, 0}, 0, {1, 1, 1, 1}},
+	{{-1.0f, -1.0f, -1.0f}, 0, {-1, 0, 0}, 0, {1, 1, 1, 1}, {1, 1, 1, 1}},
+	{{-1.0f, -1.0f, 1.0f}, 0, {-1, 0, 0}, 0, {1, 1, 1, 1}, {1, 1, 1, 1}},
+	{{-1.0f, 1.0f, 1.0f}, 0, {-1, 0, 0}, 0, {1, 1, 1, 1}, {1, 1, 1, 1}},
+	{{-1.0f, 1.0f, -1.0f}, 0, {-1, 0, 0}, 0, {1, 1, 1, 1}, {1, 1, 1, 1}},
 	};
 
 	std::vector<uint32_t> cubeIndices = {
@@ -2042,7 +2042,7 @@ GPUMeshBuffers AgniEngine::uploadMesh(std::span<uint32_t> indices,
 	return newSurface;
 }
 
-void GLTFMetallic_Roughness::buildPipelines(AgniEngine* engine)
+void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 {
 	VkShaderModule meshFragShader;
 	if (!vkutil::loadShaderModule(
@@ -2124,7 +2124,7 @@ void GLTFMetallic_Roughness::buildPipelines(AgniEngine* engine)
 	vkDestroyShaderModule(engine->_device, meshVertexShader, nullptr);
 }
 
-void GLTFMetallic_Roughness::clearResources(VkDevice device)
+void GltfPbrMaterial::clearResources(VkDevice device)
 {
 	vkDestroyDescriptorSetLayout(device, materialLayout, nullptr);
 	vkDestroyPipelineLayout(device, transparentPipeline.layout, nullptr);
@@ -2133,11 +2133,11 @@ void GLTFMetallic_Roughness::clearResources(VkDevice device)
 	vkDestroyPipeline(device, opaquePipeline.pipeline, nullptr);
 }
 
-MaterialInstance GLTFMetallic_Roughness::writeMaterial(
-VkDevice                     device,
-MaterialPass                 pass,
-const MaterialResources&     resources,
-DescriptorAllocatorGrowable& descriptorAllocator)
+MaterialInstance
+GltfPbrMaterial::writeMaterial(VkDevice                     device,
+                               MaterialPass                 pass,
+                               const MaterialResources&     resources,
+                               DescriptorAllocatorGrowable& descriptorAllocator)
 {
 	MaterialInstance matData;
 	matData.passType = pass;

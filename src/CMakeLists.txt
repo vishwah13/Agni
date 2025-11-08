@@ -17,6 +17,7 @@ add_executable (engine
   vk_loader.cpp
   camera.cpp
   camera.h
+  Debug.h
 )
 
 # Add shader files to the project so they appear in Visual Studio
@@ -38,7 +39,7 @@ target_include_directories(engine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
 add_dependencies(engine Shaders)
 
-target_link_libraries(engine PUBLIC vma glm volk::volk Vulkan::Headers fmt::fmt stb_image SDL3::SDL3 vkbootstrap imgui fastgltf::fastgltf renderdoc)
+target_link_libraries(engine PUBLIC vma glm volk::volk Vulkan::Headers fmt::fmt stb_image SDL3::SDL3 vkbootstrap imgui fastgltf::fastgltf renderdoc mikktspace)
 
 target_precompile_headers(engine PUBLIC <optional> <vector> <memory> <string> <vector> <unordered_map> <glm/mat4x4.hpp>  <glm/vec4.hpp> <volk.h>)
 

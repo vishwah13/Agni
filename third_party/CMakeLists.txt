@@ -24,6 +24,7 @@ add_library(vma INTERFACE)
 
 add_library(stb_image INTERFACE)
 add_library(renderdoc INTERFACE)
+add_library(mikktspace INTERFACE)
 
 add_subdirectory(fastgltf)
 add_subdirectory(fmt EXCLUDE_FROM_ALL)
@@ -73,3 +74,5 @@ target_link_libraries(imgui PUBLIC volk::volk_headers SDL3::SDL3 Vulkan::Headers
 target_include_directories(stb_image INTERFACE stb_image)
 
 target_include_directories(renderdoc INTERFACE renderdoc)
+
+target_include_directories(mikktspace INTERFACE mikktspace)

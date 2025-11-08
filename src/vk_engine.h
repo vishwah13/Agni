@@ -81,7 +81,7 @@ struct ComputeEffect
 	ComputePushConstants data;
 };
 
-struct GLTFMetallic_Roughness
+struct GltfPbrMaterial
 {
 	MaterialPipeline opaquePipeline;
 	MaterialPipeline transparentPipeline;
@@ -293,7 +293,7 @@ public:
 
 	// default materials
 	MaterialInstance       defaultData;
-	GLTFMetallic_Roughness metalRoughMaterial;
+	GltfPbrMaterial metalRoughMaterial;
 
 	// skybox
 	Skybox skybox;
