@@ -24,7 +24,7 @@ add_library(vma INTERFACE)
 
 add_library(stb_image INTERFACE)
 add_library(renderdoc INTERFACE)
-add_library(mikktspace INTERFACE)
+add_library(mikktspace STATIC)
 
 add_subdirectory(fastgltf)
 add_subdirectory(fmt EXCLUDE_FROM_ALL)
@@ -75,4 +75,9 @@ target_include_directories(stb_image INTERFACE stb_image)
 
 target_include_directories(renderdoc INTERFACE renderdoc)
 
-target_include_directories(mikktspace INTERFACE mikktspace)
+target_sources(mikktspace PRIVATE
+  mikktspace/mikktspace.h
+  mikktspace/mikktspace.c
+)
+
+target_include_directories(mikktspace PUBLIC mikktspace)

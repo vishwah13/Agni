@@ -14,6 +14,8 @@
 #include <fastgltf/glm_element_traits.hpp>
 #include <fastgltf/tools.hpp>
 
+#include "mikktspace.h"
+
 // Returns either VK_FILTER_NEAREST or VK_FILTER_LINEAR
 VkFilter extractFilter(fastgltf::Filter filter)
 {
@@ -50,6 +52,71 @@ VkSamplerMipmapMode extractMipmapMode(fastgltf::Filter filter)
 		default:
 			return VK_SAMPLER_MIPMAP_MODE_LINEAR;
 	}
+}
+
+// MikkTSpace implementation for tangent generation
+struct MikkTSpaceUserData
+{
+	std::vector<Vertex>*   vertices;
+	std::vector<uint32_t>* indices;
+	size_t                 vertexOffset; // offset to the current primitive's vertices
+};
+
+// MikkTSpace callback: Get number of faces
+int mikkGetNumFaces(const SMikkTSpaceContext* pContext)
+{
+	MikkTSpaceUserData* userData = static_cast<MikkTSpaceUserData*>(pContext->m_pUserData);
+	return static_cast<int>(userData->indices->size() / 3); // triangles only
+}
+
+// MikkTSpace callback: Get number of vertices per face (always 3 for triangles)
+int mikkGetNumVerticesOfFace(const SMikkTSpaceContext* pContext, const int iFace)
+{
+	return 3; // triangles
+}
+
+// MikkTSpace callback: Get position
+void mikkGetPosition(const SMikkTSpaceContext* pContext, float fvPosOut[], const int iFace, const int iVert)
+{
+	MikkTSpaceUserData* userData = static_cast<MikkTSpaceUserData*>(pContext->m_pUserData);
+	int vertexIndex = (*userData->indices)[iFace * 3 + iVert];
+	const Vertex& vertex = (*userData->vertices)[vertexIndex];
+	fvPosOut[0] = vertex.position.x;
+	fvPosOut[1] = vertex.position.y;
+	fvPosOut[2] = vertex.position.z;
+}
+
+// MikkTSpace callback: Get normal
+void mikkGetNormal(const SMikkTSpaceContext* pContext, float fvNormOut[], const int iFace, const int iVert)
+{
+	MikkTSpaceUserData* userData = static_cast<MikkTSpaceUserData*>(pContext->m_pUserData);
+	int vertexIndex = (*userData->indices)[iFace * 3 + iVert];
+	const Vertex& vertex = (*userData->vertices)[vertexIndex];
+	fvNormOut[0] = vertex.normal.x;
+	fvNormOut[1] = vertex.normal.y;
+	fvNormOut[2] = vertex.normal.z;
+}
+
+// MikkTSpace callback: Get texture coordinates
+void mikkGetTexCoord(const SMikkTSpaceContext* pContext, float fvTexcOut[], const int iFace, const int iVert)
+{
+	MikkTSpaceUserData* userData = static_cast<MikkTSpaceUserData*>(pContext->m_pUserData);
+	int vertexIndex = (*userData->indices)[iFace * 3 + iVert];
+	const Vertex& vertex = (*userData->vertices)[vertexIndex];
+	fvTexcOut[0] = vertex.uv_x;
+	fvTexcOut[1] = vertex.uv_y;
+}
+
+// MikkTSpace callback: Set tangent space (basic version)
+void mikkSetTSpaceBasic(const SMikkTSpaceContext* pContext, const float fvTangent[], const float fSign, const int iFace, const int iVert)
+{
+	MikkTSpaceUserData* userData = static_cast<MikkTSpaceUserData*>(pContext->m_pUserData);
+	int vertexIndex = (*userData->indices)[iFace * 3 + iVert];
+	Vertex& vertex = (*userData->vertices)[vertexIndex];
+	vertex.tangent.x = fvTangent[0];
+	vertex.tangent.y = fvTangent[1];
+	vertex.tangent.z = fvTangent[2];
+	vertex.tangent.w = fSign; // store handedness in w component
 }
 
 std::optional<AllocatedImage> loadImage(AgniEngine*      engine,
@@ -562,17 +629,39 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 				{ vertices[initial_vtx + index].color = v; });
 			}
 
-			// need to generate tangents using MikkTSpace 
-			// load tangesnt
-			auto tangents = p.findAttribute("TANGENT");
-			if (tangents != p.attributes.end())
+			// Generate tangents using MikkTSpace
+			// Create a temporary index buffer for this primitive only
+			std::vector<uint32_t> primitiveIndices;
+			primitiveIndices.reserve(newSurface.count);
+			for (uint32_t i = newSurface.startIndex; i < newSurface.startIndex + newSurface.count; i++)
 			{
+				primitiveIndices.push_back(indices[i]);
+			}
 
-				fastgltf::iterateAccessorWithIndex<glm::vec4>(
-				gltf,
-				gltf.accessors[(*tangents).accessorIndex],
-				[&](glm::vec4 v, size_t index)
-				{ vertices[initial_vtx + index].tangent = v; });
+			// Setup MikkTSpace interface
+			SMikkTSpaceInterface mikkInterface = {};
+			mikkInterface.m_getNumFaces = mikkGetNumFaces;
+			mikkInterface.m_getNumVerticesOfFace = mikkGetNumVerticesOfFace;
+			mikkInterface.m_getPosition = mikkGetPosition;
+			mikkInterface.m_getNormal = mikkGetNormal;
+			mikkInterface.m_getTexCoord = mikkGetTexCoord;
+			mikkInterface.m_setTSpaceBasic = mikkSetTSpaceBasic;
+
+			// Setup user data
+			MikkTSpaceUserData userData = {};
+			userData.vertices = &vertices;
+			userData.indices = &primitiveIndices;
+			userData.vertexOffset = initial_vtx;
+
+			// Setup context
+			SMikkTSpaceContext mikkContext = {};
+			mikkContext.m_pInterface = &mikkInterface;
+			mikkContext.m_pUserData = &userData;
+
+			// Generate tangents
+			if (!genTangSpaceDefault(&mikkContext))
+			{
+				fmt::print("Warning: Failed to generate tangents for mesh: {}\n", mesh.name);
 			}
 
 			if (p.materialIndex.has_value())
