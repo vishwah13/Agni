@@ -102,6 +102,10 @@ struct GLTFMetallic_Roughness
 		VkSampler      colorSampler;
 		AllocatedImage metalRoughImage;
 		VkSampler      metalRoughSampler;
+		AllocatedImage normalImage;
+		VkSampler      normalSampler;
+		AllocatedImage aoImage;
+		VkSampler      aoSampler;
 		VkBuffer       dataBuffer;
 		uint32_t       dataBufferOffset;
 	};
@@ -170,7 +174,9 @@ struct Skybox
 	              const MaterialResources&     resources,
 	              DescriptorAllocatorGrowable& descriptorAllocator);
 
-	void Draw(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptor, VkExtent2D drawExtent);
+	void Draw(VkCommandBuffer cmd,
+	          VkDescriptorSet sceneDescriptor,
+	          VkExtent2D      drawExtent);
 };
 
 struct SkyBoxPushConstants
@@ -222,7 +228,7 @@ public:
 
 	// draw resources
 	AllocatedImage _drawImage;
-	AllocatedImage        _depthImage;
+	AllocatedImage _depthImage;
 	VkExtent2D     _drawExtent;
 	float          renderScale = 1.f;
 
@@ -283,7 +289,7 @@ public:
 	VkSampler _defaultSamplerNearest;
 
 	AllocatedImage _cubemapImage;
-	VkSampler _cubemapSamplerHandle;
+	VkSampler      _cubemapSamplerHandle;
 
 	// default materials
 	MaterialInstance       defaultData;
@@ -299,23 +305,25 @@ public:
 
 	void destroyBuffer(const AllocatedBuffer& buffer);
 
-	AllocatedImage createImage(VkExtent3D            size,
-	                           VkFormat              format,
-	                           VkImageUsageFlags     usage,
-	                           bool                  mipmapped = false,
-	                           VkSampleCountFlagBits numSamples = VK_SAMPLE_COUNT_1_BIT);
-	AllocatedImage createImage(void*                 data,
-	                           VkExtent3D            size,
-	                           VkFormat              format,
-	                           VkImageUsageFlags     usage,
-	                           bool                  mipmapped = false,
-	                           VkSampleCountFlagBits numSamples = VK_SAMPLE_COUNT_1_BIT);
-	void           destroyImage(const AllocatedImage& img);
+	AllocatedImage
+	createImage(VkExtent3D            size,
+	            VkFormat              format,
+	            VkImageUsageFlags     usage,
+	            bool                  mipmapped  = false,
+	            VkSampleCountFlagBits numSamples = VK_SAMPLE_COUNT_1_BIT);
+	AllocatedImage
+	     createImage(void*                 data,
+	                 VkExtent3D            size,
+	                 VkFormat              format,
+	                 VkImageUsageFlags     usage,
+	                 bool                  mipmapped  = false,
+	                 VkSampleCountFlagBits numSamples = VK_SAMPLE_COUNT_1_BIT);
+	void destroyImage(const AllocatedImage& img);
 
 	AllocatedImage createCubemap(const std::array<std::string, 6>& faceFiles,
 	                             VkFormat                          format,
 	                             VkImageUsageFlags                 usage,
-	                             bool                              mipmapped = false);
+	                             bool mipmapped = false);
 
 private:
 	VkDescriptorSetLayout _singleImageDescriptorLayout;
