@@ -360,12 +360,12 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 
 	// create buffer to hold the material data
 	file.materialDataBuffer = engine->createBuffer(
-	sizeof(GLTFMetallic_Roughness::MaterialConstants) * gltf.materials.size(),
+	sizeof(GltfPbrMaterial::MaterialConstants) * gltf.materials.size(),
 	VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 	VMA_MEMORY_USAGE_CPU_TO_GPU);
 	int                                        dataIndex = 0;
-	GLTFMetallic_Roughness::MaterialConstants* sceneMaterialConstants =
-	(GLTFMetallic_Roughness::MaterialConstants*)
+	GltfPbrMaterial::MaterialConstants* sceneMaterialConstants =
+	(GltfPbrMaterial::MaterialConstants*)
 	file.materialDataBuffer.info.pMappedData;
 
 	for (fastgltf::Material& mat : gltf.materials)
@@ -374,7 +374,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		materials.push_back(newMat);
 		file.materials[mat.name.c_str()] = newMat;
 
-		GLTFMetallic_Roughness::MaterialConstants constants;
+		GltfPbrMaterial::MaterialConstants constants;
 		constants.colorFactors.x = mat.pbrData.baseColorFactor[0];
 		constants.colorFactors.y = mat.pbrData.baseColorFactor[1];
 		constants.colorFactors.z = mat.pbrData.baseColorFactor[2];
@@ -391,7 +391,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 			passType = MaterialPass::Transparent;
 		}
 
-		GLTFMetallic_Roughness::MaterialResources materialResources;
+		GltfPbrMaterial::MaterialResources materialResources;
 		// default the material textures
 		materialResources.colorImage        = engine->_whiteImage;
 		materialResources.colorSampler      = engine->_defaultSamplerLinear;
@@ -405,7 +405,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		// set the uniform buffer for the material data
 		materialResources.dataBuffer = file.materialDataBuffer.buffer;
 		materialResources.dataBufferOffset =
-		dataIndex * sizeof(GLTFMetallic_Roughness::MaterialConstants);
+		dataIndex * sizeof(GltfPbrMaterial::MaterialConstants);
 		// grab textures from gltf file
 		if (mat.pbrData.baseColorTexture.has_value())
 		{
@@ -560,6 +560,19 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 				gltf.accessors[(*colors).accessorIndex],
 				[&](glm::vec4 v, size_t index)
 				{ vertices[initial_vtx + index].color = v; });
+			}
+
+			// need to generate tangents using MikkTSpace 
+			// load tangesnt
+			auto tangents = p.findAttribute("TANGENT");
+			if (tangents != p.attributes.end())
+			{
+
+				fastgltf::iterateAccessorWithIndex<glm::vec4>(
+				gltf,
+				gltf.accessors[(*tangents).accessorIndex],
+				[&](glm::vec4 v, size_t index)
+				{ vertices[initial_vtx + index].tangent = v; });
 			}
 
 			if (p.materialIndex.has_value())
