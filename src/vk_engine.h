@@ -157,6 +157,10 @@ public:
 	bool       stop_rendering {false};
 	VkExtent2D _windowExtent {1600, 900};
 
+	// Delta time tracking
+	std::chrono::time_point<std::chrono::high_resolution_clock> lastFrameTime;
+	float deltaTime {0.0f};    // Time between frames in seconds
+
 	EngineStats stats;
 
 	struct SDL_Window* _window {nullptr};

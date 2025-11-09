@@ -11,8 +11,8 @@ public:
 	float pitch {0.f};
 	// horizontal rotation
 	float yaw {0.f};
-	// camera speed
-	float speed {0.5f};
+	// camera speed (units per second)
+	float speed {5.0f};
 	// camera sensitivity
 	float mouseSensitivity {0.5f};
 
@@ -23,5 +23,5 @@ public:
 
 	void processSDLEvent(SDL_Event& e);
 
-	void update();
+	void update(float deltaTime);
 };

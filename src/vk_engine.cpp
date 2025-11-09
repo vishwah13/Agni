@@ -442,10 +442,19 @@ void AgniEngine::run()
 	SDL_Event e;
 	bool      bQuit = false;
 
+	// Initialize last frame time
+	lastFrameTime = std::chrono::high_resolution_clock::now();
+
 	// main loop
 	while (!bQuit)
 	{
-		// begin clock
+		// Calculate delta time
+		auto currentTime = std::chrono::high_resolution_clock::now();
+		std::chrono::duration<float> elapsed = currentTime - lastFrameTime;
+		deltaTime = elapsed.count();
+		lastFrameTime = currentTime;
+
+		// begin clock for frametime
 		auto start = std::chrono::system_clock::now();
 
 		// Handle events on queue
@@ -593,9 +602,9 @@ void AgniEngine::run()
 		// get clock again to compare with start clock
 		auto end = std::chrono::system_clock::now();
 		// convert to microseconds (integer), and then come back to miliseconds
-		auto elapsed =
+		auto frameElapsed =
 		std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-		stats.frametime = elapsed.count() / 1000.f; // in milliseconds
+		stats.frametime = frameElapsed.count() / 1000.f; // in milliseconds
 	}
 }
 
@@ -1541,7 +1550,7 @@ void AgniEngine::updateScene()
 	mainDrawContext.OpaqueSurfaces.clear();
 	mainDrawContext.TransparentSurfaces.clear();
 
-	mainCamera.update();
+	mainCamera.update(deltaTime);
 	// camera view
 	glm::mat4 view = mainCamera.getViewMatrix();
 	// camera projection
