@@ -619,6 +619,9 @@ void AgniEngine::initVulkan()
 
 	SDL_Vulkan_CreateSurface(_window, _instance, nullptr, &_surface);
 
+	VkPhysicalDeviceFeatures deviceFeatures {.sampleRateShading = VK_TRUE};
+
+
 	// vulkan 1.3 features
 	VkPhysicalDeviceVulkan13Features features {
 	.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
@@ -634,6 +637,7 @@ void AgniEngine::initVulkan()
 	// use vkbootstrap to select a gpu.
 	vkb::PhysicalDeviceSelector selector {vkbInstance};
 	vkb::PhysicalDevice physicalDevice = selector.set_minimum_version(1, 3)
+	                                     .set_required_features(deviceFeatures)
 	                                     .set_required_features_13(features)
 	                                     .set_required_features_12(features12)
 	                                     .set_surface(_surface)
@@ -1253,8 +1257,7 @@ void AgniEngine::initDefaultData()
 	                                               globalDescriptorAllocator);
 
 	// std::string structurePath = {"../../assets/structure.glb"};
-	std::string helmetPath = {
-	"../../assets/flighthelmet/helmet.glb"};
+	std::string helmetPath = {"../../assets/flighthelmet/helmet.glb"};
 	// auto        structureFile = loadGltf(this, structurePath);
 	auto helmetPathFile = loadGltf(this, helmetPath);
 
@@ -2096,7 +2099,8 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 	pipelineBuilder.setShaders(meshVertexShader, meshFragShader);
 	pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 	pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
-	pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+	pipelineBuilder.setCullMode(VK_CULL_MODE_FRONT_BIT,
+	                            VK_FRONT_FACE_CLOCKWISE);
 	pipelineBuilder.enableMultisampling(engine->msaaSamples);
 	pipelineBuilder.disableBlending();
 	pipelineBuilder.enableDepthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
@@ -2237,7 +2241,7 @@ void Skybox::buildPipelines(AgniEngine* engine)
 	pipelineBuilder.setShaders(skyVertexShader, skyFragShader);
 	pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 	pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
-	pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+	pipelineBuilder.setCullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE);
 	pipelineBuilder.enableMultisampling(engine->msaaSamples);
 	pipelineBuilder.disableBlending();
 	// turning off depth buffer writes for skybox, but enable depth test with
