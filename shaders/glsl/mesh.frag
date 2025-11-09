@@ -7,6 +7,8 @@ layout (location = 0) in vec3 inNormal;
 layout (location = 1) in vec3 inColor;
 layout (location = 2) in vec2 inUV;
 layout (location = 3) in vec3 inWorldPos;
+layout (location = 4) in vec3 inTangent;
+layout (location = 5) in vec3 inBitangent;
 
 layout (location = 0) out vec4 outFragColor;
 
@@ -68,8 +70,20 @@ void main()
 
 	float ao = texture(aoTex, inUV).r;
 
-	// Calculate normal (could add normal mapping here)
+	// Normal mapping
+	// Construct TBN matrix to transform from tangent space to world space
+	vec3 T = normalize(inTangent);
+	vec3 B = normalize(inBitangent);
 	vec3 N = normalize(inNormal);
+	mat3 TBN = mat3(T, B, N);
+
+	// Sample normal from normal map (stored in tangent space)
+	vec3 normalMap = texture(normalTex, inUV).xyz;
+	// Transform from [0,1] range to [-1,1] range
+	normalMap = normalMap * 2.0 - 1.0;
+	// Transform normal from tangent space to world space
+	N = normalize(TBN * normalMap);
+
 	vec3 V = normalize(sceneData.camPos.xyz - inWorldPos);
 
 	// Calculate F0 (base reflectivity)
