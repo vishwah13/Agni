@@ -44,6 +44,14 @@ void Camera::processSDLEvent(SDL_Event& e)
 		{
 			velocity.x = 1;
 		}
+		if (e.key.key == SDLK_E)
+		{
+			velocity.y = 1; // Up
+		}
+		if (e.key.key == SDLK_Q)
+		{
+			velocity.y = -1; // Down
+		}
 	}
 
 	if (e.type == SDL_EVENT_KEY_UP)
@@ -63,6 +71,14 @@ void Camera::processSDLEvent(SDL_Event& e)
 		if (e.key.key == SDLK_D)
 		{
 			velocity.x = 0;
+		}
+		if (e.key.key == SDLK_E)
+		{
+			velocity.y = 0;
+		}
+		if (e.key.key == SDLK_Q)
+		{
+			velocity.y = 0;
 		}
 	}
 
