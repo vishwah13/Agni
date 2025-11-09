@@ -1254,7 +1254,7 @@ void AgniEngine::initDefaultData()
 
 	// std::string structurePath = {"../../assets/structure.glb"};
 	std::string helmetPath = {
-	"../../assets/free_1975_porsche_911_930_turbo.glb"};
+	"../../assets/flighthelmet/helmet.glb"};
 	// auto        structureFile = loadGltf(this, structurePath);
 	auto helmetPathFile = loadGltf(this, helmetPath);
 

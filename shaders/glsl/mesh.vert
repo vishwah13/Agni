@@ -9,6 +9,8 @@ layout (location = 0) out vec3 outNormal;
 layout (location = 1) out vec3 outColor;
 layout (location = 2) out vec2 outUV;
 layout (location = 3) out vec3 outWorldPos;
+layout (location = 4) out vec3 outTangent;
+layout (location = 5) out vec3 outBitangent;
 
 struct Vertex {
 
@@ -45,4 +47,14 @@ void main()
 	outColor = v.color.xyz * materialData.colorFactors.xyz;
 	outUV.x = v.uv_x;
 	outUV.y = v.uv_y;
+
+	// Transform tangent to world space
+	vec3 T = normalize((PushConstants.render_matrix * vec4(v.tangent.xyz, 0.0)).xyz);
+	// Re-orthogonalize T with respect to N using Gram-Schmidt process
+	T = normalize(T - dot(T, outNormal) * outNormal);
+	// Calculate bitangent using handedness (w component)
+	vec3 B = cross(outNormal, T) * v.tangent.w;
+
+	outTangent = T;
+	outBitangent = B;
 }
