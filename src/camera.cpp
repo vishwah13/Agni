@@ -84,11 +84,9 @@ void Camera::processSDLEvent(SDL_Event& e)
 	}
 }
 
-// need to pass deltaTime (time between frames) and multiply the velocity by
-// that.
-void Camera::update()
+void Camera::update(float deltaTime)
 {
 	glm::mat4 cameraRotation = getRotationMatrix();
 	position +=
-	glm::vec3(cameraRotation * glm::vec4(velocity * 0.5f, 0.f)) * speed;
+	glm::vec3(cameraRotation * glm::vec4(velocity, 0.f)) * speed * deltaTime;
 }
