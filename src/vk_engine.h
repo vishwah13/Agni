@@ -11,6 +11,7 @@
 #include <vk_descriptors.h>
 #include <vk_loader.h>
 #include <vk_types.h>
+#include <skybox.h>
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 
@@ -148,42 +149,6 @@ struct DrawContext
 	std::vector<RenderObject> TransparentSurfaces;
 };
 
-struct Skybox
-{
-	uint32_t       indexCount;
-	uint32_t       firstIndex;
-	GPUMeshBuffers meshBuffers;
-
-	MaterialPipeline      skyboxPipeline;
-	VkDescriptorSetLayout skyboxMaterialLayout;
-	MaterialInstance*     skyboxMaterial;
-
-	DescriptorWriter writer;
-
-	void buildPipelines(AgniEngine* engine);
-	void clearResources(VkDevice device);
-
-	struct MaterialResources
-	{
-		AllocatedImage cubemapImage;
-		VkSampler      cubemapSampler;
-	};
-
-	MaterialInstance
-	writeMaterial(VkDevice                     device,
-	              const MaterialResources&     resources,
-	              DescriptorAllocatorGrowable& descriptorAllocator);
-
-	void Draw(VkCommandBuffer cmd,
-	          VkDescriptorSet sceneDescriptor,
-	          VkExtent2D      drawExtent);
-};
-
-struct SkyBoxPushConstants
-{
-	VkDeviceAddress vertexBufferAddress;
-};
-
 class AgniEngine
 {
 public:
@@ -287,9 +252,6 @@ public:
 	// default sampleres
 	VkSampler _defaultSamplerLinear;
 	VkSampler _defaultSamplerNearest;
-
-	AllocatedImage _cubemapImage;
-	VkSampler      _cubemapSamplerHandle;
 
 	// default materials
 	MaterialInstance       defaultData;

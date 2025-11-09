@@ -17,6 +17,8 @@ add_executable (engine
   vk_loader.cpp
   camera.cpp
   camera.h
+  skybox.h
+  skybox.cpp
   Debug.h
 )
 
