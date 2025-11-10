@@ -25,10 +25,10 @@ public:
 
 	bool rightMousePressed = false;
 
-	glm::mat4 getViewMatrix();
-	glm::mat4 getRotationMatrix();
+	glm::mat4 getViewMatrix() const;
+	glm::mat4 getRotationMatrix() const;
 
-	void processSDLEvent(SDL_Event& e);
+	void processSDLEvent(const SDL_Event& e);
 
 	void update(float deltaTime);
 };
