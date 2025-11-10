@@ -719,7 +719,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		if (node.meshIndex.has_value())
 		{
 			newNode = std::make_shared<MeshNode>();
-			static_cast<MeshNode*>(newNode.get())->mesh =
+			static_cast<MeshNode*>(newNode.get())->getMesh() =
 			meshes[*node.meshIndex];
 		}
 		else
@@ -733,7 +733,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		std::visit(
 		fastgltf::visitor {
 		[&](fastgltf::math::fmat4x4 matrix)
-		{ memcpy(&newNode->localTransform, matrix.data(), sizeof(matrix)); },
+		{ memcpy(&newNode->getLocalTransform(), matrix.data(), sizeof(matrix)); },
 		[&](fastgltf::TRS transform)
 		{
 			glm::vec3 tl(transform.translation[0],
@@ -750,7 +750,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 			glm::mat4 rm = glm::toMat4(rot);
 			glm::mat4 sm = glm::scale(glm::mat4(1.f), sc);
 
-			newNode->localTransform = tm * rm * sm;
+			newNode->getLocalTransform() = tm * rm * sm;
 		}},
 		node.transform);
 	}
@@ -763,15 +763,15 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 
 		for (auto& c : node.children)
 		{
-			sceneNode->children.push_back(nodes[c]);
-			nodes[c]->parent = sceneNode;
+			sceneNode->getChildren().push_back(nodes[c]);
+			nodes[c]->getParent() = sceneNode;
 		}
 	}
 
 	// find the top nodes, with no parents
 	for (auto& node : nodes)
 	{
-		if (node->parent.lock() == nullptr)
+		if (node->getParent().lock() == nullptr)
 		{
 			file.topNodes.push_back(node);
 			node->refreshTransform(glm::mat4 {1.f});

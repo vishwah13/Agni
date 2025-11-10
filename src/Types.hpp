@@ -119,16 +119,9 @@ class IRenderable
 // implementation of a drawable scene node.
 // the scene node can hold children and will also keep a transform to propagate
 // to them
-struct Node : public IRenderable
+class Node : public IRenderable
 {
-
-	// parent pointer must be a weak pointer to avoid circular dependencies
-	std::weak_ptr<Node>                parent;
-	std::vector<std::shared_ptr<Node>> children;
-
-	glm::mat4 localTransform;
-	glm::mat4 worldTransform;
-
+public:
 	// The Node class will hold the object matrix for the transforms. Both local
 	// and world transform. The world transform needs to be updated, so whenever
 	// the local Transform gets changed, refreshTransform must be called. This
@@ -151,4 +144,25 @@ struct Node : public IRenderable
 			c->Draw(topMatrix, ctx);
 		}
 	}
+
+	// Accessors
+	glm::mat4& getLocalTransform() { return localTransform; }
+	const glm::mat4& getLocalTransform() const { return localTransform; }
+
+	glm::mat4& getWorldTransform() { return worldTransform; }
+	const glm::mat4& getWorldTransform() const { return worldTransform; }
+
+	std::vector<std::shared_ptr<Node>>& getChildren() { return children; }
+	const std::vector<std::shared_ptr<Node>>& getChildren() const { return children; }
+
+	std::weak_ptr<Node>& getParent() { return parent; }
+	const std::weak_ptr<Node>& getParent() const { return parent; }
+
+protected:
+	// parent pointer must be a weak pointer to avoid circular dependencies
+	std::weak_ptr<Node>                parent;
+	std::vector<std::shared_ptr<Node>> children;
+
+	glm::mat4 localTransform;
+	glm::mat4 worldTransform;
 };
