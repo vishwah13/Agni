@@ -2,24 +2,24 @@
 # Add source to this project's executable.
 add_executable (engine
   main.cpp
-  Types.h
+  Types.hpp
   Initializers.cpp
-  Initializers.h
-  Images.h
+  Initializers.hpp
+  Images.hpp
   Images.cpp
-  Descriptors.h
+  Descriptors.hpp
   Descriptors.cpp
-  Pipelines.h
+  Pipelines.hpp
   Pipelines.cpp
-  AgniEngine.h
+  AgniEngine.hpp
   AgniEngine.cpp
-  Loader.h
+  Loader.hpp
   Loader.cpp
-  camera.cpp
-  camera.h
-  skybox.h
-  skybox.cpp
-  Debug.h
+  Camera.cpp
+  Camera.hpp
+  Skybox.hpp
+  Skybox.cpp
+  Debug.hpp
 )
 
 # Add shader files to the project so they appear in Visual Studio

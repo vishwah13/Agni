@@ -1,8 +1,8 @@
 ﻿#pragma once
-#include "Descriptors.h"
+#include "Descriptors.hpp"
 #include <filesystem>
 #include <unordered_map>
-#include <Types.h>
+#include <Types.hpp>
 
 struct GLTFMaterial
 {

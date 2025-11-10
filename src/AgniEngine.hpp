@@ -4,14 +4,14 @@
 #pragma once
 
 #include "vk_mem_alloc.h"
-#include <camera.h>
+#include <Camera.hpp>
 #include <deque>
 #include <functional>
-#include <skybox.h>
+#include <Skybox.hpp>
 #include <vector>
-#include <Descriptors.h>
-#include <Loader.h>
-#include <Types.h>
+#include <Descriptors.hpp>
+#include <Loader.hpp>
+#include <Types.hpp>
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 

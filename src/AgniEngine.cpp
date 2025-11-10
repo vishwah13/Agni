@@ -1,5 +1,5 @@
 ﻿//> includes
-#include "AgniEngine.h"
+#include "AgniEngine.hpp"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 
@@ -7,10 +7,10 @@
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_vulkan.h"
 
-#include <Images.h>
-#include <Initializers.h>
-#include <Pipelines.h>
-#include <Types.h>
+#include <Images.hpp>
+#include <Initializers.hpp>
+#include <Pipelines.hpp>
+#include <Types.hpp>
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
@@ -26,7 +26,7 @@
 #include "renderdoc_app.h"
 #include "stb_image.h"
 
-#include "Debug.h"
+#include "Debug.hpp"
 
 #define NOMINMAX
 #include <windows.h>

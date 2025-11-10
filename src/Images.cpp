@@ -1,5 +1,5 @@
-#include <Images.h>
-#include <Initializers.h>
+#include <Images.hpp>
+#include <Initializers.hpp>
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 

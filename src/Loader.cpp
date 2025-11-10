@@ -1,11 +1,11 @@
 ﻿#include "stb_image.h"
 #include <iostream>
 #include <variant>
-#include <Loader.h>
+#include <Loader.hpp>
 
-#include "AgniEngine.h"
-#include "Initializers.h"
-#include "Types.h"
+#include "AgniEngine.hpp"
+#include "Initializers.hpp"
+#include "Types.hpp"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
