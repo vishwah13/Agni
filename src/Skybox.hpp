@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Descriptors.h>
-#include <Types.h>
+#include <Descriptors.hpp>
+#include <Types.hpp>
 
 class AgniEngine;
 
