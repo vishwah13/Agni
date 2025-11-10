@@ -202,7 +202,12 @@ public:
 	FrameData& getCurrentFrame()
 	{
 		return _frames[_frameNumber % FRAME_OVERLAP];
-	};
+	}
+
+	const FrameData& getCurrentFrame() const
+	{
+		return _frames[_frameNumber % FRAME_OVERLAP];
+	}
 
 	VkQueue  _graphicsQueue;
 	uint32_t _graphicsQueueFamily;

@@ -2,7 +2,7 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
 
-glm::mat4 Camera::getViewMatrix()
+glm::mat4 Camera::getViewMatrix() const
 {
 	// inverting the camera matrix to get the proper view matrix
 	glm::mat4 cameraTranslation = glm::translate(glm::mat4(1.f), position);
@@ -10,7 +10,7 @@ glm::mat4 Camera::getViewMatrix()
 	return glm::inverse(cameraTranslation * cameraRotation);
 }
 
-glm::mat4 Camera::getRotationMatrix()
+glm::mat4 Camera::getRotationMatrix() const
 {
 	// fairly typical FPS style camera. we join the pitch and yaw rotations into
 	// the final rotation matrix
@@ -24,7 +24,7 @@ glm::mat4 Camera::getRotationMatrix()
 // Need improvemnts
 // TO-DO: Better camera rotation handling (e.g., clamp pitch, wrap yaw)
 // TO-DO: Add zoom functionality
-void Camera::processSDLEvent(SDL_Event& e)
+void Camera::processSDLEvent(const SDL_Event& e)
 {
 	if (e.type == SDL_EVENT_KEY_DOWN)
 	{

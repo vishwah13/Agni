@@ -130,7 +130,7 @@ public:
 	void refreshTransform(const glm::mat4& parentMatrix)
 	{
 		worldTransform = parentMatrix * localTransform;
-		for (auto c : children)
+		for (const auto& c : children)
 		{
 			c->refreshTransform(worldTransform);
 		}

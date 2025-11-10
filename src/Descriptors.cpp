@@ -63,11 +63,11 @@ void DescriptorAllocatorGrowable::init(VkDevice                 device,
 
 void DescriptorAllocatorGrowable::clearPools(VkDevice device)
 {
-	for (auto p : readyPools)
+	for (const auto& p : readyPools)
 	{
 		vkResetDescriptorPool(device, p, 0);
 	}
-	for (auto p : fullPools)
+	for (const auto& p : fullPools)
 	{
 		vkResetDescriptorPool(device, p, 0);
 		readyPools.push_back(p);
@@ -77,12 +77,12 @@ void DescriptorAllocatorGrowable::clearPools(VkDevice device)
 
 void DescriptorAllocatorGrowable::destroyPools(VkDevice device)
 {
-	for (auto p : readyPools)
+	for (const auto& p : readyPools)
 	{
 		vkDestroyDescriptorPool(device, p, nullptr);
 	}
 	readyPools.clear();
-	for (auto p : fullPools)
+	for (const auto& p : fullPools)
 	{
 		vkDestroyDescriptorPool(device, p, nullptr);
 	}
@@ -153,7 +153,7 @@ DescriptorAllocatorGrowable::createPool(VkDevice                 device,
                                         std::span<PoolSizeRatio> poolRatios)
 {
 	std::vector<VkDescriptorPoolSize> poolSizes;
-	for (PoolSizeRatio ratio : poolRatios)
+	for (const PoolSizeRatio& ratio : poolRatios)
 	{
 		poolSizes.push_back(VkDescriptorPoolSize {
 		.type            = ratio.type,
