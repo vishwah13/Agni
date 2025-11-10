@@ -64,7 +64,7 @@ void Skybox::buildPipelines(AgniEngine* engine)
 	                                   skyboxMaterialLayout};
 
 	VkPipelineLayoutCreateInfo mesh_layout_info =
-	vkinit::pipeline_layout_create_info();
+	vkinit::pipelineLayoutCreateInfo();
 	mesh_layout_info.setLayoutCount         = 2;
 	mesh_layout_info.pSetLayouts            = layouts;
 	mesh_layout_info.pPushConstantRanges    = &matrixRange;
