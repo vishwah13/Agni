@@ -1,8 +1,8 @@
 ﻿#pragma once
-#include "vk_descriptors.h"
+#include "Descriptors.h"
 #include <filesystem>
 #include <unordered_map>
-#include <vk_types.h>
+#include <Types.h>
 
 struct GLTFMaterial
 {

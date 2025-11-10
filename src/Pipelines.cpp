@@ -1,6 +1,6 @@
 ﻿#include <fstream>
-#include <vk_initializers.h>
-#include <vk_pipelines.h>
+#include <Initializers.h>
+#include <Pipelines.h>
 
 bool vkutil::loadShaderModule(const char*     filePath,
                               VkDevice        device,

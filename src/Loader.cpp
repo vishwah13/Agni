@@ -1,11 +1,11 @@
 ﻿#include "stb_image.h"
 #include <iostream>
 #include <variant>
-#include <vk_loader.h>
+#include <Loader.h>
 
-#include "vk_engine.h"
-#include "vk_initializers.h"
-#include "vk_types.h"
+#include "AgniEngine.h"
+#include "Initializers.h"
+#include "Types.h"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>

@@ -2,19 +2,19 @@
 # Add source to this project's executable.
 add_executable (engine
   main.cpp
-  vk_types.h
-  vk_initializers.cpp
-  vk_initializers.h
-  vk_images.h
-  vk_images.cpp
-  vk_descriptors.h
-  vk_descriptors.cpp
-  vk_pipelines.h
-  vk_pipelines.cpp
-  vk_engine.h
-  vk_engine.cpp
-  vk_loader.h
-  vk_loader.cpp
+  Types.h
+  Initializers.cpp
+  Initializers.h
+  Images.h
+  Images.cpp
+  Descriptors.h
+  Descriptors.cpp
+  Pipelines.h
+  Pipelines.cpp
+  AgniEngine.h
+  AgniEngine.cpp
+  Loader.h
+  Loader.cpp
   camera.cpp
   camera.h
   skybox.h
