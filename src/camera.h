@@ -1,10 +1,17 @@
 #pragma once
 #include <SDL3/SDL_events.h>
 #include <vk_types.h>
-
+// camera should have a constructor
 class Camera
 {
 public:
+	Camera()                                = default;
+	~Camera()                               = default;
+	Camera(const Camera& other)             = delete;
+	Camera(Camera&& other)                  = delete;
+	Camera&  operator=(const Camera& other) = delete;
+	Camera&& operator=(Camera&& other)      = delete;
+
 	glm::vec3 velocity;
 	glm::vec3 position;
 	// vertical rotation
