@@ -123,12 +123,17 @@ struct GltfPbrMaterial
 	              DescriptorAllocatorGrowable& descriptorAllocator);
 };
 
-struct MeshNode : public Node
+class MeshNode : public Node
 {
-
-	std::shared_ptr<MeshAsset> mesh;
-
+public:
 	virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx) override;
+
+	// Accessor for mesh
+	std::shared_ptr<MeshAsset>& getMesh() { return mesh; }
+	const std::shared_ptr<MeshAsset>& getMesh() const { return mesh; }
+
+protected:
+	std::shared_ptr<MeshAsset> mesh;
 };
 
 struct RenderObject
