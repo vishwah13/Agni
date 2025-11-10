@@ -9,9 +9,9 @@
 #include <functional>
 #include <skybox.h>
 #include <vector>
-#include <vk_descriptors.h>
-#include <vk_loader.h>
-#include <vk_types.h>
+#include <Descriptors.h>
+#include <Loader.h>
+#include <Types.h>
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 

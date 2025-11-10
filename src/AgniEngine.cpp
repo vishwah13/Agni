@@ -1,5 +1,5 @@
 ﻿//> includes
-#include "vk_engine.h"
+#include "AgniEngine.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 
@@ -7,10 +7,10 @@
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_vulkan.h"
 
-#include <vk_images.h>
-#include <vk_initializers.h>
-#include <vk_pipelines.h>
-#include <vk_types.h>
+#include <Images.h>
+#include <Initializers.h>
+#include <Pipelines.h>
+#include <Types.h>
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"

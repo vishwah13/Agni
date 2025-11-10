@@ -1,7 +1,7 @@
 #pragma once
 
-#include <vk_descriptors.h>
-#include <vk_types.h>
+#include <Descriptors.h>
+#include <Types.h>
 
 class AgniEngine;
 

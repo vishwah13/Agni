@@ -1,8 +1,8 @@
 #include "skybox.h"
-#include "vk_engine.h"
-#include "vk_images.h"
-#include "vk_initializers.h"
-#include "vk_pipelines.h"
+#include "AgniEngine.h"
+#include "Images.h"
+#include "Initializers.h"
+#include "Pipelines.h"
 #include <fmt/core.h>
 
 void Skybox::init(AgniEngine*                        engine,
