@@ -12,18 +12,18 @@ public:
 	Camera&  operator=(const Camera& other) = delete;
 	Camera&& operator=(Camera&& other)      = delete;
 
-	glm::vec3 velocity;
-	glm::vec3 position;
+	glm::vec3 m_velocity;
+	glm::vec3 m_position;
 	// vertical rotation
-	float pitch {0.f};
+	float m_pitch {0.f};
 	// horizontal rotation
-	float yaw {0.f};
+	float m_yaw {0.f};
 	// camera speed (units per second)
-	float speed {5.0f};
+	float m_speed {5.0f};
 	// camera sensitivity
-	float mouseSensitivity {0.5f};
+	float m_mouseSensitivity {0.5f};
 
-	bool rightMousePressed = false;
+	bool m_rightMousePressed = false;
 
 	glm::mat4 getViewMatrix() const;
 	glm::mat4 getRotationMatrix() const;

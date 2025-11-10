@@ -359,7 +359,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 	{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3},
 	{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1}};
 
-	file.descriptorPool.init(engine->_device, gltf.materials.size(), sizes);
+	file.descriptorPool.init(engine->m_device, gltf.materials.size(), sizes);
 
 	// load samplers
 	for (fastgltf::Sampler& sampler : gltf.samplers)
@@ -379,7 +379,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		sampler.minFilter.value_or(fastgltf::Filter::Nearest));
 
 		VkSampler newSampler;
-		vkCreateSampler(engine->_device, &sampl, nullptr, &newSampler);
+		vkCreateSampler(engine->m_device, &sampl, nullptr, &newSampler);
 
 		file.samplers.push_back(newSampler);
 	}
@@ -418,7 +418,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		{
 			// we failed to load, so lets give the slot a default white texture
 			// to not completely break loading
-			images.push_back(engine->_errorCheckerboardImage);
+			images.push_back(engine->m_errorCheckerboardImage);
 			std::cout << "gltf failed to load texture " << image.name
 			          << std::endl;
 		}
@@ -460,14 +460,14 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 
 		GltfPbrMaterial::MaterialResources materialResources;
 		// default the material textures
-		materialResources.colorImage        = engine->_whiteImage;
-		materialResources.colorSampler      = engine->_defaultSamplerLinear;
-		materialResources.metalRoughImage   = engine->_whiteImage;
-		materialResources.metalRoughSampler = engine->_defaultSamplerLinear;
-		materialResources.normalImage       = engine->_whiteImage;
-		materialResources.normalSampler     = engine->_defaultSamplerLinear;
-		materialResources.aoImage           = engine->_whiteImage;
-		materialResources.aoSampler         = engine->_defaultSamplerLinear;
+		materialResources.colorImage        = engine->m_whiteImage;
+		materialResources.colorSampler      = engine->m_defaultSamplerLinear;
+		materialResources.metalRoughImage   = engine->m_whiteImage;
+		materialResources.metalRoughSampler = engine->m_defaultSamplerLinear;
+		materialResources.normalImage       = engine->m_whiteImage;
+		materialResources.normalSampler     = engine->m_defaultSamplerLinear;
+		materialResources.aoImage           = engine->m_whiteImage;
+		materialResources.aoSampler         = engine->m_defaultSamplerLinear;
 
 		// set the uniform buffer for the material data
 		materialResources.dataBuffer = file.materialDataBuffer.buffer;
@@ -524,8 +524,8 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 			materialResources.aoSampler = file.samplers[sampler];
 		}
 		// build material
-		newMat->data = engine->metalRoughMaterial.writeMaterial(
-		engine->_device, passType, materialResources, file.descriptorPool);
+		newMat->data = engine->m_metalRoughMaterial.writeMaterial(
+		engine->m_device, passType, materialResources, file.descriptorPool);
 
 		dataIndex++;
 	}
@@ -791,7 +791,7 @@ void LoadedGLTF::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
 
 void LoadedGLTF::clearAll()
 {
-	VkDevice dv = creator->_device;
+	VkDevice dv = creator->m_device;
 
 	descriptorPool.destroyPools(dv);
 	creator->destroyBuffer(materialDataBuffer);
@@ -806,7 +806,7 @@ void LoadedGLTF::clearAll()
 	for (auto& [k, v] : images)
 	{
 
-		if (v.image == creator->_errorCheckerboardImage.image)
+		if (v.image == creator->m_errorCheckerboardImage.image)
 		{
 			// dont destroy the default images
 			continue;

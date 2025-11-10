@@ -9,7 +9,7 @@ void Skybox::init(AgniEngine*                        engine,
                   const std::array<std::string, 6>& cubemapFaces)
 {
 	// Create cubemap image
-	cubemapImage = engine->createCubemap(cubemapFaces,
+	m_cubemapImage = engine->createCubemap(cubemapFaces,
 	                                     VK_FORMAT_R8G8B8A8_UNORM,
 	                                     VK_IMAGE_USAGE_SAMPLED_BIT,
 	                                     false);
@@ -23,7 +23,7 @@ void Skybox::init(AgniEngine*                        engine,
 	cubemapSamplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 	cubemapSamplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 
-	vkCreateSampler(engine->_device, &cubemapSamplerInfo, nullptr, &cubemapSampler);
+	vkCreateSampler(engine->m_device, &cubemapSamplerInfo, nullptr, &m_cubemapSampler);
 
 	// Create cube mesh
 	createCubeMesh(engine);
@@ -36,14 +36,14 @@ void Skybox::buildPipelines(AgniEngine* engine)
 {
 	VkShaderModule skyFragShader;
 	if (!vkutil::loadShaderModule(
-	    "../../shaders/glsl/skybox.frag.spv", engine->_device, &skyFragShader))
+	    "../../shaders/glsl/skybox.frag.spv", engine->m_device, &skyFragShader))
 	{
 		fmt::println("Error when building the skybox fragment shader module");
 	}
 
 	VkShaderModule skyVertexShader;
 	if (!vkutil::loadShaderModule("../../shaders/glsl/skybox.vert.spv",
-	                              engine->_device,
+	                              engine->m_device,
 	                              &skyVertexShader))
 	{
 		fmt::println("Error when building the skybox vertex shader module");
@@ -57,11 +57,11 @@ void Skybox::buildPipelines(AgniEngine* engine)
 	DescriptorLayoutBuilder layoutBuilder;
 	layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-	skyboxMaterialLayout = layoutBuilder.build(
-	engine->_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+	m_skyboxMaterialLayout = layoutBuilder.build(
+	engine->m_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 
-	VkDescriptorSetLayout layouts[] = {engine->_gpuSceneDataDescriptorLayout,
-	                                   skyboxMaterialLayout};
+	VkDescriptorSetLayout layouts[] = {engine->m_gpuSceneDataDescriptorLayout,
+	                                   m_skyboxMaterialLayout};
 
 	VkPipelineLayoutCreateInfo mesh_layout_info =
 	vkinit::pipelineLayoutCreateInfo();
@@ -72,9 +72,9 @@ void Skybox::buildPipelines(AgniEngine* engine)
 
 	VkPipelineLayout newLayout;
 	VK_CHECK(vkCreatePipelineLayout(
-	engine->_device, &mesh_layout_info, nullptr, &newLayout));
+	engine->m_device, &mesh_layout_info, nullptr, &newLayout));
 
-	skyboxPipeline.layout = newLayout;
+	m_skyboxPipeline.layout = newLayout;
 
 	// build the stage-create-info for both vertex and fragment stages. This
 	// lets the pipeline know the shader modules per stage
@@ -83,7 +83,7 @@ void Skybox::buildPipelines(AgniEngine* engine)
 	pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 	pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
 	pipelineBuilder.setCullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE);
-	pipelineBuilder.enableMultisampling(engine->msaaSamples);
+	pipelineBuilder.enableMultisampling(engine->m_msaaSamples);
 	pipelineBuilder.disableBlending();
 	// turning off depth buffer writes for skybox, but enable depth test with
 	// reversed-Z
@@ -91,38 +91,38 @@ void Skybox::buildPipelines(AgniEngine* engine)
 
 	// render format
 	pipelineBuilder.setColorAttachmentFormat(
-	engine->_msaaColorImage.imageFormat);
-	pipelineBuilder.setDepthFormat(engine->_depthImage.imageFormat);
+	engine->m_msaaColorImage.imageFormat);
+	pipelineBuilder.setDepthFormat(engine->m_depthImage.imageFormat);
 
 	// use the triangle layout we created
-	pipelineBuilder._pipelineLayout = newLayout;
+	pipelineBuilder.m_pipelineLayout = newLayout;
 
 	// finally build the pipeline
-	skyboxPipeline.pipeline = pipelineBuilder.buildPipeline(engine->_device);
+	m_skyboxPipeline.pipeline = pipelineBuilder.buildPipeline(engine->m_device);
 
-	vkDestroyShaderModule(engine->_device, skyFragShader, nullptr);
-	vkDestroyShaderModule(engine->_device, skyVertexShader, nullptr);
+	vkDestroyShaderModule(engine->m_device, skyFragShader, nullptr);
+	vkDestroyShaderModule(engine->m_device, skyVertexShader, nullptr);
 }
 
 void Skybox::cleanup(AgniEngine* engine)
 {
 	// Cleanup pipeline resources
-	clearPipelineResources(engine->_device);
+	clearPipelineResources(engine->m_device);
 
 	// Cleanup mesh buffers
-	engine->destroyBuffer(meshBuffers.indexBuffer);
-	engine->destroyBuffer(meshBuffers.vertexBuffer);
+	engine->destroyBuffer(m_meshBuffers.indexBuffer);
+	engine->destroyBuffer(m_meshBuffers.vertexBuffer);
 
 	// Cleanup material
-	if (skyboxMaterial)
+	if (m_skyboxMaterial)
 	{
-		delete skyboxMaterial;
-		skyboxMaterial = nullptr;
+		delete m_skyboxMaterial;
+		m_skyboxMaterial = nullptr;
 	}
 
 	// Cleanup cubemap resources
-	vkDestroySampler(engine->_device, cubemapSampler, nullptr);
-	engine->destroyImage(cubemapImage);
+	vkDestroySampler(engine->m_device, m_cubemapSampler, nullptr);
+	engine->destroyImage(m_cubemapImage);
 }
 
 void Skybox::draw(VkCommandBuffer cmd,
@@ -131,7 +131,7 @@ void Skybox::draw(VkCommandBuffer cmd,
 {
 	// Bind skybox pipeline
 	vkCmdBindPipeline(
-	cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, skyboxPipeline.pipeline);
+	cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_skyboxPipeline.pipeline);
 
 	// Set dynamic viewport and scissor
 	VkViewport viewport = {};
@@ -155,7 +155,7 @@ void Skybox::draw(VkCommandBuffer cmd,
 	// Bind scene descriptor (set 0)
 	vkCmdBindDescriptorSets(cmd,
 	                        VK_PIPELINE_BIND_POINT_GRAPHICS,
-	                        skyboxPipeline.layout,
+	                        m_skyboxPipeline.layout,
 	                        0,
 	                        1,
 	                        &sceneDescriptor,
@@ -165,30 +165,30 @@ void Skybox::draw(VkCommandBuffer cmd,
 	// Bind skybox material descriptor (set 1)
 	vkCmdBindDescriptorSets(cmd,
 	                        VK_PIPELINE_BIND_POINT_GRAPHICS,
-	                        skyboxPipeline.layout,
+	                        m_skyboxPipeline.layout,
 	                        1,
 	                        1,
-	                        &skyboxMaterial->materialSet,
+	                        &m_skyboxMaterial->materialSet,
 	                        0,
 	                        nullptr);
 
 	// Bind index buffer
 	vkCmdBindIndexBuffer(
-	cmd, meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+	cmd, m_meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
 	// Push constants for vertex buffer address
 	SkyBoxPushConstants skyboxPush;
-	skyboxPush.vertexBufferAddress = meshBuffers.vertexBufferAddress;
+	skyboxPush.vertexBufferAddress = m_meshBuffers.vertexBufferAddress;
 
 	vkCmdPushConstants(cmd,
-	                   skyboxPipeline.layout,
+	                   m_skyboxPipeline.layout,
 	                   VK_SHADER_STAGE_VERTEX_BIT,
 	                   0,
 	                   sizeof(SkyBoxPushConstants),
 	                   &skyboxPush);
 
 	// Draw skybox
-	vkCmdDrawIndexed(cmd, indexCount, 1, firstIndex, 0, 0);
+	vkCmdDrawIndexed(cmd, m_indexCount, 1, m_firstIndex, 0, 0);
 }
 
 void Skybox::createCubeMesh(AgniEngine* engine)
@@ -237,28 +237,28 @@ void Skybox::createCubeMesh(AgniEngine* engine)
 	20, 21, 22, 22, 23, 20  // Left
 	};
 
-	meshBuffers = engine->uploadMesh(cubeIndices, cubeVertices);
-	indexCount  = static_cast<uint32_t>(cubeIndices.size());
-	firstIndex  = 0;
+	m_meshBuffers = engine->uploadMesh(cubeIndices, cubeVertices);
+	m_indexCount  = static_cast<uint32_t>(cubeIndices.size());
+	m_firstIndex  = 0;
 }
 
 void Skybox::createMaterial(AgniEngine* engine)
 {
 	// Create skybox material resources
 	MaterialResources skyboxResources;
-	skyboxResources.cubemapImage   = cubemapImage;
-	skyboxResources.cubemapSampler = cubemapSampler;
+	skyboxResources.m_cubemapImage   = m_cubemapImage;
+	skyboxResources.m_cubemapSampler = m_cubemapSampler;
 
 	// Write skybox material
-	skyboxMaterial = new MaterialInstance(writeMaterial(
-	engine->_device, skyboxResources, engine->globalDescriptorAllocator));
+	m_skyboxMaterial = new MaterialInstance(writeMaterial(
+	engine->m_device, skyboxResources, engine->m_globalDescriptorAllocator));
 }
 
 void Skybox::clearPipelineResources(VkDevice device)
 {
-	vkDestroyDescriptorSetLayout(device, skyboxMaterialLayout, nullptr);
-	vkDestroyPipelineLayout(device, skyboxPipeline.layout, nullptr);
-	vkDestroyPipeline(device, skyboxPipeline.pipeline, nullptr);
+	vkDestroyDescriptorSetLayout(device, m_skyboxMaterialLayout, nullptr);
+	vkDestroyPipelineLayout(device, m_skyboxPipeline.layout, nullptr);
+	vkDestroyPipeline(device, m_skyboxPipeline.pipeline, nullptr);
 }
 
 MaterialInstance
@@ -270,18 +270,18 @@ Skybox::writeMaterial(VkDevice                     device,
 	matData.passType = MaterialPass::Other;
 
 	matData.materialSet =
-	descriptorAllocator.allocate(device, skyboxMaterialLayout);
+	descriptorAllocator.allocate(device, m_skyboxMaterialLayout);
 
 
-	writer.clear();
-	writer.writeImage(/*binding*/ 0,
-	                  resources.cubemapImage.imageView,
-	                  resources.cubemapSampler,
+	m_writer.clear();
+	m_writer.writeImage(/*binding*/ 0,
+	                  resources.m_cubemapImage.imageView,
+	                  resources.m_cubemapSampler,
 	                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	                  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
 	// use the materialSet and update it here.
-	writer.updateSet(device, matData.materialSet);
+	m_writer.updateSet(device, matData.materialSet);
 
 	return matData;
 }

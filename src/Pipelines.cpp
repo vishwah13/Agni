@@ -58,25 +58,25 @@ void PipelineBuilder::clear()
 {
 	// clear all of the structs we need back to 0 with their correct stype
 
-	_inputAssembly = {
+	m_inputAssembly = {
 	.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
 
-	_rasterizer = {.sType =
+	m_rasterizer = {.sType =
 	               VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
 
-	_colorBlendAttachment = {};
+	m_colorBlendAttachment = {};
 
-	_multisampling = {.sType =
+	m_multisampling = {.sType =
 	                  VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
 
-	_pipelineLayout = {};
+	m_pipelineLayout = {};
 
-	_depthStencil = {
+	m_depthStencil = {
 	.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
 
-	_renderInfo = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
+	m_renderInfo = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
 
-	_shaderStages.clear();
+	m_shaderStages.clear();
 }
 
 VkPipeline PipelineBuilder::buildPipeline(VkDevice device)
@@ -100,7 +100,7 @@ VkPipeline PipelineBuilder::buildPipeline(VkDevice device)
 	colorBlending.logicOpEnable   = VK_FALSE;
 	colorBlending.logicOp         = VK_LOGIC_OP_COPY;
 	colorBlending.attachmentCount = 1;
-	colorBlending.pAttachments    = &_colorBlendAttachment;
+	colorBlending.pAttachments    = &m_colorBlendAttachment;
 
 	// completely clear VertexInputStateCreateInfo, as we have no need for it
 	VkPipelineVertexInputStateCreateInfo _vertexInputInfo = {
@@ -112,18 +112,18 @@ VkPipeline PipelineBuilder::buildPipeline(VkDevice device)
 	VkGraphicsPipelineCreateInfo pipelineInfo = {
 	.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
 	// connect the renderInfo to the pNext extension mechanism
-	pipelineInfo.pNext = &_renderInfo;
+	pipelineInfo.pNext = &m_renderInfo;
 
-	pipelineInfo.stageCount          = (uint32_t) _shaderStages.size();
-	pipelineInfo.pStages             = _shaderStages.data();
+	pipelineInfo.stageCount          = (uint32_t) m_shaderStages.size();
+	pipelineInfo.pStages             = m_shaderStages.data();
 	pipelineInfo.pVertexInputState   = &_vertexInputInfo;
-	pipelineInfo.pInputAssemblyState = &_inputAssembly;
+	pipelineInfo.pInputAssemblyState = &m_inputAssembly;
 	pipelineInfo.pViewportState      = &viewportState;
-	pipelineInfo.pRasterizationState = &_rasterizer;
-	pipelineInfo.pMultisampleState   = &_multisampling;
+	pipelineInfo.pRasterizationState = &m_rasterizer;
+	pipelineInfo.pMultisampleState   = &m_multisampling;
 	pipelineInfo.pColorBlendState    = &colorBlending;
-	pipelineInfo.pDepthStencilState  = &_depthStencil;
-	pipelineInfo.layout              = _pipelineLayout;
+	pipelineInfo.pDepthStencilState  = &m_depthStencil;
+	pipelineInfo.layout              = m_pipelineLayout;
 
 	VkDynamicState state[] = {VK_DYNAMIC_STATE_VIEWPORT,
 	                          VK_DYNAMIC_STATE_SCISSOR};
@@ -152,107 +152,107 @@ VkPipeline PipelineBuilder::buildPipeline(VkDevice device)
 void PipelineBuilder::setShaders(VkShaderModule vertexShader,
                                  VkShaderModule fragmentShader)
 {
-	_shaderStages.clear();
+	m_shaderStages.clear();
 
-	_shaderStages.push_back(vkinit::pipelineShaderStageCreateInfo(
+	m_shaderStages.push_back(vkinit::pipelineShaderStageCreateInfo(
 	VK_SHADER_STAGE_VERTEX_BIT, vertexShader));
 
-	_shaderStages.push_back(vkinit::pipelineShaderStageCreateInfo(
+	m_shaderStages.push_back(vkinit::pipelineShaderStageCreateInfo(
 	VK_SHADER_STAGE_FRAGMENT_BIT, fragmentShader));
 }
 
 void PipelineBuilder::setInputTopology(VkPrimitiveTopology topology)
 {
-	_inputAssembly.topology = topology;
+	m_inputAssembly.topology = topology;
 	// we are not going to use primitive restart on the entire tutorial so leave
 	// it on false
-	_inputAssembly.primitiveRestartEnable = VK_FALSE;
+	m_inputAssembly.primitiveRestartEnable = VK_FALSE;
 }
 
 void PipelineBuilder::setPolygonMode(VkPolygonMode mode)
 {
-	_rasterizer.polygonMode = mode;
-	_rasterizer.lineWidth   = 1.f;
+	m_rasterizer.polygonMode = mode;
+	m_rasterizer.lineWidth   = 1.f;
 }
 
 void PipelineBuilder::setCullMode(VkCullModeFlags cullMode,
                                   VkFrontFace     frontFace)
 {
-	_rasterizer.cullMode  = cullMode;
-	_rasterizer.frontFace = frontFace;
+	m_rasterizer.cullMode  = cullMode;
+	m_rasterizer.frontFace = frontFace;
 }
 
 void PipelineBuilder::setMultisamplingNone()
 {
-	_multisampling.sampleShadingEnable = VK_FALSE;
+	m_multisampling.sampleShadingEnable = VK_FALSE;
 	// multisampling defaulted to no multisampling (1 sample per pixel)
-	_multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-	_multisampling.minSampleShading     = 1.0f;
-	_multisampling.pSampleMask          = nullptr;
+	m_multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+	m_multisampling.minSampleShading     = 1.0f;
+	m_multisampling.pSampleMask          = nullptr;
 	// no alpha to coverage either
-	_multisampling.alphaToCoverageEnable = VK_FALSE;
-	_multisampling.alphaToOneEnable      = VK_FALSE;
+	m_multisampling.alphaToCoverageEnable = VK_FALSE;
+	m_multisampling.alphaToOneEnable      = VK_FALSE;
 }
 
 void PipelineBuilder::enableMultisampling(VkSampleCountFlagBits numSample)
 {
-	_multisampling.sampleShadingEnable = VK_TRUE;
+	m_multisampling.sampleShadingEnable = VK_TRUE;
 	// multisampling defaulted to no multisampling (1 sample per pixel)
-	_multisampling.rasterizationSamples = numSample;
-	_multisampling.minSampleShading     = 1.f;
-	_multisampling.pSampleMask          = nullptr;
+	m_multisampling.rasterizationSamples = numSample;
+	m_multisampling.minSampleShading     = 1.f;
+	m_multisampling.pSampleMask          = nullptr;
 	// no alpha to coverage either
-	_multisampling.alphaToCoverageEnable = VK_FALSE;
-	_multisampling.alphaToOneEnable      = VK_FALSE;
+	m_multisampling.alphaToCoverageEnable = VK_FALSE;
+	m_multisampling.alphaToOneEnable      = VK_FALSE;
 }
 
 void PipelineBuilder::disableBlending()
 {
 	// default write mask
-	_colorBlendAttachment.colorWriteMask =
+	m_colorBlendAttachment.colorWriteMask =
 	VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
 	VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 	// no blending
-	_colorBlendAttachment.blendEnable = VK_FALSE;
+	m_colorBlendAttachment.blendEnable = VK_FALSE;
 }
 
 void PipelineBuilder::setColorAttachmentFormat(VkFormat format)
 {
-	_colorAttachmentformat = format;
+	m_colorAttachmentformat = format;
 	// connect the format to the renderInfo  structure
-	_renderInfo.colorAttachmentCount    = 1;
-	_renderInfo.pColorAttachmentFormats = &_colorAttachmentformat;
+	m_renderInfo.colorAttachmentCount    = 1;
+	m_renderInfo.pColorAttachmentFormats = &m_colorAttachmentformat;
 }
 
 void PipelineBuilder::setDepthFormat(VkFormat format)
 {
-	_renderInfo.depthAttachmentFormat = format;
+	m_renderInfo.depthAttachmentFormat = format;
 }
 
 void PipelineBuilder::disableDepthtest()
 {
-	_depthStencil.depthTestEnable       = VK_FALSE;
-	_depthStencil.depthWriteEnable      = VK_FALSE;
-	_depthStencil.depthCompareOp        = VK_COMPARE_OP_NEVER;
-	_depthStencil.depthBoundsTestEnable = VK_FALSE;
-	_depthStencil.stencilTestEnable     = VK_FALSE;
-	_depthStencil.front                 = {};
-	_depthStencil.back                  = {};
-	_depthStencil.minDepthBounds        = 0.f;
-	_depthStencil.maxDepthBounds        = 1.f;
+	m_depthStencil.depthTestEnable       = VK_FALSE;
+	m_depthStencil.depthWriteEnable      = VK_FALSE;
+	m_depthStencil.depthCompareOp        = VK_COMPARE_OP_NEVER;
+	m_depthStencil.depthBoundsTestEnable = VK_FALSE;
+	m_depthStencil.stencilTestEnable     = VK_FALSE;
+	m_depthStencil.front                 = {};
+	m_depthStencil.back                  = {};
+	m_depthStencil.minDepthBounds        = 0.f;
+	m_depthStencil.maxDepthBounds        = 1.f;
 }
 
 void PipelineBuilder::enableDepthtest(bool depthWriteEnable, VkCompareOp op)
 {
-	_depthStencil.depthTestEnable       = VK_TRUE;
-	_depthStencil.depthWriteEnable      = depthWriteEnable;
-	_depthStencil.depthCompareOp        = op;
-	_depthStencil.depthBoundsTestEnable = VK_FALSE;
-	_depthStencil.stencilTestEnable     = VK_FALSE;
-	_depthStencil.front                 = {};
-	_depthStencil.back                  = {};
-	_depthStencil.minDepthBounds        = 0.f;
-	_depthStencil.maxDepthBounds        = 1.f;
+	m_depthStencil.depthTestEnable       = VK_TRUE;
+	m_depthStencil.depthWriteEnable      = depthWriteEnable;
+	m_depthStencil.depthCompareOp        = op;
+	m_depthStencil.depthBoundsTestEnable = VK_FALSE;
+	m_depthStencil.stencilTestEnable     = VK_FALSE;
+	m_depthStencil.front                 = {};
+	m_depthStencil.back                  = {};
+	m_depthStencil.minDepthBounds        = 0.f;
+	m_depthStencil.maxDepthBounds        = 1.f;
 }
 
 // formula for blending in vulkan: outColor = srcColor * srcColorBlendFactor
@@ -260,31 +260,31 @@ void PipelineBuilder::enableDepthtest(bool depthWriteEnable, VkCompareOp op)
 // For additive : outColor = srcColor.rgb * srcColor.a + dstColor.rgb * 1.0
 void PipelineBuilder::enableBlendingAdditive()
 {
-	_colorBlendAttachment.colorWriteMask =
+	m_colorBlendAttachment.colorWriteMask =
 	VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
 	VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-	_colorBlendAttachment.blendEnable         = VK_TRUE;
-	_colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-	_colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
-	_colorBlendAttachment.colorBlendOp        = VK_BLEND_OP_ADD;
-	_colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-	_colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-	_colorBlendAttachment.alphaBlendOp        = VK_BLEND_OP_ADD;
+	m_colorBlendAttachment.blendEnable         = VK_TRUE;
+	m_colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+	m_colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+	m_colorBlendAttachment.colorBlendOp        = VK_BLEND_OP_ADD;
+	m_colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	m_colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+	m_colorBlendAttachment.alphaBlendOp        = VK_BLEND_OP_ADD;
 }
 
 // For alphablend : outColor = srcColor.rgb * srcColor.a + dstColor.rgb * (1.0 -
 // srcColor.a)
 void PipelineBuilder::enableBlendingAlphablend()
 {
-	_colorBlendAttachment.colorWriteMask =
+	m_colorBlendAttachment.colorWriteMask =
 	VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
 	VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-	_colorBlendAttachment.blendEnable         = VK_TRUE;
-	_colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-	_colorBlendAttachment.dstColorBlendFactor =
+	m_colorBlendAttachment.blendEnable         = VK_TRUE;
+	m_colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+	m_colorBlendAttachment.dstColorBlendFactor =
 	VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-	_colorBlendAttachment.colorBlendOp        = VK_BLEND_OP_ADD;
-	_colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-	_colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-	_colorBlendAttachment.alphaBlendOp        = VK_BLEND_OP_ADD;
+	m_colorBlendAttachment.colorBlendOp        = VK_BLEND_OP_ADD;
+	m_colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	m_colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+	m_colorBlendAttachment.alphaBlendOp        = VK_BLEND_OP_ADD;
 }

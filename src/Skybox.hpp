@@ -41,25 +41,25 @@ public:
 private:
 	struct MaterialResources
 	{
-		AllocatedImage cubemapImage;
-		VkSampler      cubemapSampler;
+		AllocatedImage m_cubemapImage;
+		VkSampler      m_cubemapSampler;
 	};
 
 	// Mesh data
-	uint32_t       indexCount {0};
-	uint32_t       firstIndex {0};
-	GPUMeshBuffers meshBuffers {};
+	uint32_t       m_indexCount {0};
+	uint32_t       m_firstIndex {0};
+	GPUMeshBuffers m_meshBuffers {};
 
 	// Pipeline and material
-	MaterialPipeline      skyboxPipeline {};
-	VkDescriptorSetLayout skyboxMaterialLayout {VK_NULL_HANDLE};
-	MaterialInstance*     skyboxMaterial {nullptr};
+	MaterialPipeline      m_skyboxPipeline {};
+	VkDescriptorSetLayout m_skyboxMaterialLayout {VK_NULL_HANDLE};
+	MaterialInstance*     m_skyboxMaterial {nullptr};
 
 	// Cubemap resources
-	AllocatedImage cubemapImage {};
-	VkSampler      cubemapSampler {VK_NULL_HANDLE};
+	AllocatedImage m_cubemapImage {};
+	VkSampler      m_cubemapSampler {VK_NULL_HANDLE};
 
-	DescriptorWriter writer;
+	DescriptorWriter m_writer;
 
 	// Internal helper methods
 	void createCubeMesh(AgniEngine* engine);

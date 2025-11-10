@@ -117,7 +117,7 @@ class IRenderable
 };
 
 // implementation of a drawable scene node.
-// the scene node can hold children and will also keep a transform to propagate
+// the scene node can hold m_children and will also keep a transform to propagate
 // to them
 class Node : public IRenderable
 {
@@ -129,40 +129,40 @@ public:
 	// their correct places.
 	void refreshTransform(const glm::mat4& parentMatrix)
 	{
-		worldTransform = parentMatrix * localTransform;
-		for (const auto& c : children)
+		m_worldTransform = parentMatrix * m_localTransform;
+		for (const auto& c : m_children)
 		{
-			c->refreshTransform(worldTransform);
+			c->refreshTransform(m_worldTransform);
 		}
 	}
 
 	virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx)
 	{
-		// draw children
-		for (auto& c : children)
+		// draw m_children
+		for (auto& c : m_children)
 		{
 			c->Draw(topMatrix, ctx);
 		}
 	}
 
 	// Accessors
-	glm::mat4& getLocalTransform() { return localTransform; }
-	const glm::mat4& getLocalTransform() const { return localTransform; }
+	glm::mat4& getLocalTransform() { return m_localTransform; }
+	const glm::mat4& getLocalTransform() const { return m_localTransform; }
 
-	glm::mat4& getWorldTransform() { return worldTransform; }
-	const glm::mat4& getWorldTransform() const { return worldTransform; }
+	glm::mat4& getWorldTransform() { return m_worldTransform; }
+	const glm::mat4& getWorldTransform() const { return m_worldTransform; }
 
-	std::vector<std::shared_ptr<Node>>& getChildren() { return children; }
-	const std::vector<std::shared_ptr<Node>>& getChildren() const { return children; }
+	std::vector<std::shared_ptr<Node>>& getChildren() { return m_children; }
+	const std::vector<std::shared_ptr<Node>>& getChildren() const { return m_children; }
 
-	std::weak_ptr<Node>& getParent() { return parent; }
-	const std::weak_ptr<Node>& getParent() const { return parent; }
+	std::weak_ptr<Node>& getParent() { return m_parent; }
+	const std::weak_ptr<Node>& getParent() const { return m_parent; }
 
 protected:
-	// parent pointer must be a weak pointer to avoid circular dependencies
-	std::weak_ptr<Node>                parent;
-	std::vector<std::shared_ptr<Node>> children;
+	// m_parent pointer must be a weak pointer to avoid circular dependencies
+	std::weak_ptr<Node>                m_parent;
+	std::vector<std::shared_ptr<Node>> m_children;
 
-	glm::mat4 localTransform;
-	glm::mat4 worldTransform;
+	glm::mat4 m_localTransform;
+	glm::mat4 m_worldTransform;
 };
