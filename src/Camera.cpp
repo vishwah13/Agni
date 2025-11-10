@@ -5,24 +5,24 @@
 glm::mat4 Camera::getViewMatrix() const
 {
 	// inverting the camera matrix to get the proper view matrix
-	glm::mat4 cameraTranslation = glm::translate(glm::mat4(1.f), position);
+	glm::mat4 cameraTranslation = glm::translate(glm::mat4(1.f), m_position);
 	glm::mat4 cameraRotation    = getRotationMatrix();
 	return glm::inverse(cameraTranslation * cameraRotation);
 }
 
 glm::mat4 Camera::getRotationMatrix() const
 {
-	// fairly typical FPS style camera. we join the pitch and yaw rotations into
+	// fairly typical FPS style camera. we join the m_pitch and m_yaw rotations into
 	// the final rotation matrix
 
-	glm::quat pitchRotation = glm::angleAxis(pitch, glm::vec3 {1.f, 0.f, 0.f});
-	glm::quat yawRotation   = glm::angleAxis(yaw, glm::vec3 {0.f, -1.f, 0.f});
+	glm::quat pitchRotation = glm::angleAxis(m_pitch, glm::vec3 {1.f, 0.f, 0.f});
+	glm::quat yawRotation   = glm::angleAxis(m_yaw, glm::vec3 {0.f, -1.f, 0.f});
 
 	return glm::toMat4(yawRotation) * glm::toMat4(pitchRotation);
 }
 
 // Need improvemnts
-// TO-DO: Better camera rotation handling (e.g., clamp pitch, wrap yaw)
+// TO-DO: Better camera rotation handling (e.g., clamp m_pitch, wrap m_yaw)
 // TO-DO: Add zoom functionality
 void Camera::processSDLEvent(const SDL_Event& e)
 {
@@ -30,27 +30,27 @@ void Camera::processSDLEvent(const SDL_Event& e)
 	{
 		if (e.key.key == SDLK_W)
 		{
-			velocity.z = -1;
+			m_velocity.z = -1;
 		}
 		if (e.key.key == SDLK_S)
 		{
-			velocity.z = 1;
+			m_velocity.z = 1;
 		}
 		if (e.key.key == SDLK_A)
 		{
-			velocity.x = -1;
+			m_velocity.x = -1;
 		}
 		if (e.key.key == SDLK_D)
 		{
-			velocity.x = 1;
+			m_velocity.x = 1;
 		}
 		if (e.key.key == SDLK_E)
 		{
-			velocity.y = 1; // Up
+			m_velocity.y = 1; // Up
 		}
 		if (e.key.key == SDLK_Q)
 		{
-			velocity.y = -1; // Down
+			m_velocity.y = -1; // Down
 		}
 	}
 
@@ -58,51 +58,51 @@ void Camera::processSDLEvent(const SDL_Event& e)
 	{
 		if (e.key.key == SDLK_W)
 		{
-			velocity.z = 0;
+			m_velocity.z = 0;
 		}
 		if (e.key.key == SDLK_S)
 		{
-			velocity.z = 0;
+			m_velocity.z = 0;
 		}
 		if (e.key.key == SDLK_A)
 		{
-			velocity.x = 0;
+			m_velocity.x = 0;
 		}
 		if (e.key.key == SDLK_D)
 		{
-			velocity.x = 0;
+			m_velocity.x = 0;
 		}
 		if (e.key.key == SDLK_E)
 		{
-			velocity.y = 0;
+			m_velocity.y = 0;
 		}
 		if (e.key.key == SDLK_Q)
 		{
-			velocity.y = 0;
+			m_velocity.y = 0;
 		}
 	}
 
 	if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
 	    e.button.button == SDL_BUTTON_RIGHT)
 	{
-		rightMousePressed = true;
+		m_rightMousePressed = true;
 	}
 	if (e.type == SDL_EVENT_MOUSE_BUTTON_UP &&
 	    e.button.button == SDL_BUTTON_RIGHT)
 	{
-		rightMousePressed = false;
+		m_rightMousePressed = false;
 	}
 
-	if (e.type == SDL_EVENT_MOUSE_MOTION && rightMousePressed)
+	if (e.type == SDL_EVENT_MOUSE_MOTION && m_rightMousePressed)
 	{
-		yaw += (float) (e.motion.xrel / 200.f) * mouseSensitivity;
-		pitch -= (float) (e.motion.yrel / 200.f) * mouseSensitivity;
+		m_yaw += (float) (e.motion.xrel / 200.f) * m_mouseSensitivity;
+		m_pitch -= (float) (e.motion.yrel / 200.f) * m_mouseSensitivity;
 	}
 }
 
 void Camera::update(float deltaTime)
 {
 	glm::mat4 cameraRotation = getRotationMatrix();
-	position +=
-	glm::vec3(cameraRotation * glm::vec4(velocity, 0.f)) * speed * deltaTime;
+	m_position +=
+	glm::vec3(cameraRotation * glm::vec4(m_velocity, 0.f)) * m_speed * deltaTime;
 }

@@ -5,7 +5,7 @@
 struct DescriptorLayoutBuilder
 {
 
-	std::vector<VkDescriptorSetLayoutBinding> bindings;
+	std::vector<VkDescriptorSetLayoutBinding> m_bindings;
 
 	void                  addBinding(uint32_t binding, VkDescriptorType type);
 	void                  clear();
@@ -40,17 +40,17 @@ private:
 	                            uint32_t                 setCount,
 	                            std::span<PoolSizeRatio> poolRatios);
 
-	std::vector<PoolSizeRatio>    ratios;
-	std::vector<VkDescriptorPool> fullPools;
-	std::vector<VkDescriptorPool> readyPools;
-	uint32_t                      setsPerPool;
+	std::vector<PoolSizeRatio>    m_ratios;
+	std::vector<VkDescriptorPool> m_fullPools;
+	std::vector<VkDescriptorPool> m_readyPools;
+	uint32_t                      m_setsPerPool;
 };
 
 struct DescriptorWriter
 {
-	std::deque<VkDescriptorImageInfo>  imageInfos;
-	std::deque<VkDescriptorBufferInfo> bufferInfos;
-	std::vector<VkWriteDescriptorSet>  writes;
+	std::deque<VkDescriptorImageInfo>  m_imageInfos;
+	std::deque<VkDescriptorBufferInfo> m_bufferInfos;
+	std::vector<VkWriteDescriptorSet>  m_writes;
 
 	void writeImage(int              binding,
 	                VkImageView      image,

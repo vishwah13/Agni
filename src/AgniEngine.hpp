@@ -129,11 +129,11 @@ public:
 	virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx) override;
 
 	// Accessor for mesh
-	std::shared_ptr<MeshAsset>& getMesh() { return mesh; }
-	const std::shared_ptr<MeshAsset>& getMesh() const { return mesh; }
+	std::shared_ptr<MeshAsset>& getMesh() { return m_mesh; }
+	const std::shared_ptr<MeshAsset>& getMesh() const { return m_mesh; }
 
 protected:
-	std::shared_ptr<MeshAsset> mesh;
+	std::shared_ptr<MeshAsset> m_mesh;
 };
 
 struct RenderObject
@@ -164,85 +164,85 @@ public:
 	AgniEngine operator=(const AgniEngine& other) = delete;
 	AgniEngine operator=(AgniEngine&& other)      = delete;
 
-	bool       _isInitialized {false};
-	int        _frameNumber {0};
-	bool       stop_rendering {false};
-	VkExtent2D _windowExtent {1600, 900};
+	bool       m_isInitialized {false};
+	int        m_frameNumber {0};
+	bool       m_stopRendering {false};
+	VkExtent2D m_windowExtent {1600, 900};
 
 	// Delta time tracking
-	std::chrono::time_point<std::chrono::high_resolution_clock> lastFrameTime;
-	float deltaTime {0.0f}; // Time between frames in seconds
+	std::chrono::time_point<std::chrono::high_resolution_clock> m_lastFrameTime;
+	float m_deltaTime {0.0f}; // Time between frames in seconds
 
-	EngineStats stats;
+	EngineStats m_stats;
 
-	struct SDL_Window* _window {nullptr};
+	struct SDL_Window* m_window {nullptr};
 
 	static AgniEngine& Get();
 
-	DeletionQueue _mainDeletionQueue;
+	DeletionQueue m_mainDeletionQueue;
 
-	VmaAllocator _allocator;
+	VmaAllocator m_allocator;
 
-	VkInstance               _instance;       // Vulkan library handle
-	VkDebugUtilsMessengerEXT _debugMessenger; // Vulkan debug output handle
-	VkPhysicalDevice         _chosenGPU; // GPU chosen as the default device
-	VkDevice                 _device;    // Vulkan device for commands
-	VkSurfaceKHR             _surface;   // Vulkan window surface
+	VkInstance               m_instance;       // Vulkan library handle
+	VkDebugUtilsMessengerEXT m_debugMessenger; // Vulkan debug output handle
+	VkPhysicalDevice         m_chosenGPU; // GPU chosen as the default device
+	VkDevice                 m_device;    // Vulkan device for commands
+	VkSurfaceKHR             m_surface;   // Vulkan window surface
 
-	VkSwapchainKHR _swapchain;
-	VkFormat       _swapchainImageFormat;
+	VkSwapchainKHR m_swapchain;
+	VkFormat       m_swapchainImageFormat;
 
-	std::vector<VkImage>     _swapchainImages;
-	std::vector<VkImageView> _swapchainImageViews;
-	VkExtent2D               _swapchainExtent;
-	bool                     resizeRequested {false};
+	std::vector<VkImage>     m_swapchainImages;
+	std::vector<VkImageView> m_swapchainImageViews;
+	VkExtent2D               m_swapchainExtent;
+	bool                     m_resizeRequested {false};
 
-	FrameData _frames[FRAME_OVERLAP];
+	FrameData m_frames[FRAME_OVERLAP];
 
 	FrameData& getCurrentFrame()
 	{
-		return _frames[_frameNumber % FRAME_OVERLAP];
+		return m_frames[m_frameNumber % FRAME_OVERLAP];
 	}
 
 	const FrameData& getCurrentFrame() const
 	{
-		return _frames[_frameNumber % FRAME_OVERLAP];
+		return m_frames[m_frameNumber % FRAME_OVERLAP];
 	}
 
-	VkQueue  _graphicsQueue;
-	uint32_t _graphicsQueueFamily;
+	VkQueue  m_graphicsQueue;
+	uint32_t m_graphicsQueueFamily;
 
 	// draw resources
-	AllocatedImage _drawImage;
-	AllocatedImage _depthImage;
-	VkExtent2D     _drawExtent;
-	float          renderScale = 1.f;
+	AllocatedImage m_drawImage;
+	AllocatedImage m_depthImage;
+	VkExtent2D     m_drawExtent;
+	float          m_renderScale = 1.f;
 
 	// MSAA resources
-	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_4_BIT;
-	AllocatedImage        _msaaColorImage;
+	VkSampleCountFlagBits m_msaaSamples = VK_SAMPLE_COUNT_4_BIT;
+	AllocatedImage        m_msaaColorImage;
 
-	DescriptorAllocatorGrowable globalDescriptorAllocator;
+	DescriptorAllocatorGrowable m_globalDescriptorAllocator;
 
-	VkDescriptorSet       _drawImageDescriptors;
-	VkDescriptorSetLayout _drawImageDescriptorLayout;
+	VkDescriptorSet       m_drawImageDescriptors;
+	VkDescriptorSetLayout m_drawImageDescriptorLayout;
 
-	VkPipeline       _gradientPipeline;
-	VkPipelineLayout _gradientPipelineLayout;
+	VkPipeline       m_gradientPipeline;
+	VkPipelineLayout m_gradientPipelineLayout;
 
 	// immediate submit structures for ImGui
-	VkFence         _immFence;
-	VkCommandBuffer _immCommandBuffer;
-	VkCommandPool   _immCommandPool;
+	VkFence         m_immFence;
+	VkCommandBuffer m_immCommandBuffer;
+	VkCommandPool   m_immCommandPool;
 
 	// compute shader effects shinanigans
-	std::vector<ComputeEffect> backgroundEffects;
-	int                        currentBackgroundEffect {0};
+	std::vector<ComputeEffect> m_backgroundEffects;
+	int                        m_currentBackgroundEffect {0};
 
-	GPUSceneData          sceneData;
-	VkDescriptorSetLayout _gpuSceneDataDescriptorLayout;
+	GPUSceneData          m_sceneData;
+	VkDescriptorSetLayout m_gpuSceneDataDescriptorLayout;
 
-	Camera mainCamera;
+	Camera m_mainCamera;
 
 
 	// initializes everything in the engine
@@ -265,21 +265,21 @@ public:
 	GPUMeshBuffers uploadMesh(std::span<uint32_t> indices,
 	                          std::span<Vertex>   vertices);
 	// default textures
-	AllocatedImage _whiteImage;
-	AllocatedImage _blackImage;
-	AllocatedImage _greyImage;
-	AllocatedImage _errorCheckerboardImage;
+	AllocatedImage m_whiteImage;
+	AllocatedImage m_blackImage;
+	AllocatedImage m_greyImage;
+	AllocatedImage m_errorCheckerboardImage;
 
 	// default sampleres
-	VkSampler _defaultSamplerLinear;
-	VkSampler _defaultSamplerNearest;
+	VkSampler m_defaultSamplerLinear;
+	VkSampler m_defaultSamplerNearest;
 
 	// default materials
-	MaterialInstance defaultData;
-	GltfPbrMaterial  metalRoughMaterial;
+	MaterialInstance m_defaultData;
+	GltfPbrMaterial  m_metalRoughMaterial;
 
-	// skybox
-	Skybox skybox;
+	// m_skybox
+	Skybox m_skybox;
 
 	// creating and destroying buffers can go in their own class later ??
 	AllocatedBuffer createBuffer(size_t             allocSize,
@@ -309,10 +309,10 @@ public:
 	                             bool mipmapped = false);
 
 private:
-	VkDescriptorSetLayout _singleImageDescriptorLayout;
+	VkDescriptorSetLayout m_singleImageDescriptorLayout;
 
-	DrawContext mainDrawContext;
-	std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>> loadedScenes;
+	DrawContext m_mainDrawContext;
+	std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>> m_loadedScenes;
 
 	void initVulkan();
 	void initSwapchain();

@@ -12,20 +12,20 @@ namespace vkutil
 class PipelineBuilder
 {
 public:
-	std::vector<VkPipelineShaderStageCreateInfo> _shaderStages;
+	std::vector<VkPipelineShaderStageCreateInfo> m_shaderStages;
 
-	VkPipelineInputAssemblyStateCreateInfo _inputAssembly;
-	VkPipelineRasterizationStateCreateInfo _rasterizer;
-	VkPipelineColorBlendAttachmentState    _colorBlendAttachment;
-	VkPipelineMultisampleStateCreateInfo   _multisampling;
-	VkPipelineLayout                       _pipelineLayout;
-	VkPipelineDepthStencilStateCreateInfo  _depthStencil;
+	VkPipelineInputAssemblyStateCreateInfo m_inputAssembly;
+	VkPipelineRasterizationStateCreateInfo m_rasterizer;
+	VkPipelineColorBlendAttachmentState    m_colorBlendAttachment;
+	VkPipelineMultisampleStateCreateInfo   m_multisampling;
+	VkPipelineLayout                       m_pipelineLayout;
+	VkPipelineDepthStencilStateCreateInfo  m_depthStencil;
 	// so all systems related to VkRenderPass will be completely skipped
 	// Instead, we extend the VkGraphicsPipelineCreateInfo with a
 	// VkPipelineRenderingCreateInfo added into its pNext chain. This structure
 	// holds a list of the attachment formats the pipeline will use.
-	VkPipelineRenderingCreateInfo _renderInfo;
-	VkFormat                      _colorAttachmentformat;
+	VkPipelineRenderingCreateInfo m_renderInfo;
+	VkFormat                      m_colorAttachmentformat;
 
 	PipelineBuilder()
 	{
