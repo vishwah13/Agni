@@ -7,11 +7,11 @@
 #include <camera.h>
 #include <deque>
 #include <functional>
+#include <skybox.h>
 #include <vector>
 #include <vk_descriptors.h>
 #include <vk_loader.h>
 #include <vk_types.h>
-#include <skybox.h>
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 
@@ -152,6 +152,13 @@ struct DrawContext
 class AgniEngine
 {
 public:
+	AgniEngine()                                  = default;
+	~AgniEngine()                                 = default;
+	AgniEngine(const AgniEngine& other)           = delete;
+	AgniEngine(AgniEngine&& other)                = delete;
+	AgniEngine operator=(const AgniEngine& other) = delete;
+	AgniEngine operator=(AgniEngine&& other)      = delete;
+
 	bool       _isInitialized {false};
 	int        _frameNumber {0};
 	bool       stop_rendering {false};
@@ -159,7 +166,7 @@ public:
 
 	// Delta time tracking
 	std::chrono::time_point<std::chrono::high_resolution_clock> lastFrameTime;
-	float deltaTime {0.0f};    // Time between frames in seconds
+	float deltaTime {0.0f}; // Time between frames in seconds
 
 	EngineStats stats;
 
@@ -258,8 +265,8 @@ public:
 	VkSampler _defaultSamplerNearest;
 
 	// default materials
-	MaterialInstance       defaultData;
-	GltfPbrMaterial metalRoughMaterial;
+	MaterialInstance defaultData;
+	GltfPbrMaterial  metalRoughMaterial;
 
 	// skybox
 	Skybox skybox;

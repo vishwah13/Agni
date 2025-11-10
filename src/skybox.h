@@ -13,11 +13,15 @@ struct SkyBoxPushConstants
 class Skybox
 {
 public:
-	Skybox()  = default;
-	~Skybox() = default;
+	Skybox()                                = default;
+	~Skybox()                               = default;
+	Skybox(const Skybox& other)             = delete;
+	Skybox(Skybox&& other)                  = delete;
+	Skybox&  operator=(const Skybox& other) = delete;
+	Skybox&& operator=(Skybox&& other)      = delete;
 
 	// Initialize the skybox with cubemap faces
-	void init(AgniEngine*                        engine,
+	void init(AgniEngine*                       engine,
 	          const std::array<std::string, 6>& cubemapFaces);
 
 	// Build Vulkan pipelines for skybox rendering
@@ -58,9 +62,10 @@ private:
 	DescriptorWriter writer;
 
 	// Internal helper methods
-	void         createCubeMesh(AgniEngine* engine);
-	void         createMaterial(AgniEngine* engine);
-	MaterialInstance writeMaterial(VkDevice                     device,
-	                               const MaterialResources&     resources,
-	                               DescriptorAllocatorGrowable& descriptorAllocator);
+	void createCubeMesh(AgniEngine* engine);
+	void createMaterial(AgniEngine* engine);
+	MaterialInstance
+	writeMaterial(VkDevice                     device,
+	              const MaterialResources&     resources,
+	              DescriptorAllocatorGrowable& descriptorAllocator);
 };
