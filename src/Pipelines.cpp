@@ -154,10 +154,10 @@ void PipelineBuilder::setShaders(VkShaderModule vertexShader,
 {
 	_shaderStages.clear();
 
-	_shaderStages.push_back(vkinit::pipeline_shader_stage_create_info(
+	_shaderStages.push_back(vkinit::pipelineShaderStageCreateInfo(
 	VK_SHADER_STAGE_VERTEX_BIT, vertexShader));
 
-	_shaderStages.push_back(vkinit::pipeline_shader_stage_create_info(
+	_shaderStages.push_back(vkinit::pipelineShaderStageCreateInfo(
 	VK_SHADER_STAGE_FRAGMENT_BIT, fragmentShader));
 }
 

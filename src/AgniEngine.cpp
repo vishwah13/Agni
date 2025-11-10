@@ -221,7 +221,7 @@ void AgniEngine::draw()
 
 	// begin the command buffer recording. We will use this command buffer
 	// exactly once, so we want to let vulkan know that
-	VkCommandBufferBeginInfo cmdBeginInfo = vkinit::command_buffer_begin_info(
+	VkCommandBufferBeginInfo cmdBeginInfo = vkinit::commandBufferBeginInfo(
 	VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
 	_drawExtent.width =
@@ -303,16 +303,16 @@ void AgniEngine::draw()
 	// when the swapchain is ready we will signal the _renderSemaphore, to
 	// signal that rendering has finished
 
-	VkCommandBufferSubmitInfo cmdinfo = vkinit::command_buffer_submit_info(cmd);
+	VkCommandBufferSubmitInfo cmdinfo = vkinit::commandBufferSubmitInfo(cmd);
 
-	VkSemaphoreSubmitInfo waitInfo = vkinit::semaphore_submit_info(
+	VkSemaphoreSubmitInfo waitInfo = vkinit::semaphoreSubmitInfo(
 	VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR,
 	getCurrentFrame()._swapchainSemaphore);
-	VkSemaphoreSubmitInfo signalInfo = vkinit::semaphore_submit_info(
+	VkSemaphoreSubmitInfo signalInfo = vkinit::semaphoreSubmitInfo(
 	VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, getCurrentFrame()._renderSemaphore);
 
 	VkSubmitInfo2 submit =
-	vkinit::submit_info(&cmdinfo, &signalInfo, &waitInfo);
+	vkinit::submitInfo(&cmdinfo, &signalInfo, &waitInfo);
 
 	// submit command buffer to the queue and execute it.
 	//  _renderFence will now block until the graphic commands finish execution
@@ -360,7 +360,7 @@ void AgniEngine::drawBackground(VkCommandBuffer cmd)
 	clearValue              = {{0.0f, 0.0f, flash, 1.0f}};
 
 	VkImageSubresourceRange clearRange =
-	vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
+	vkinit::imageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT);
 
 	ComputeEffect& effect = backgroundEffects[currentBackgroundEffect];
 
@@ -404,7 +404,7 @@ std::function<void(VkCommandBuffer cmd)>&& function)
 
 	VkCommandBuffer cmd = _immCommandBuffer;
 
-	VkCommandBufferBeginInfo cmdBeginInfo = vkinit::command_buffer_begin_info(
+	VkCommandBufferBeginInfo cmdBeginInfo = vkinit::commandBufferBeginInfo(
 	VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
 	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
@@ -413,8 +413,8 @@ std::function<void(VkCommandBuffer cmd)>&& function)
 
 	VK_CHECK(vkEndCommandBuffer(cmd));
 
-	VkCommandBufferSubmitInfo cmdinfo = vkinit::command_buffer_submit_info(cmd);
-	VkSubmitInfo2 submit = vkinit::submit_info(&cmdinfo, nullptr, nullptr);
+	VkCommandBufferSubmitInfo cmdinfo = vkinit::commandBufferSubmitInfo(cmd);
+	VkSubmitInfo2 submit = vkinit::submitInfo(&cmdinfo, nullptr, nullptr);
 
 	// submit command buffer to the queue and execute it.
 	//  _renderFence will now block until the graphic commands finish execution
@@ -425,10 +425,10 @@ std::function<void(VkCommandBuffer cmd)>&& function)
 
 void AgniEngine::drawImgui(VkCommandBuffer cmd, VkImageView targetImageView)
 {
-	VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(
+	VkRenderingAttachmentInfo colorAttachment = vkinit::attachmentInfo(
 	targetImageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	VkRenderingInfo renderInfo =
-	vkinit::rendering_info(_swapchainExtent, &colorAttachment, nullptr);
+	vkinit::renderingInfo(_swapchainExtent, &colorAttachment, nullptr);
 
 	vkCmdBeginRendering(cmd, &renderInfo);
 
@@ -730,7 +730,7 @@ void AgniEngine::initCommands()
 	/// create a command pool for commands submitted to the graphics queue.
 	// we also want the pool to allow for resetting of individual command
 	// buffers
-	VkCommandPoolCreateInfo commandPoolInfo = vkinit::command_pool_create_info(
+	VkCommandPoolCreateInfo commandPoolInfo = vkinit::commandPoolCreateInfo(
 	_graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
 	for (int i = 0; i < FRAME_OVERLAP; i++)
@@ -741,7 +741,7 @@ void AgniEngine::initCommands()
 
 		// allocate the default command buffer that we will use for rendering
 		VkCommandBufferAllocateInfo cmdAllocInfo =
-		vkinit::command_buffer_allocate_info(_frames[i]._commandPool, 1);
+		vkinit::commandBufferAllocateInfo(_frames[i]._commandPool, 1);
 
 		VK_CHECK(vkAllocateCommandBuffers(
 		_device, &cmdAllocInfo, &_frames[i]._mainCommandBuffer));
@@ -752,7 +752,7 @@ void AgniEngine::initCommands()
 
 	// allocate the command buffer for immediate submits
 	VkCommandBufferAllocateInfo cmdAllocInfo =
-	vkinit::command_buffer_allocate_info(_immCommandPool, 1);
+	vkinit::commandBufferAllocateInfo(_immCommandPool, 1);
 
 	VK_CHECK(
 	vkAllocateCommandBuffers(_device, &cmdAllocInfo, &_immCommandBuffer));
@@ -770,8 +770,8 @@ void AgniEngine::initSyncStructures()
 	// we want the fence to start signalled so we can wait on it on the first
 	// frame
 	VkFenceCreateInfo fenceCreateInfo =
-	vkinit::fence_create_info(VK_FENCE_CREATE_SIGNALED_BIT);
-	VkSemaphoreCreateInfo semaphoreCreateInfo = vkinit::semaphore_create_info();
+	vkinit::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
+	VkSemaphoreCreateInfo semaphoreCreateInfo = vkinit::semaphoreCreateInfo();
 
 	for (int i = 0; i < FRAME_OVERLAP; i++)
 	{
@@ -1388,15 +1388,15 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 
 	// begin a render pass with MSAA images that resolve to draw image
 	VkRenderingAttachmentInfo colorAttachment =
-	vkinit::attachment_info_msaa(_msaaColorImage.imageView,
-	                             _drawImage.imageView,
-	                             nullptr,
-	                             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	VkRenderingAttachmentInfo depthAttachment = vkinit::depth_attachment_info(
+	vkinit::attachmentInfoMsaa(_msaaColorImage.imageView,
+	                           _drawImage.imageView,
+	                           nullptr,
+	                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	VkRenderingAttachmentInfo depthAttachment = vkinit::depthAttachmentInfo(
 	_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
 	VkRenderingInfo renderInfo =
-	vkinit::rendering_info(_drawExtent, &colorAttachment, &depthAttachment);
+	vkinit::renderingInfo(_drawExtent, &colorAttachment, &depthAttachment);
 	vkCmdBeginRendering(cmd, &renderInfo);
 
 	// this is not the best way to do it. it's just one way to do it. It would
@@ -1635,7 +1635,7 @@ AllocatedImage AgniEngine::createImage(VkExtent3D            size,
 	newImage.imageExtent = size;
 
 	VkImageCreateInfo img_info =
-	vkinit::image_create_info(format, usage, size, 0, 1, numSamples);
+	vkinit::imageCreateInfo(format, usage, size, 0, 1, numSamples);
 	if (mipmapped)
 	{
 		img_info.mipLevels = static_cast<uint32_t>(std::floor(
@@ -1667,7 +1667,7 @@ AllocatedImage AgniEngine::createImage(VkExtent3D            size,
 
 	// build a image-view for the image
 	VkImageViewCreateInfo view_info =
-	vkinit::imageview_create_info(format, newImage.image, aspectFlag);
+	vkinit::imageViewCreateInfo(format, newImage.image, aspectFlag);
 	view_info.subresourceRange.levelCount = img_info.mipLevels;
 
 	VK_CHECK(
@@ -1810,7 +1810,7 @@ AgniEngine::createCubemap(const std::array<std::string, 6>& faceFiles,
 	cubemap.imageFormat = format;
 	cubemap.imageExtent = {(uint32_t) width, (uint32_t) height, 1};
 
-	VkImageCreateInfo img_info = vkinit::image_create_info(
+	VkImageCreateInfo img_info = vkinit::imageCreateInfo(
 	format,
 	usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
 	cubemap.imageExtent);
@@ -1840,7 +1840,7 @@ AgniEngine::createCubemap(const std::array<std::string, 6>& faceFiles,
 	                        nullptr));
 
 	// Create image view for cubemap
-	VkImageViewCreateInfo view_info = vkinit::imageview_create_info(
+	VkImageViewCreateInfo view_info = vkinit::imageViewCreateInfo(
 	format, cubemap.image, VK_IMAGE_ASPECT_COLOR_BIT);
 	view_info.viewType                    = VK_IMAGE_VIEW_TYPE_CUBE;
 	view_info.subresourceRange.layerCount = 6;
@@ -2014,7 +2014,7 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 	                                   materialLayout};
 
 	VkPipelineLayoutCreateInfo mesh_layout_info =
-	vkinit::pipeline_layout_create_info();
+	vkinit::pipelineLayoutCreateInfo();
 	mesh_layout_info.setLayoutCount         = 2;
 	mesh_layout_info.pSetLayouts            = layouts;
 	mesh_layout_info.pPushConstantRanges    = &matrixRange;
