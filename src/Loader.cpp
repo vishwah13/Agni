@@ -1,7 +1,7 @@
 ﻿#include "stb_image.h"
+#include <Loader.hpp>
 #include <iostream>
 #include <variant>
-#include <Loader.hpp>
 
 #include "AgniEngine.hpp"
 #include "Initializers.hpp"
@@ -59,64 +59,83 @@ struct MikkTSpaceUserData
 {
 	std::vector<Vertex>*   vertices;
 	std::vector<uint32_t>* indices;
-	size_t                 vertexOffset; // offset to the current primitive's vertices
+	size_t vertexOffset; // offset to the current primitive's vertices
 };
 
 // MikkTSpace callback: Get number of faces
 int mikkGetNumFaces(const SMikkTSpaceContext* pContext)
 {
-	MikkTSpaceUserData* userData = static_cast<MikkTSpaceUserData*>(pContext->m_pUserData);
+	MikkTSpaceUserData* userData =
+	static_cast<MikkTSpaceUserData*>(pContext->m_pUserData);
 	return static_cast<int>(userData->indices->size() / 3); // triangles only
 }
 
 // MikkTSpace callback: Get number of vertices per face (always 3 for triangles)
-int mikkGetNumVerticesOfFace(const SMikkTSpaceContext* pContext, const int iFace)
+int mikkGetNumVerticesOfFace(const SMikkTSpaceContext* pContext,
+                             const int                 iFace)
 {
 	return 3; // triangles
 }
 
 // MikkTSpace callback: Get position
-void mikkGetPosition(const SMikkTSpaceContext* pContext, float fvPosOut[], const int iFace, const int iVert)
+void mikkGetPosition(const SMikkTSpaceContext* pContext,
+                     float                     fvPosOut[],
+                     const int                 iFace,
+                     const int                 iVert)
 {
-	MikkTSpaceUserData* userData = static_cast<MikkTSpaceUserData*>(pContext->m_pUserData);
-	int vertexIndex = (*userData->indices)[iFace * 3 + iVert];
-	const Vertex& vertex = (*userData->vertices)[vertexIndex];
-	fvPosOut[0] = vertex.position.x;
-	fvPosOut[1] = vertex.position.y;
-	fvPosOut[2] = vertex.position.z;
+	MikkTSpaceUserData* userData =
+	static_cast<MikkTSpaceUserData*>(pContext->m_pUserData);
+	int           vertexIndex = (*userData->indices)[iFace * 3 + iVert];
+	const Vertex& vertex      = (*userData->vertices)[vertexIndex];
+	fvPosOut[0]               = vertex.m_position.x;
+	fvPosOut[1]               = vertex.m_position.y;
+	fvPosOut[2]               = vertex.m_position.z;
 }
 
 // MikkTSpace callback: Get normal
-void mikkGetNormal(const SMikkTSpaceContext* pContext, float fvNormOut[], const int iFace, const int iVert)
+void mikkGetNormal(const SMikkTSpaceContext* pContext,
+                   float                     fvNormOut[],
+                   const int                 iFace,
+                   const int                 iVert)
 {
-	MikkTSpaceUserData* userData = static_cast<MikkTSpaceUserData*>(pContext->m_pUserData);
-	int vertexIndex = (*userData->indices)[iFace * 3 + iVert];
-	const Vertex& vertex = (*userData->vertices)[vertexIndex];
-	fvNormOut[0] = vertex.normal.x;
-	fvNormOut[1] = vertex.normal.y;
-	fvNormOut[2] = vertex.normal.z;
+	MikkTSpaceUserData* userData =
+	static_cast<MikkTSpaceUserData*>(pContext->m_pUserData);
+	int           vertexIndex = (*userData->indices)[iFace * 3 + iVert];
+	const Vertex& vertex      = (*userData->vertices)[vertexIndex];
+	fvNormOut[0]              = vertex.m_normal.x;
+	fvNormOut[1]              = vertex.m_normal.y;
+	fvNormOut[2]              = vertex.m_normal.z;
 }
 
 // MikkTSpace callback: Get texture coordinates
-void mikkGetTexCoord(const SMikkTSpaceContext* pContext, float fvTexcOut[], const int iFace, const int iVert)
+void mikkGetTexCoord(const SMikkTSpaceContext* pContext,
+                     float                     fvTexcOut[],
+                     const int                 iFace,
+                     const int                 iVert)
 {
-	MikkTSpaceUserData* userData = static_cast<MikkTSpaceUserData*>(pContext->m_pUserData);
-	int vertexIndex = (*userData->indices)[iFace * 3 + iVert];
-	const Vertex& vertex = (*userData->vertices)[vertexIndex];
-	fvTexcOut[0] = vertex.uv_x;
-	fvTexcOut[1] = vertex.uv_y;
+	MikkTSpaceUserData* userData =
+	static_cast<MikkTSpaceUserData*>(pContext->m_pUserData);
+	int           vertexIndex = (*userData->indices)[iFace * 3 + iVert];
+	const Vertex& vertex      = (*userData->vertices)[vertexIndex];
+	fvTexcOut[0]              = vertex.m_uv_x;
+	fvTexcOut[1]              = vertex.m_uv_y;
 }
 
 // MikkTSpace callback: Set tangent space (basic version)
-void mikkSetTSpaceBasic(const SMikkTSpaceContext* pContext, const float fvTangent[], const float fSign, const int iFace, const int iVert)
+void mikkSetTSpaceBasic(const SMikkTSpaceContext* pContext,
+                        const float               fvTangent[],
+                        const float               fSign,
+                        const int                 iFace,
+                        const int                 iVert)
 {
-	MikkTSpaceUserData* userData = static_cast<MikkTSpaceUserData*>(pContext->m_pUserData);
-	int vertexIndex = (*userData->indices)[iFace * 3 + iVert];
-	Vertex& vertex = (*userData->vertices)[vertexIndex];
-	vertex.tangent.x = fvTangent[0];
-	vertex.tangent.y = fvTangent[1];
-	vertex.tangent.z = fvTangent[2];
-	vertex.tangent.w = fSign; // store handedness in w component
+	MikkTSpaceUserData* userData =
+	static_cast<MikkTSpaceUserData*>(pContext->m_pUserData);
+	int     vertexIndex = (*userData->indices)[iFace * 3 + iVert];
+	Vertex& vertex      = (*userData->vertices)[vertexIndex];
+	vertex.m_tangent.x  = fvTangent[0];
+	vertex.m_tangent.y  = fvTangent[1];
+	vertex.m_tangent.z  = fvTangent[2];
+	vertex.m_tangent.w  = fSign; // store handedness in w component
 }
 
 std::optional<AllocatedImage> loadImage(AgniEngine*      engine,
@@ -276,7 +295,7 @@ std::optional<AllocatedImage> loadImage(AgniEngine*      engine,
 
 	// if any of the attempts to load the data failed, we havent written the
 	// image so handle is null
-	if (newImage.image == VK_NULL_HANDLE)
+	if (newImage.m_image == VK_NULL_HANDLE)
 	{
 		return {};
 	}
@@ -292,7 +311,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 	fmt::print("Loading GLTF: {}\n", filePath.string());
 
 	std::shared_ptr<LoadedGLTF> scene = std::make_shared<LoadedGLTF>();
-	scene->creator                    = engine;
+	scene->m_creator                  = engine;
 	LoadedGLTF& file                  = *scene.get();
 
 	fastgltf::Parser parser {};
@@ -359,7 +378,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 	{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3},
 	{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1}};
 
-	file.descriptorPool.init(engine->m_device, gltf.materials.size(), sizes);
+	file.m_descriptorPool.init(engine->m_device, gltf.materials.size(), sizes);
 
 	// load samplers
 	for (fastgltf::Sampler& sampler : gltf.samplers)
@@ -381,7 +400,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		VkSampler newSampler;
 		vkCreateSampler(engine->m_device, &sampl, nullptr, &newSampler);
 
-		file.samplers.push_back(newSampler);
+		file.m_samplers.push_back(newSampler);
 	}
 
 	// temporal arrays for all the objects to use while creating the GLTF data
@@ -411,7 +430,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		if (img.has_value())
 		{
 			images.push_back(*img);
-			file.images[imageName] =
+			file.m_images[imageName] =
 			*img; // Always store in map with a valid key
 		}
 		else
@@ -426,14 +445,14 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 	}
 
 	// create buffer to hold the material data
-	file.materialDataBuffer = engine->createBuffer(
+	file.m_materialDataBuffer = engine->createBuffer(
 	sizeof(GltfPbrMaterial::MaterialConstants) * gltf.materials.size(),
 	VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 	VMA_MEMORY_USAGE_CPU_TO_GPU);
-	int                                        dataIndex = 0;
+	int                                 dataIndex = 0;
 	GltfPbrMaterial::MaterialConstants* sceneMaterialConstants =
 	(GltfPbrMaterial::MaterialConstants*)
-	file.materialDataBuffer.info.pMappedData;
+	file.m_materialDataBuffer.m_info.pMappedData;
 
 	for (fastgltf::Material& mat : gltf.materials)
 	{
@@ -442,13 +461,13 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		file.materials[mat.name.c_str()] = newMat;
 
 		GltfPbrMaterial::MaterialConstants constants;
-		constants.colorFactors.x = mat.pbrData.baseColorFactor[0];
-		constants.colorFactors.y = mat.pbrData.baseColorFactor[1];
-		constants.colorFactors.z = mat.pbrData.baseColorFactor[2];
-		constants.colorFactors.w = mat.pbrData.baseColorFactor[3];
+		constants.m_colorFactors.x = mat.pbrData.baseColorFactor[0];
+		constants.m_colorFactors.y = mat.pbrData.baseColorFactor[1];
+		constants.m_colorFactors.z = mat.pbrData.baseColorFactor[2];
+		constants.m_colorFactors.w = mat.pbrData.baseColorFactor[3];
 
-		constants.metal_rough_factors.x = mat.pbrData.metallicFactor;
-		constants.metal_rough_factors.y = mat.pbrData.roughnessFactor;
+		constants.m_metal_rough_factors.x = mat.pbrData.metallicFactor;
+		constants.m_metal_rough_factors.y = mat.pbrData.roughnessFactor;
 		// write material parameters to buffer
 		sceneMaterialConstants[dataIndex] = constants;
 
@@ -460,18 +479,18 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 
 		GltfPbrMaterial::MaterialResources materialResources;
 		// default the material textures
-		materialResources.colorImage        = engine->m_whiteImage;
-		materialResources.colorSampler      = engine->m_defaultSamplerLinear;
-		materialResources.metalRoughImage   = engine->m_whiteImage;
-		materialResources.metalRoughSampler = engine->m_defaultSamplerLinear;
-		materialResources.normalImage       = engine->m_whiteImage;
-		materialResources.normalSampler     = engine->m_defaultSamplerLinear;
-		materialResources.aoImage           = engine->m_whiteImage;
-		materialResources.aoSampler         = engine->m_defaultSamplerLinear;
+		materialResources.m_colorImage        = engine->m_whiteImage;
+		materialResources.m_colorSampler      = engine->m_defaultSamplerLinear;
+		materialResources.m_metalRoughImage   = engine->m_whiteImage;
+		materialResources.m_metalRoughSampler = engine->m_defaultSamplerLinear;
+		materialResources.m_normalImage       = engine->m_whiteImage;
+		materialResources.m_normalSampler     = engine->m_defaultSamplerLinear;
+		materialResources.m_aoImage           = engine->m_whiteImage;
+		materialResources.m_aoSampler         = engine->m_defaultSamplerLinear;
 
 		// set the uniform buffer for the material data
-		materialResources.dataBuffer = file.materialDataBuffer.buffer;
-		materialResources.dataBufferOffset =
+		materialResources.m_dataBuffer = file.m_materialDataBuffer.m_buffer;
+		materialResources.m_dataBufferOffset =
 		dataIndex * sizeof(GltfPbrMaterial::MaterialConstants);
 		// grab textures from gltf file
 		if (mat.pbrData.baseColorTexture.has_value())
@@ -483,8 +502,8 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 			gltf.textures[mat.pbrData.baseColorTexture.value().textureIndex]
 			.samplerIndex.value();
 
-			materialResources.colorImage   = images[img];
-			materialResources.colorSampler = file.samplers[sampler];
+			materialResources.m_colorImage   = images[img];
+			materialResources.m_colorSampler = file.m_samplers[sampler];
 		}
 		if (mat.pbrData.metallicRoughnessTexture.has_value())
 		{
@@ -497,8 +516,8 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 			.textures[mat.pbrData.metallicRoughnessTexture.value().textureIndex]
 			.samplerIndex.value();
 
-			materialResources.metalRoughImage   = images[img];
-			materialResources.metalRoughSampler = file.samplers[sampler];
+			materialResources.m_metalRoughImage   = images[img];
+			materialResources.m_metalRoughSampler = file.m_samplers[sampler];
 		}
 		if (mat.normalTexture.has_value())
 		{
@@ -508,8 +527,8 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 			gltf.textures[mat.normalTexture.value().textureIndex]
 			.samplerIndex.value();
 
-			materialResources.normalImage   = images[img];
-			materialResources.normalSampler = file.samplers[sampler];
+			materialResources.m_normalImage   = images[img];
+			materialResources.m_normalSampler = file.m_samplers[sampler];
 		}
 		if (mat.occlusionTexture.has_value())
 		{
@@ -520,12 +539,12 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 			gltf.textures[mat.occlusionTexture.value().textureIndex]
 			.samplerIndex.value();
 
-			materialResources.aoImage   = images[img];
-			materialResources.aoSampler = file.samplers[sampler];
+			materialResources.m_aoImage   = images[img];
+			materialResources.m_aoSampler = file.m_samplers[sampler];
 		}
 		// build material
-		newMat->data = engine->m_metalRoughMaterial.writeMaterial(
-		engine->m_device, passType, materialResources, file.descriptorPool);
+		newMat->m_data = engine->m_metalRoughMaterial.writeMaterial(
+		engine->m_device, passType, materialResources, file.m_descriptorPool);
 
 		dataIndex++;
 	}
@@ -541,7 +560,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		std::shared_ptr<MeshAsset> newmesh = std::make_shared<MeshAsset>();
 		meshes.push_back(newmesh);
 		file.meshes[mesh.name.c_str()] = newmesh;
-		newmesh->name                  = mesh.name;
+		newmesh->m_name                = mesh.name;
 
 		// clear the mesh arrays each mesh, we dont want to merge them by error
 		indices.clear();
@@ -550,8 +569,8 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		for (auto&& p : mesh.primitives)
 		{
 			GeoSurface newSurface;
-			newSurface.startIndex = (uint32_t) indices.size();
-			newSurface.count =
+			newSurface.m_startIndex = (uint32_t) indices.size();
+			newSurface.m_count =
 			(uint32_t) gltf.accessors[p.indicesAccessor.value()].count;
 
 			size_t initial_vtx = vertices.size();
@@ -581,12 +600,12 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 				[&](glm::vec3 v, size_t index)
 				{
 					Vertex newvtx;
-					newvtx.position               = v;
-					newvtx.normal                 = {1, 0, 0};
-					newvtx.color                  = glm::vec4 {1.f};
-					newvtx.uv_x                   = 0;
-					newvtx.uv_y                   = 0;
-					newvtx.tangent                = {0, 0, 0, 0};
+					newvtx.m_position             = v;
+					newvtx.m_normal               = {1, 0, 0};
+					newvtx.m_color                = glm::vec4 {1.f};
+					newvtx.m_uv_x                 = 0;
+					newvtx.m_uv_y                 = 0;
+					newvtx.m_tangent              = {0, 0, 0, 0};
 					vertices[initial_vtx + index] = newvtx;
 				});
 			}
@@ -600,7 +619,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 				gltf,
 				gltf.accessors[(*normals).accessorIndex],
 				[&](glm::vec3 v, size_t index)
-				{ vertices[initial_vtx + index].normal = v; });
+				{ vertices[initial_vtx + index].m_normal = v; });
 			}
 
 			// load UVs
@@ -613,8 +632,8 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 				gltf.accessors[(*uv).accessorIndex],
 				[&](glm::vec2 v, size_t index)
 				{
-					vertices[initial_vtx + index].uv_x = v.x;
-					vertices[initial_vtx + index].uv_y = v.y;
+					vertices[initial_vtx + index].m_uv_x = v.x;
+					vertices[initial_vtx + index].m_uv_y = v.y;
 				});
 			}
 
@@ -627,7 +646,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 				gltf,
 				gltf.accessors[(*colors).accessorIndex],
 				[&](glm::vec4 v, size_t index)
-				{ vertices[initial_vtx + index].color = v; });
+				{ vertices[initial_vtx + index].m_color = v; });
 			}
 
 			// load tangents if available, otherwise generate them
@@ -639,74 +658,78 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 				gltf,
 				gltf.accessors[(*tangents).accessorIndex],
 				[&](glm::vec4 v, size_t index)
-				{ vertices[initial_vtx + index].tangent = v; });
+				{ vertices[initial_vtx + index].m_tangent = v; });
 			}
 			else
 			{
 				// Generate tangents using MikkTSpace
 				// Create a temporary index buffer for this primitive only
 				std::vector<uint32_t> primitiveIndices;
-				primitiveIndices.reserve(newSurface.count);
-				for (uint32_t i = newSurface.startIndex; i < newSurface.startIndex + newSurface.count; i++)
+				primitiveIndices.reserve(newSurface.m_count);
+				for (uint32_t i = newSurface.m_startIndex;
+				     i < newSurface.m_startIndex + newSurface.m_count;
+				     i++)
 				{
 					primitiveIndices.push_back(indices[i]);
 				}
 
 				// Setup MikkTSpace interface
-				SMikkTSpaceInterface mikkInterface = {};
-				mikkInterface.m_getNumFaces = mikkGetNumFaces;
+				SMikkTSpaceInterface mikkInterface   = {};
+				mikkInterface.m_getNumFaces          = mikkGetNumFaces;
 				mikkInterface.m_getNumVerticesOfFace = mikkGetNumVerticesOfFace;
-				mikkInterface.m_getPosition = mikkGetPosition;
-				mikkInterface.m_getNormal = mikkGetNormal;
-				mikkInterface.m_getTexCoord = mikkGetTexCoord;
-				mikkInterface.m_setTSpaceBasic = mikkSetTSpaceBasic;
+				mikkInterface.m_getPosition          = mikkGetPosition;
+				mikkInterface.m_getNormal            = mikkGetNormal;
+				mikkInterface.m_getTexCoord          = mikkGetTexCoord;
+				mikkInterface.m_setTSpaceBasic       = mikkSetTSpaceBasic;
 
 				// Setup user data
 				MikkTSpaceUserData userData = {};
-				userData.vertices = &vertices;
-				userData.indices = &primitiveIndices;
-				userData.vertexOffset = initial_vtx;
+				userData.vertices           = &vertices;
+				userData.indices            = &primitiveIndices;
+				userData.vertexOffset       = initial_vtx;
 
 				// Setup context
 				SMikkTSpaceContext mikkContext = {};
-				mikkContext.m_pInterface = &mikkInterface;
-				mikkContext.m_pUserData = &userData;
+				mikkContext.m_pInterface       = &mikkInterface;
+				mikkContext.m_pUserData        = &userData;
 
 				// Generate tangents
 				if (!genTangSpaceDefault(&mikkContext))
 				{
-					fmt::print("Warning: Failed to generate tangents for mesh: {}\n", mesh.name);
+					fmt::print(
+					"Warning: Failed to generate tangents for mesh: {}\n",
+					mesh.name);
 				}
 			}
 
 			if (p.materialIndex.has_value())
 			{
-				newSurface.material = materials[p.materialIndex.value()];
+				newSurface.m_material = materials[p.materialIndex.value()];
 			}
 			else
 			{
-				newSurface.material = materials[0];
+				newSurface.m_material = materials[0];
 			}
 
 			// loop the vertices of this surface, find min/max bounds
-			glm::vec3 minpos = vertices[initial_vtx].position;
-			glm::vec3 maxpos = vertices[initial_vtx].position;
+			glm::vec3 minpos = vertices[initial_vtx].m_position;
+			glm::vec3 maxpos = vertices[initial_vtx].m_position;
 			for (int i = initial_vtx; i < vertices.size(); i++)
 			{
-				minpos = glm::min(minpos, vertices[i].position);
-				maxpos = glm::max(maxpos, vertices[i].position);
+				minpos = glm::min(minpos, vertices[i].m_position);
+				maxpos = glm::max(maxpos, vertices[i].m_position);
 			}
 			// calculate origin and extents from the min/max, use extent lenght
 			// for radius
-			newSurface.bounds.origin  = (maxpos + minpos) / 2.f;
-			newSurface.bounds.extents = (maxpos - minpos) / 2.f;
-			newSurface.bounds.sphereRadius =
-			glm::length(newSurface.bounds.extents);
+			newSurface.m_bounds.m_origin  = (maxpos + minpos) / 2.f;
+			newSurface.m_bounds.m_extents = (maxpos - minpos) / 2.f;
+			newSurface.m_bounds.m_sphereRadius =
+			glm::length(newSurface.m_bounds.m_extents);
 
-			newmesh->surfaces.push_back(newSurface);
+			newmesh->m_surfaces.push_back(newSurface);
 		}
 
-		newmesh->meshBuffers = engine->uploadMesh(indices, vertices);
+		newmesh->m_meshBuffers = engine->uploadMesh(indices, vertices);
 	}
 
 	// load all nodes and their meshes
@@ -731,27 +754,32 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		file.nodes[node.name.c_str()];
 
 		std::visit(
-		fastgltf::visitor {
-		[&](fastgltf::math::fmat4x4 matrix)
-		{ memcpy(&newNode->getLocalTransform(), matrix.data(), sizeof(matrix)); },
-		[&](fastgltf::TRS transform)
-		{
-			glm::vec3 tl(transform.translation[0],
-			             transform.translation[1],
-			             transform.translation[2]);
-			glm::quat rot(transform.rotation[3],
-			              transform.rotation[0],
-			              transform.rotation[1],
-			              transform.rotation[2]);
-			glm::vec3 sc(
-			transform.scale[0], transform.scale[1], transform.scale[2]);
+		fastgltf::visitor {[&](fastgltf::math::fmat4x4 matrix)
+		                   {
+			                   memcpy(&newNode->getLocalTransform(),
+			                          matrix.data(),
+			                          sizeof(matrix));
+		                   },
+		                   [&](fastgltf::TRS transform)
+		                   {
+			                   glm::vec3 tl(transform.translation[0],
+			                                transform.translation[1],
+			                                transform.translation[2]);
+			                   glm::quat rot(transform.rotation[3],
+			                                 transform.rotation[0],
+			                                 transform.rotation[1],
+			                                 transform.rotation[2]);
+			                   glm::vec3 sc(transform.scale[0],
+			                                transform.scale[1],
+			                                transform.scale[2]);
 
-			glm::mat4 tm = glm::translate(glm::mat4(1.f), tl);
-			glm::mat4 rm = glm::toMat4(rot);
-			glm::mat4 sm = glm::scale(glm::mat4(1.f), sc);
+			                   glm::mat4 tm =
+			                   glm::translate(glm::mat4(1.f), tl);
+			                   glm::mat4 rm = glm::toMat4(rot);
+			                   glm::mat4 sm = glm::scale(glm::mat4(1.f), sc);
 
-			newNode->getLocalTransform() = tm * rm * sm;
-		}},
+			                   newNode->getLocalTransform() = tm * rm * sm;
+		                   }},
 		node.transform);
 	}
 
@@ -773,7 +801,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 	{
 		if (node->getParent().lock() == nullptr)
 		{
-			file.topNodes.push_back(node);
+			file.m_topNodes.push_back(node);
 			node->refreshTransform(glm::mat4 {1.f});
 		}
 	}
@@ -783,7 +811,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 void LoadedGLTF::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
 {
 	// create renderables from the scenenodes
-	for (auto& n : topNodes)
+	for (auto& n : m_topNodes)
 	{
 		n->Draw(topMatrix, ctx);
 	}
@@ -791,31 +819,31 @@ void LoadedGLTF::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
 
 void LoadedGLTF::clearAll()
 {
-	VkDevice dv = creator->m_device;
+	VkDevice dv = m_creator->m_device;
 
-	descriptorPool.destroyPools(dv);
-	creator->destroyBuffer(materialDataBuffer);
+	m_descriptorPool.destroyPools(dv);
+	m_creator->destroyBuffer(m_materialDataBuffer);
 
 	for (auto& [k, v] : meshes)
 	{
 
-		creator->destroyBuffer(v->meshBuffers.indexBuffer);
-		creator->destroyBuffer(v->meshBuffers.vertexBuffer);
+		m_creator->destroyBuffer(v->m_meshBuffers.m_indexBuffer);
+		m_creator->destroyBuffer(v->m_meshBuffers.m_vertexBuffer);
 	}
 
-	for (auto& [k, v] : images)
+	for (auto& [k, v] : m_images)
 	{
 
-		if (v.image == creator->m_errorCheckerboardImage.image)
+		if (v.m_image == m_creator->m_errorCheckerboardImage.m_image)
 		{
 			// dont destroy the default images
 			continue;
 		}
-		creator->destroyImage(v);
+		m_creator->destroyImage(v);
 	}
 
 
-	for (auto& sampler : samplers)
+	for (auto& sampler : m_samplers)
 	{
 		vkDestroySampler(dv, sampler, nullptr);
 	}

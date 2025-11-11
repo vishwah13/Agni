@@ -6,30 +6,30 @@
 
 struct GLTFMaterial
 {
-	MaterialInstance data;
+	MaterialInstance m_data;
 };
 
 struct Bounds
 {
-	glm::vec3 origin;
-	float     sphereRadius;
-	glm::vec3 extents;
+	glm::vec3 m_origin;
+	float     m_sphereRadius;
+	glm::vec3 m_extents;
 };
 
 struct GeoSurface
 {
-	uint32_t                      startIndex;
-	uint32_t                      count;
-	Bounds                        bounds;
-	std::shared_ptr<GLTFMaterial> material;
+	uint32_t                      m_startIndex;
+	uint32_t                      m_count;
+	Bounds                        m_bounds;
+	std::shared_ptr<GLTFMaterial> m_material;
 };
 
 struct MeshAsset
 {
-	std::string name;
+	std::string m_name;
 
-	std::vector<GeoSurface> surfaces;
-	GPUMeshBuffers          meshBuffers;
+	std::vector<GeoSurface> m_surfaces;
+	GPUMeshBuffers          m_meshBuffers;
 };
 
 // forward declaration
@@ -42,20 +42,20 @@ struct LoadedGLTF : public IRenderable
 	// storage for all the data on a given glTF file
 	std::unordered_map<std::string, std::shared_ptr<MeshAsset>>    meshes;
 	std::unordered_map<std::string, std::shared_ptr<Node>>         nodes;
-	std::unordered_map<std::string, AllocatedImage>                images;
+	std::unordered_map<std::string, AllocatedImage>                m_images;
 	std::unordered_map<std::string, std::shared_ptr<GLTFMaterial>> materials;
 
 	// nodes that dont have a parent, for iterating through the file in tree
 	// order
-	std::vector<std::shared_ptr<Node>> topNodes;
+	std::vector<std::shared_ptr<Node>> m_topNodes;
 
-	std::vector<VkSampler> samplers;
+	std::vector<VkSampler> m_samplers;
 
-	DescriptorAllocatorGrowable descriptorPool;
+	DescriptorAllocatorGrowable m_descriptorPool;
 
-	AllocatedBuffer materialDataBuffer;
+	AllocatedBuffer m_materialDataBuffer;
 
-	AgniEngine* creator;
+	AgniEngine* m_creator;
 
 	~LoadedGLTF()
 	{
