@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "renderdoc_app.h"
 #include "vk_mem_alloc.h"
 #include <Camera.hpp>
 #include <Descriptors.hpp>
@@ -294,6 +295,7 @@ public:
 
 	void destroyBuffer(const AllocatedBuffer& buffer);
 
+	// creating and destroying images can go in their own class later ??
 	AllocatedImage
 	createImage(VkExtent3D            size,
 	            VkFormat              format,
@@ -320,10 +322,16 @@ private:
 	DrawContext m_mainDrawContext;
 	std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>> m_loadedScenes;
 
+	RENDERDOC_API_1_1_2* m_rdocAPI = NULL;
+
 	void initVulkan();
 	void initSwapchain();
 	void initCommands();
 	void initSyncStructures();
+
+	void initRenderDocAPI();
+	void captureRenderDocFrame();
+	void endRenderDocFrameCapture();
 
 	void createSwapchain(uint32_t width, uint32_t height);
 	void resizeSwapchain();
