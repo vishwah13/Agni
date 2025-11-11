@@ -22,13 +22,13 @@ bool vkutil::loadShaderModule(const char*     filePath,
 
 	// spirv expects the buffer to be on uint32, so make sure to reserve a int
 	// vector big enough for the entire file
-	std::vector<uint32_t> buffer(fileSize / sizeof(uint32_t));
+	std::vector<uint32_t> m_buffer(fileSize / sizeof(uint32_t));
 
 	// put file cursor at beginning
 	file.seekg(0);
 
 	// load the entire file into the buffer
-	file.read((char*) buffer.data(), fileSize);
+	file.read((char*) m_buffer.data(), fileSize);
 
 	// now that the file is loaded into the buffer, we can close it
 	file.close();
@@ -40,8 +40,8 @@ bool vkutil::loadShaderModule(const char*     filePath,
 
 	// codeSize has to be in bytes, so multply the ints in the buffer by size of
 	// int to know the real size of the buffer
-	createInfo.codeSize = buffer.size() * sizeof(uint32_t);
-	createInfo.pCode    = buffer.data();
+	createInfo.codeSize = m_buffer.size() * sizeof(uint32_t);
+	createInfo.pCode    = m_buffer.data();
 
 	// check that the creation goes well.
 	VkShaderModule shaderModule;

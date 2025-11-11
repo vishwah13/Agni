@@ -11,8 +11,8 @@ struct DescriptorLayoutBuilder
 	void                  clear();
 	VkDescriptorSetLayout build(VkDevice           device,
 	                            VkShaderStageFlags shaderStages,
-	                            void*              pNext = nullptr,
-	                            VkDescriptorSetLayoutCreateFlags flags = 0);
+	                            void*              m_pNext = nullptr,
+	                            VkDescriptorSetLayoutCreateFlags m_flags = 0);
 };
 
 struct DescriptorAllocatorGrowable
@@ -20,8 +20,8 @@ struct DescriptorAllocatorGrowable
 public:
 	struct PoolSizeRatio
 	{
-		VkDescriptorType type;
-		float            ratio;
+		VkDescriptorType m_type;
+		float            m_ratio;
 	};
 
 	void init(VkDevice                 device,
@@ -32,7 +32,7 @@ public:
 
 	VkDescriptorSet allocate(VkDevice              device,
 	                         VkDescriptorSetLayout layout,
-	                         void*                 pNext = nullptr);
+	                         void*                 m_pNext = nullptr);
 
 private:
 	VkDescriptorPool getPool(VkDevice device);

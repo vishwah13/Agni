@@ -74,7 +74,7 @@ void Skybox::buildPipelines(AgniEngine* engine)
 	VK_CHECK(vkCreatePipelineLayout(
 	engine->m_device, &mesh_layout_info, nullptr, &newLayout));
 
-	m_skyboxPipeline.layout = newLayout;
+	m_skyboxPipeline.m_layout = newLayout;
 
 	// build the stage-create-info for both vertex and fragment stages. This
 	// lets the pipeline know the shader modules per stage
@@ -91,14 +91,14 @@ void Skybox::buildPipelines(AgniEngine* engine)
 
 	// render format
 	pipelineBuilder.setColorAttachmentFormat(
-	engine->m_msaaColorImage.imageFormat);
-	pipelineBuilder.setDepthFormat(engine->m_depthImage.imageFormat);
+	engine->m_msaaColorImage.m_imageFormat);
+	pipelineBuilder.setDepthFormat(engine->m_depthImage.m_imageFormat);
 
 	// use the triangle layout we created
 	pipelineBuilder.m_pipelineLayout = newLayout;
 
 	// finally build the pipeline
-	m_skyboxPipeline.pipeline = pipelineBuilder.buildPipeline(engine->m_device);
+	m_skyboxPipeline.m_pipeline = pipelineBuilder.buildPipeline(engine->m_device);
 
 	vkDestroyShaderModule(engine->m_device, skyFragShader, nullptr);
 	vkDestroyShaderModule(engine->m_device, skyVertexShader, nullptr);
@@ -110,8 +110,8 @@ void Skybox::cleanup(AgniEngine* engine)
 	clearPipelineResources(engine->m_device);
 
 	// Cleanup mesh buffers
-	engine->destroyBuffer(m_meshBuffers.indexBuffer);
-	engine->destroyBuffer(m_meshBuffers.vertexBuffer);
+	engine->destroyBuffer(m_meshBuffers.m_indexBuffer);
+	engine->destroyBuffer(m_meshBuffers.m_vertexBuffer);
 
 	// Cleanup material
 	if (m_skyboxMaterial)
@@ -131,7 +131,7 @@ void Skybox::draw(VkCommandBuffer cmd,
 {
 	// Bind skybox pipeline
 	vkCmdBindPipeline(
-	cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_skyboxPipeline.pipeline);
+	cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_skyboxPipeline.m_pipeline);
 
 	// Set dynamic viewport and scissor
 	VkViewport viewport = {};
@@ -155,7 +155,7 @@ void Skybox::draw(VkCommandBuffer cmd,
 	// Bind scene descriptor (set 0)
 	vkCmdBindDescriptorSets(cmd,
 	                        VK_PIPELINE_BIND_POINT_GRAPHICS,
-	                        m_skyboxPipeline.layout,
+	                        m_skyboxPipeline.m_layout,
 	                        0,
 	                        1,
 	                        &sceneDescriptor,
@@ -165,23 +165,23 @@ void Skybox::draw(VkCommandBuffer cmd,
 	// Bind skybox material descriptor (set 1)
 	vkCmdBindDescriptorSets(cmd,
 	                        VK_PIPELINE_BIND_POINT_GRAPHICS,
-	                        m_skyboxPipeline.layout,
+	                        m_skyboxPipeline.m_layout,
 	                        1,
 	                        1,
-	                        &m_skyboxMaterial->materialSet,
+	                        &m_skyboxMaterial-> m_materialSet,
 	                        0,
 	                        nullptr);
 
 	// Bind index buffer
 	vkCmdBindIndexBuffer(
-	cmd, m_meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+	cmd, m_meshBuffers.m_indexBuffer.m_buffer, 0, VK_INDEX_TYPE_UINT32);
 
 	// Push constants for vertex buffer address
 	SkyBoxPushConstants skyboxPush;
-	skyboxPush.vertexBufferAddress = m_meshBuffers.vertexBufferAddress;
+	skyboxPush.m_vertexBufferAddress = m_meshBuffers.m_vertexBufferAddress;
 
 	vkCmdPushConstants(cmd,
-	                   m_skyboxPipeline.layout,
+	                   m_skyboxPipeline.m_layout,
 	                   VK_SHADER_STAGE_VERTEX_BIT,
 	                   0,
 	                   sizeof(SkyBoxPushConstants),
@@ -257,8 +257,8 @@ void Skybox::createMaterial(AgniEngine* engine)
 void Skybox::clearPipelineResources(VkDevice device)
 {
 	vkDestroyDescriptorSetLayout(device, m_skyboxMaterialLayout, nullptr);
-	vkDestroyPipelineLayout(device, m_skyboxPipeline.layout, nullptr);
-	vkDestroyPipeline(device, m_skyboxPipeline.pipeline, nullptr);
+	vkDestroyPipelineLayout(device, m_skyboxPipeline.m_layout, nullptr);
+	vkDestroyPipeline(device, m_skyboxPipeline.m_pipeline, nullptr);
 }
 
 MaterialInstance
@@ -267,21 +267,21 @@ Skybox::writeMaterial(VkDevice                     device,
                       DescriptorAllocatorGrowable& descriptorAllocator)
 {
 	MaterialInstance matData;
-	matData.passType = MaterialPass::Other;
+	matData.m_passType = MaterialPass::Other;
 
-	matData.materialSet =
+	matData.m_materialSet =
 	descriptorAllocator.allocate(device, m_skyboxMaterialLayout);
 
 
 	m_writer.clear();
 	m_writer.writeImage(/*binding*/ 0,
-	                  resources.m_cubemapImage.imageView,
+	                  resources.m_cubemapImage.m_imageView,
 	                  resources.m_cubemapSampler,
 	                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	                  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
 	// use the materialSet and update it here.
-	m_writer.updateSet(device, matData.materialSet);
+	m_writer.updateSet(device, matData.m_materialSet);
 
 	return matData;
 }

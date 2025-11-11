@@ -5,23 +5,23 @@
 
 #include "vk_mem_alloc.h"
 #include <Camera.hpp>
-#include <deque>
-#include <functional>
-#include <Skybox.hpp>
-#include <vector>
 #include <Descriptors.hpp>
 #include <Loader.hpp>
+#include <Skybox.hpp>
 #include <Types.hpp>
+#include <deque>
+#include <functional>
+#include <vector>
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 
 struct EngineStats
 {
-	float frametime;
-	int   triangleCount;
-	int   drawcallCount;
-	float sceneUpdateTime;
-	float meshDrawTime;
+	float m_frametime;
+	int   m_triangleCount;
+	int   m_drawcallCount;
+	float m_sceneUpdateTime;
+	float m_meshDrawTime;
 };
 
 struct DeletionQueue
@@ -48,70 +48,70 @@ struct DeletionQueue
 struct FrameData
 {
 
-	VkCommandPool   _commandPool;
-	VkCommandBuffer _mainCommandBuffer;
+	VkCommandPool   m_commandPool;
+	VkCommandBuffer m_mainCommandBuffer;
 
-	VkSemaphore _swapchainSemaphore, _renderSemaphore;
-	VkFence     _renderFence;
+	VkSemaphore m_swapchainSemaphore, m_renderSemaphore;
+	VkFence     m_renderFence;
 
-	DeletionQueue _deletionQueue;
+	DeletionQueue m_deletionQueue;
 	// To allocate descriptor sets at runtime.
-	DescriptorAllocatorGrowable _frameDescriptors;
+	DescriptorAllocatorGrowable m_frameDescriptors;
 };
 
 struct ComputePushConstants
 {
-	glm::vec4 data1;
-	glm::vec4 data2;
-	glm::vec4 data3;
-	glm::vec4 data4;
+	glm::vec4 m_data1;
+	glm::vec4 m_data2;
+	glm::vec4 m_data3;
+	glm::vec4 m_data4;
 };
 
 struct TrianglePushConstants
 {
-	glm::vec3 color;
+	glm::vec3 m_color;
 };
 
 struct ComputeEffect
 {
-	const char* name;
+	const char* m_name;
 
-	VkPipeline       pipeline;
-	VkPipelineLayout layout;
+	VkPipeline       m_pipeline;
+	VkPipelineLayout m_layout;
 
-	ComputePushConstants data;
+	ComputePushConstants m_data;
 };
 
 struct GltfPbrMaterial
 {
-	MaterialPipeline opaquePipeline;
-	MaterialPipeline transparentPipeline;
+	MaterialPipeline m_opaquePipeline;
+	MaterialPipeline m_transparentPipeline;
 
-	VkDescriptorSetLayout materialLayout;
+	VkDescriptorSetLayout m_materialLayout;
 
 	struct MaterialConstants
 	{
-		glm::vec4 colorFactors;
-		glm::vec4 metal_rough_factors;
+		glm::vec4 m_colorFactors;
+		glm::vec4 m_metal_rough_factors;
 		// padding, we need it anyway for uniform buffers
 		glm::vec4 extra[14];
 	};
 
 	struct MaterialResources
 	{
-		AllocatedImage colorImage;
-		VkSampler      colorSampler;
-		AllocatedImage metalRoughImage;
-		VkSampler      metalRoughSampler;
-		AllocatedImage normalImage;
-		VkSampler      normalSampler;
-		AllocatedImage aoImage;
-		VkSampler      aoSampler;
-		VkBuffer       dataBuffer;
-		uint32_t       dataBufferOffset;
+		AllocatedImage m_colorImage;
+		VkSampler      m_colorSampler;
+		AllocatedImage m_metalRoughImage;
+		VkSampler      m_metalRoughSampler;
+		AllocatedImage m_normalImage;
+		VkSampler      m_normalSampler;
+		AllocatedImage m_aoImage;
+		VkSampler      m_aoSampler;
+		VkBuffer       m_dataBuffer;
+		uint32_t       m_dataBufferOffset;
 	};
 
-	DescriptorWriter writer;
+	DescriptorWriter m_writer;
 
 	void buildPipelines(AgniEngine* engine);
 	void clearResources(VkDevice device);
@@ -129,8 +129,14 @@ public:
 	virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx) override;
 
 	// Accessor for mesh
-	std::shared_ptr<MeshAsset>& getMesh() { return m_mesh; }
-	const std::shared_ptr<MeshAsset>& getMesh() const { return m_mesh; }
+	std::shared_ptr<MeshAsset>& getMesh()
+	{
+		return m_mesh;
+	}
+	const std::shared_ptr<MeshAsset>& getMesh() const
+	{
+		return m_mesh;
+	}
 
 protected:
 	std::shared_ptr<MeshAsset> m_mesh;
@@ -138,20 +144,20 @@ protected:
 
 struct RenderObject
 {
-	uint32_t indexCount;
-	uint32_t firstIndex;
-	VkBuffer indexBuffer;
+	uint32_t m_indexCount;
+	uint32_t m_firstIndex;
+	VkBuffer m_indexBuffer;
 
-	MaterialInstance* material;
-	Bounds            bounds;
-	glm::mat4         transform;
-	VkDeviceAddress   vertexBufferAddress;
+	MaterialInstance* m_material;
+	Bounds            m_bounds;
+	glm::mat4         m_transform;
+	VkDeviceAddress   m_vertexBufferAddress;
 };
 
 struct DrawContext
 {
-	std::vector<RenderObject> OpaqueSurfaces;
-	std::vector<RenderObject> TransparentSurfaces;
+	std::vector<RenderObject> m_OpaqueSurfaces;
+	std::vector<RenderObject> m_TransparentSurfaces;
 };
 
 class AgniEngine
@@ -295,7 +301,7 @@ public:
 	            bool                  mipmapped  = false,
 	            VkSampleCountFlagBits numSamples = VK_SAMPLE_COUNT_1_BIT);
 	AllocatedImage
-	     createImage(void*                 data,
+	     createImage(void*                 m_data,
 	                 VkExtent3D            size,
 	                 VkFormat              format,
 	                 VkImageUsageFlags     usage,

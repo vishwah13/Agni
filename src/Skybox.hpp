@@ -7,7 +7,7 @@ class AgniEngine;
 
 struct SkyBoxPushConstants
 {
-	VkDeviceAddress vertexBufferAddress;
+	VkDeviceAddress m_vertexBufferAddress;
 };
 
 class Skybox

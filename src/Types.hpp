@@ -36,56 +36,56 @@
 
 struct AllocatedImage
 {
-	VkImage       image;
-	VkImageView   imageView;
-	VmaAllocation allocation;
-	VkExtent3D    imageExtent;
-	VkFormat      imageFormat;
+	VkImage       m_image;
+	VkImageView   m_imageView;
+	VmaAllocation m_allocation;
+	VkExtent3D    m_imageExtent;
+	VkFormat      m_imageFormat;
 };
 
 struct AllocatedBuffer
 {
-	VkBuffer          buffer;
-	VmaAllocation     allocation;
-	VmaAllocationInfo info;
+	VkBuffer          m_buffer;
+	VmaAllocation     m_allocation;
+	VmaAllocationInfo m_info;
 };
 
 struct Vertex
 {
 
-	glm::vec3 position;
-	float     uv_x;
-	glm::vec3 normal;
-	float     uv_y;
-	glm::vec4 color;
-	glm::vec4 tangent;
+	glm::vec3 m_position;
+	float     m_uv_x;
+	glm::vec3 m_normal;
+	float     m_uv_y;
+	glm::vec4 m_color;
+	glm::vec4 m_tangent;
 };
 
 // holds the resources needed for a mesh
 struct GPUMeshBuffers
 {
 
-	AllocatedBuffer indexBuffer;
-	AllocatedBuffer vertexBuffer;
-	VkDeviceAddress vertexBufferAddress;
+	AllocatedBuffer m_indexBuffer;
+	AllocatedBuffer m_vertexBuffer;
+	VkDeviceAddress m_vertexBufferAddress;
 };
 
 // push constants for our mesh object draws
 struct GPUDrawPushConstants
 {
-	glm::mat4       worldMatrix;
-	VkDeviceAddress vertexBuffer;
+	glm::mat4       m_worldMatrix;
+	VkDeviceAddress m_vertexBuffer;
 };
 
 struct GPUSceneData
 {
-	glm::mat4 view;
-	glm::mat4 proj;
-	glm::mat4 viewproj;
-	glm::vec4 ambientColor;
-	glm::vec4 sunlightDirection; // w for sun power
-	glm::vec4 sunlightColor;
-	glm::vec3 cameraPosition;
+	glm::mat4 m_view;
+	glm::mat4 m_proj;
+	glm::mat4 m_viewproj;
+	glm::vec4 m_ambientColor;
+	glm::vec4 m_sunlightDirection; // w for sun power
+	glm::vec4 m_sunlightColor;
+	glm::vec3 m_cameraPosition;
 };
 
 enum class MaterialPass : uint8_t
@@ -96,15 +96,15 @@ enum class MaterialPass : uint8_t
 };
 struct MaterialPipeline
 {
-	VkPipeline       pipeline;
-	VkPipelineLayout layout;
+	VkPipeline       m_pipeline;
+	VkPipelineLayout m_layout;
 };
 
 struct MaterialInstance
 {
-	MaterialPipeline* pipeline;
-	VkDescriptorSet   materialSet;
-	MaterialPass      passType;
+	MaterialPipeline* m_pipeline;
+	VkDescriptorSet   m_materialSet;
+	MaterialPass      m_passType;
 };
 
 struct DrawContext;

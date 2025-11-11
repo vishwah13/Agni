@@ -156,8 +156,8 @@ DescriptorAllocatorGrowable::createPool(VkDevice                 device,
 	for (const PoolSizeRatio& ratio : poolRatios)
 	{
 		poolSizes.push_back(VkDescriptorPoolSize {
-		.type            = ratio.type,
-		.descriptorCount = uint32_t(ratio.ratio * setCount)});
+		.type            = ratio.m_type,
+		.descriptorCount = uint32_t(ratio.m_ratio * setCount)});
 	}
 
 	VkDescriptorPoolCreateInfo pool_info = {};
