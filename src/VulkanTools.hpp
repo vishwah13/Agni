@@ -1,11 +1,8 @@
 #pragma once
+#include <fmt/core.h>
 #include <string>
 #include <volk.h>
 
-// it's not very good now it just gives an error code, need to improve it
-// later
-// need something like this:
-// https://github.com/SaschaWillems/Vulkan/blob/master/base/VulkanTools.h
 #define VK_CHECK(x)                                     \
 	do                                                  \
 	{                                                   \

@@ -13,6 +13,7 @@
 #include <deque>
 #include <functional>
 #include <vector>
+#include <Scene.hpp>
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 

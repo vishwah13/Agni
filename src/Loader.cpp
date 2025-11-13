@@ -7,6 +7,7 @@
 #include "Initializers.hpp"
 #include "Types.hpp"
 
+
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
 

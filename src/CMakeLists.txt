@@ -22,6 +22,8 @@ add_executable (engine
   Debug.hpp
   VulkanTools.hpp
   VulkanTools.cpp
+  Scene.hpp
+  Scene.cpp
 )
 
 # Add shader files to the project so they appear in Visual Studio
