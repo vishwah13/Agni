@@ -20,6 +20,8 @@ add_executable (engine
   Skybox.hpp
   Skybox.cpp
   Debug.hpp
+  VulkanTools.hpp
+  VulkanTools.cpp
 )
 
 # Add shader files to the project so they appear in Visual Studio

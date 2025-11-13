@@ -10,6 +10,7 @@
 #include <vector>
 
 #define VK_NO_PROTOTYPES
+#include <VulkanTools.hpp>
 #include <vk_mem_alloc.h>
 #include <volk.h>
 
@@ -23,16 +24,18 @@
 // later
 // need something like this:
 // https://github.com/SaschaWillems/Vulkan/blob/master/base/VulkanTools.h
-#define VK_CHECK(x)                                                           \
-	do                                                                        \
-	{                                                                         \
-		VkResult err = x;                                                     \
-		if (err)                                                              \
-		{                                                                     \
-			fmt::println("Detected Vulkan error: {}", static_cast<int>(err)); \
-			abort();                                                          \
-		}                                                                     \
+#define VK_CHECK(x)                                     \
+	do                                                  \
+	{                                                   \
+		VkResult err = x;                               \
+		if (err != VK_SUCCESS)                          \
+		{                                               \
+			fmt::println("Fatal Vulkan error: {}",      \
+			             vks::tools::errorString(err)); \
+			assert(err == VK_SUCCESS);                  \
+		}                                               \
 	} while (0)
+
 
 struct AllocatedImage
 {
@@ -117,8 +120,8 @@ class IRenderable
 };
 
 // implementation of a drawable scene node.
-// the scene node can hold m_children and will also keep a transform to propagate
-// to them
+// the scene node can hold m_children and will also keep a transform to
+// propagate to them
 class Node : public IRenderable
 {
 public:
@@ -146,17 +149,41 @@ public:
 	}
 
 	// Accessors
-	glm::mat4& getLocalTransform() { return m_localTransform; }
-	const glm::mat4& getLocalTransform() const { return m_localTransform; }
+	glm::mat4& getLocalTransform()
+	{
+		return m_localTransform;
+	}
+	const glm::mat4& getLocalTransform() const
+	{
+		return m_localTransform;
+	}
 
-	glm::mat4& getWorldTransform() { return m_worldTransform; }
-	const glm::mat4& getWorldTransform() const { return m_worldTransform; }
+	glm::mat4& getWorldTransform()
+	{
+		return m_worldTransform;
+	}
+	const glm::mat4& getWorldTransform() const
+	{
+		return m_worldTransform;
+	}
 
-	std::vector<std::shared_ptr<Node>>& getChildren() { return m_children; }
-	const std::vector<std::shared_ptr<Node>>& getChildren() const { return m_children; }
+	std::vector<std::shared_ptr<Node>>& getChildren()
+	{
+		return m_children;
+	}
+	const std::vector<std::shared_ptr<Node>>& getChildren() const
+	{
+		return m_children;
+	}
 
-	std::weak_ptr<Node>& getParent() { return m_parent; }
-	const std::weak_ptr<Node>& getParent() const { return m_parent; }
+	std::weak_ptr<Node>& getParent()
+	{
+		return m_parent;
+	}
+	const std::weak_ptr<Node>& getParent() const
+	{
+		return m_parent;
+	}
 
 protected:
 	// m_parent pointer must be a weak pointer to avoid circular dependencies
