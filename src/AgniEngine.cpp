@@ -11,6 +11,7 @@
 #include <Initializers.hpp>
 #include <Pipelines.hpp>
 #include <Types.hpp>
+#include <VulkanTools.hpp>
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"

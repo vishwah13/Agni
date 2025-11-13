@@ -3,16 +3,15 @@
 #include "Images.hpp"
 #include "Initializers.hpp"
 #include "Pipelines.hpp"
+#include <VulkanTools.hpp>
 #include <fmt/core.h>
 
-void Skybox::init(AgniEngine*                        engine,
+void Skybox::init(AgniEngine*                       engine,
                   const std::array<std::string, 6>& cubemapFaces)
 {
 	// Create cubemap image
-	m_cubemapImage = engine->createCubemap(cubemapFaces,
-	                                     VK_FORMAT_R8G8B8A8_UNORM,
-	                                     VK_IMAGE_USAGE_SAMPLED_BIT,
-	                                     false);
+	m_cubemapImage = engine->createCubemap(
+	cubemapFaces, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, false);
 
 	// Create sampler for cubemap
 	VkSamplerCreateInfo cubemapSamplerInfo = {
@@ -23,7 +22,8 @@ void Skybox::init(AgniEngine*                        engine,
 	cubemapSamplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 	cubemapSamplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 
-	vkCreateSampler(engine->m_device, &cubemapSamplerInfo, nullptr, &m_cubemapSampler);
+	vkCreateSampler(
+	engine->m_device, &cubemapSamplerInfo, nullptr, &m_cubemapSampler);
 
 	// Create cube mesh
 	createCubeMesh(engine);
@@ -57,8 +57,9 @@ void Skybox::buildPipelines(AgniEngine* engine)
 	DescriptorLayoutBuilder layoutBuilder;
 	layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-	m_skyboxMaterialLayout = layoutBuilder.build(
-	engine->m_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+	m_skyboxMaterialLayout = layoutBuilder.build(engine->m_device,
+	                                             VK_SHADER_STAGE_VERTEX_BIT |
+	                                             VK_SHADER_STAGE_FRAGMENT_BIT);
 
 	VkDescriptorSetLayout layouts[] = {engine->m_gpuSceneDataDescriptorLayout,
 	                                   m_skyboxMaterialLayout};
@@ -98,7 +99,8 @@ void Skybox::buildPipelines(AgniEngine* engine)
 	pipelineBuilder.m_pipelineLayout = newLayout;
 
 	// finally build the pipeline
-	m_skyboxPipeline.m_pipeline = pipelineBuilder.buildPipeline(engine->m_device);
+	m_skyboxPipeline.m_pipeline =
+	pipelineBuilder.buildPipeline(engine->m_device);
 
 	vkDestroyShaderModule(engine->m_device, skyFragShader, nullptr);
 	vkDestroyShaderModule(engine->m_device, skyVertexShader, nullptr);
@@ -168,7 +170,7 @@ void Skybox::draw(VkCommandBuffer cmd,
 	                        m_skyboxPipeline.m_layout,
 	                        1,
 	                        1,
-	                        &m_skyboxMaterial-> m_materialSet,
+	                        &m_skyboxMaterial->m_materialSet,
 	                        0,
 	                        nullptr);
 
@@ -275,10 +277,10 @@ Skybox::writeMaterial(VkDevice                     device,
 
 	m_writer.clear();
 	m_writer.writeImage(/*binding*/ 0,
-	                  resources.m_cubemapImage.m_imageView,
-	                  resources.m_cubemapSampler,
-	                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-	                  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	                    resources.m_cubemapImage.m_imageView,
+	                    resources.m_cubemapSampler,
+	                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+	                    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
 	// use the materialSet and update it here.
 	m_writer.updateSet(device, matData.m_materialSet);

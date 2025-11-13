@@ -1,4 +1,5 @@
 ﻿#include <Descriptors.hpp>
+#include <VulkanTools.hpp>
 
 void DescriptorLayoutBuilder::addBinding(uint32_t         binding,
                                          VkDescriptorType type)
