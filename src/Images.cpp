@@ -1,7 +1,7 @@
 #include <Images.hpp>
 #include <Initializers.hpp>
 #define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
+#include <stb_image.h>
 
 // TO-DO: better pipline barrier sync
 // https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples

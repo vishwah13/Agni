@@ -1,6 +1,8 @@
 #pragma once
 #include <fmt/core.h>
+
 #include <string>
+
 #include <volk.h>
 
 #define VK_CHECK(x)                                     \

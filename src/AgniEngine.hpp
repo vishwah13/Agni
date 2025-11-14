@@ -1,19 +1,18 @@
-﻿// vulkan_guide.h : Include file for standard system include files,
-// or project specific include files.
+﻿#pragma once
+#include <renderdoc_app.h>
 
-#pragma once
+#include <vk_mem_alloc.h>
 
-#include "renderdoc_app.h"
-#include "vk_mem_alloc.h"
 #include <Camera.hpp>
 #include <Descriptors.hpp>
 #include <Loader.hpp>
+#include <Scene.hpp>
 #include <Skybox.hpp>
 #include <Types.hpp>
+
 #include <deque>
 #include <functional>
 #include <vector>
-#include <Scene.hpp>
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 

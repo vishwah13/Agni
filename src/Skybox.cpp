@@ -1,9 +1,10 @@
-#include "Skybox.hpp"
-#include "AgniEngine.hpp"
-#include "Images.hpp"
-#include "Initializers.hpp"
-#include "Pipelines.hpp"
+#include <AgniEngine.hpp>
+#include <Images.hpp>
+#include <Initializers.hpp>
+#include <Pipelines.hpp>
+#include <Skybox.hpp>
 #include <VulkanTools.hpp>
+
 #include <fmt/core.h>
 
 void Skybox::init(AgniEngine*                       engine,
