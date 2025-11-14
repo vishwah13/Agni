@@ -1,5 +1,6 @@
 #pragma once
 #include <SDL3/SDL_events.h>
+
 #include <Types.hpp>
 // camera should have a constructor
 class Camera

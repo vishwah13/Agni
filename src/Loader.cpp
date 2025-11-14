@@ -1,11 +1,12 @@
-﻿#include "stb_image.h"
-#include <Loader.hpp>
-#include <iostream>
+﻿#include <iostream>
 #include <variant>
 
-#include "AgniEngine.hpp"
-#include "Initializers.hpp"
-#include "Types.hpp"
+#include <stb_image.h>
+
+#include <AgniEngine.hpp>
+#include <Initializers.hpp>
+#include <Loader.hpp>
+#include <Types.hpp>
 
 
 #define GLM_ENABLE_EXPERIMENTAL
@@ -15,7 +16,7 @@
 #include <fastgltf/glm_element_traits.hpp>
 #include <fastgltf/tools.hpp>
 
-#include "mikktspace.h"
+#include <mikktspace.h>
 
 // Returns either VK_FILTER_NEAREST or VK_FILTER_LINEAR
 VkFilter extractFilter(fastgltf::Filter filter)
