@@ -4,6 +4,7 @@
 #include <Types.hpp>
 
 class AgniEngine;
+class ResourceManager;
 
 struct SkyBoxPushConstants
 {
@@ -68,4 +69,12 @@ private:
 	writeMaterial(VkDevice                     device,
 	              const MaterialResources&     resources,
 	              DescriptorAllocatorGrowable& descriptorAllocator);
+
+	AllocatedImage createCubemap(
+	    class ResourceManager&            resourceManager,
+	    VkDevice                          device,
+	    const std::array<std::string, 6>& faceFiles,
+	    VkFormat                          format,
+	    VkImageUsageFlags                 usage,
+	    bool                              mipmapped = false);
 };

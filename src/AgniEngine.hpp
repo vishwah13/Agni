@@ -215,11 +215,6 @@ public:
 	VkPipeline       m_gradientPipeline;
 	VkPipelineLayout m_gradientPipelineLayout;
 
-	// immediate submit structures for ImGui
-	VkFence         m_immFence;
-	VkCommandBuffer m_immCommandBuffer;
-	VkCommandPool   m_immCommandPool;
-
 	// compute shader effects shinanigans
 	std::vector<ComputeEffect> m_backgroundEffects;
 	int                        m_currentBackgroundEffect {0};
@@ -241,7 +236,6 @@ public:
 
 	void drawBackground(VkCommandBuffer cmd);
 
-	void immediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function);
 	void drawImgui(VkCommandBuffer cmd, VkImageView targetImageView);
 
 	// run main loop
@@ -265,11 +259,6 @@ public:
 
 	// m_skybox
 	Skybox m_skybox;
-
-	AllocatedImage createCubemap(const std::array<std::string, 6>& faceFiles,
-	                             VkFormat                          format,
-	                             VkImageUsageFlags                 usage,
-	                             bool mipmapped = false);
 
 private:
 	VkDescriptorSetLayout m_singleImageDescriptorLayout;

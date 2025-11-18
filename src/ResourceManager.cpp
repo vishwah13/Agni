@@ -9,11 +9,15 @@
 
 void ResourceManager::init(VkInstance       instance,
                            VkPhysicalDevice physicalDevice,
-                           VkDevice         device)
+                           VkDevice         device,
+                           VkQueue          graphicsQueue,
+                           uint32_t         graphicsQueueFamily)
 {
-	m_instance       = instance;
-	m_physicalDevice = physicalDevice;
-	m_device         = device;
+	m_instance            = instance;
+	m_physicalDevice      = physicalDevice;
+	m_device              = device;
+	m_graphicsQueue       = graphicsQueue;
+	m_graphicsQueueFamily = graphicsQueueFamily;
 
 	// initialize the memory allocator
 	VmaAllocatorCreateInfo allocatorInfo = {};
@@ -31,6 +35,31 @@ void ResourceManager::init(VkInstance       instance,
 
 	m_mainDeletionQueue.push_function([&]()
 	                                  { vmaDestroyAllocator(m_allocator); });
+
+	// Initialize immediate submit resources
+	VkCommandPoolCreateInfo commandPoolInfo =
+	    vkinit::commandPoolCreateInfo(m_graphicsQueueFamily,
+	                                  VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+
+	VK_CHECK(vkCreateCommandPool(
+	    m_device, &commandPoolInfo, nullptr, &m_immCommandPool));
+
+	// allocate the command buffer for immediate submits
+	VkCommandBufferAllocateInfo cmdAllocInfo =
+	    vkinit::commandBufferAllocateInfo(m_immCommandPool, 1);
+
+	VK_CHECK(
+	    vkAllocateCommandBuffers(m_device, &cmdAllocInfo, &m_immCommandBuffer));
+
+	// Create fence for immediate submit synchronization
+	VkFenceCreateInfo fenceCreateInfo =
+	    vkinit::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
+	VK_CHECK(vkCreateFence(m_device, &fenceCreateInfo, nullptr, &m_immFence));
+
+	m_mainDeletionQueue.push_function(
+	    [=]() { vkDestroyCommandPool(m_device, m_immCommandPool, nullptr); });
+	m_mainDeletionQueue.push_function(
+	    [=]() { vkDestroyFence(m_device, m_immFence, nullptr); });
 }
 
 void ResourceManager::cleanup()
@@ -124,13 +153,12 @@ AllocatedImage ResourceManager::createImage(VkExtent3D            size,
 }
 
 AllocatedImage ResourceManager::createImage(
-void*                                                     data,
-VkExtent3D                                                size,
-VkFormat                                                  format,
-VkImageUsageFlags                                         usage,
-std::function<void(std::function<void(VkCommandBuffer)>)> immediateSubmit,
-bool                                                      mipmapped,
-VkSampleCountFlagBits                                     numSamples)
+void*                 data,
+VkExtent3D            size,
+VkFormat              format,
+VkImageUsageFlags     usage,
+bool                  mipmapped,
+VkSampleCountFlagBits numSamples)
 {
 	size_t          data_size    = size.depth * size.width * size.height * 4;
 	AllocatedBuffer uploadbuffer = createBuffer(
@@ -198,4 +226,31 @@ void ResourceManager::destroyImage(const AllocatedImage& img)
 {
 	vkDestroyImageView(m_device, img.m_imageView, nullptr);
 	vmaDestroyImage(m_allocator, img.m_image, img.m_allocation);
+}
+
+void ResourceManager::immediateSubmit(
+    std::function<void(VkCommandBuffer cmd)>&& function)
+{
+	VK_CHECK(vkResetFences(m_device, 1, &m_immFence));
+	VK_CHECK(vkResetCommandBuffer(m_immCommandBuffer, 0));
+
+	VkCommandBuffer cmd = m_immCommandBuffer;
+
+	VkCommandBufferBeginInfo cmdBeginInfo =
+	    vkinit::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+
+	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
+
+	function(cmd);
+
+	VK_CHECK(vkEndCommandBuffer(cmd));
+
+	VkCommandBufferSubmitInfo cmdinfo = vkinit::commandBufferSubmitInfo(cmd);
+	VkSubmitInfo2 submit = vkinit::submitInfo(&cmdinfo, nullptr, nullptr);
+
+	// submit command buffer to the queue and execute it.
+	//  _renderFence will now block until the graphic commands finish execution
+	VK_CHECK(vkQueueSubmit2(m_graphicsQueue, 1, &submit, m_immFence));
+
+	VK_CHECK(vkWaitForFences(m_device, 1, &m_immFence, true, 9999999999));
 }

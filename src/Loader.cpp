@@ -174,7 +174,6 @@ std::optional<AllocatedImage> loadImage(AgniEngine*      engine,
 			                               imagesize,
 			                               VK_FORMAT_R8G8B8A8_UNORM,
 			                               VK_IMAGE_USAGE_SAMPLED_BIT,
-			                               [engine](auto&& fn) { engine->immediateSubmit(std::move(fn)); },
 			                               mipmapped);
 
 			stbi_image_free(data);
@@ -206,7 +205,6 @@ std::optional<AllocatedImage> loadImage(AgniEngine*      engine,
 			                               imagesize,
 			                               VK_FORMAT_R8G8B8A8_UNORM,
 			                               VK_IMAGE_USAGE_SAMPLED_BIT,
-			                               [engine](auto&& fn) { engine->immediateSubmit(std::move(fn)); },
 			                               mipmapped);
 
 			stbi_image_free(data);
@@ -251,7 +249,6 @@ std::optional<AllocatedImage> loadImage(AgniEngine*      engine,
 				                               imagesize,
 				                               VK_FORMAT_R8G8B8A8_UNORM,
 				                               VK_IMAGE_USAGE_SAMPLED_BIT,
-				                               [engine](auto&& fn) { engine->immediateSubmit(std::move(fn)); },
 				                               mipmapped);
 
 				stbi_image_free(data);
@@ -283,7 +280,6 @@ std::optional<AllocatedImage> loadImage(AgniEngine*      engine,
 				                               imagesize,
 				                               VK_FORMAT_R8G8B8A8_UNORM,
 				                               VK_IMAGE_USAGE_SAMPLED_BIT,
-				                               [engine](auto&& fn) { engine->immediateSubmit(std::move(fn)); },
 				                               mipmapped);
 
 				stbi_image_free(data);

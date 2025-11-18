@@ -376,33 +376,6 @@ void AgniEngine::drawBackground(VkCommandBuffer cmd)
 // way to improve it would be to run it on a different queue than the graphics
 // queue, and that way we could overlap the execution from this with the main
 // render loop.
-void AgniEngine::immediateSubmit(
-std::function<void(VkCommandBuffer cmd)>&& function)
-{
-	VK_CHECK(vkResetFences(m_device, 1, &m_immFence));
-	VK_CHECK(vkResetCommandBuffer(m_immCommandBuffer, 0));
-
-	VkCommandBuffer cmd = m_immCommandBuffer;
-
-	VkCommandBufferBeginInfo cmdBeginInfo =
-	vkinit::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-
-	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
-
-	function(cmd);
-
-	VK_CHECK(vkEndCommandBuffer(cmd));
-
-	VkCommandBufferSubmitInfo cmdinfo = vkinit::commandBufferSubmitInfo(cmd);
-	VkSubmitInfo2 submit = vkinit::submitInfo(&cmdinfo, nullptr, nullptr);
-
-	// submit command buffer to the queue and execute it.
-	//  _renderFence will now block until the graphic commands finish execution
-	VK_CHECK(vkQueueSubmit2(m_graphicsQueue, 1, &submit, m_immFence));
-
-	VK_CHECK(vkWaitForFences(m_device, 1, &m_immFence, true, 9999999999));
-}
-
 void AgniEngine::drawImgui(VkCommandBuffer cmd, VkImageView targetImageView)
 {
 	VkRenderingAttachmentInfo colorAttachment = vkinit::attachmentInfo(
@@ -656,7 +629,7 @@ void AgniEngine::initVulkan()
 	vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
 
 	// initializing ResourceManager
-	m_resourceManager.init(m_instance, m_chosenGPU, m_device);
+	m_resourceManager.init(m_instance, m_chosenGPU, m_device, m_graphicsQueue, m_graphicsQueueFamily);
 }
 
 void AgniEngine::initSwapchain()
@@ -732,19 +705,6 @@ void AgniEngine::initCommands()
 		VK_CHECK(vkAllocateCommandBuffers(
 		m_device, &cmdAllocInfo, &m_frames[i].m_mainCommandBuffer));
 	}
-	// ImGui immediate command buffer pool
-	VK_CHECK(vkCreateCommandPool(
-	m_device, &commandPoolInfo, nullptr, &m_immCommandPool));
-
-	// allocate the command buffer for immediate submits
-	VkCommandBufferAllocateInfo cmdAllocInfo =
-	vkinit::commandBufferAllocateInfo(m_immCommandPool, 1);
-
-	VK_CHECK(
-	vkAllocateCommandBuffers(m_device, &cmdAllocInfo, &m_immCommandBuffer));
-
-	m_resourceManager.getMainDeletionQueue().push_function(
-	[=]() { vkDestroyCommandPool(m_device, m_immCommandPool, nullptr); });
 }
 
 void AgniEngine::initSyncStructures()
@@ -773,10 +733,6 @@ void AgniEngine::initSyncStructures()
 		                           nullptr,
 		                           &m_frames[i].m_renderSemaphore));
 	}
-
-	VK_CHECK(vkCreateFence(m_device, &fenceCreateInfo, nullptr, &m_immFence));
-	m_resourceManager.getMainDeletionQueue().push_function(
-	[=]() { vkDestroyFence(m_device, m_immFence, nullptr); });
 }
 
 void AgniEngine::initRenderDocAPI()
@@ -1193,24 +1149,21 @@ void AgniEngine::initDefaultData()
     (void*) &white,
     VkExtent3D {1, 1, 1},
     VK_FORMAT_R8G8B8A8_UNORM,
-    VK_IMAGE_USAGE_SAMPLED_BIT,
-    [this](auto&& fn) { immediateSubmit(std::move(fn)); });
+    VK_IMAGE_USAGE_SAMPLED_BIT);
 
 	uint32_t grey = glm::packUnorm4x8(glm::vec4(0.66f, 0.66f, 0.66f, 1));
 	m_greyImage   = m_resourceManager.createImage(
     (void*) &grey,
     VkExtent3D {1, 1, 1},
     VK_FORMAT_R8G8B8A8_UNORM,
-    VK_IMAGE_USAGE_SAMPLED_BIT,
-    [this](auto&& fn) { immediateSubmit(std::move(fn)); });
+    VK_IMAGE_USAGE_SAMPLED_BIT);
 
 	uint32_t black = glm::packUnorm4x8(glm::vec4(0, 0, 0, 0));
 	m_blackImage   = m_resourceManager.createImage(
     (void*) &black,
     VkExtent3D {1, 1, 1},
     VK_FORMAT_R8G8B8A8_UNORM,
-    VK_IMAGE_USAGE_SAMPLED_BIT,
-    [this](auto&& fn) { immediateSubmit(std::move(fn)); });
+    VK_IMAGE_USAGE_SAMPLED_BIT);
 
 	// checkerboard image
 	uint32_t magenta = glm::packUnorm4x8(glm::vec4(1, 0, 1, 1));
@@ -1226,8 +1179,7 @@ void AgniEngine::initDefaultData()
 	pixels.data(),
 	VkExtent3D {16, 16, 1},
 	VK_FORMAT_R8G8B8A8_UNORM,
-	VK_IMAGE_USAGE_SAMPLED_BIT,
-	[this](auto&& fn) { immediateSubmit(std::move(fn)); });
+	VK_IMAGE_USAGE_SAMPLED_BIT);
 
 	VkSamplerCreateInfo sampl = {.sType =
 	                             VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
@@ -1601,167 +1553,6 @@ void AgniEngine::updateScene()
 	m_stats.m_sceneUpdateTime = elapsed.count() / 1000.f;
 }
 
-AllocatedImage
-AgniEngine::createCubemap(const std::array<std::string, 6>& faceFiles,
-                          VkFormat                          format,
-                          VkImageUsageFlags                 usage,
-                          bool                              mipmapped)
-{
-	// Load all 6 faces
-	std::array<stbi_uc*, 6> faceData;
-	int                     width, height, channels;
-
-	// Load first face to get dimensions
-	faceData[0] =
-	stbi_load(faceFiles[0].c_str(), &width, &height, &channels, 4);
-	if (!faceData[0])
-	{
-		fmt::println("Failed to load cubemap face: {}", faceFiles[0]);
-		throw std::runtime_error("Failed to load cubemap face");
-	}
-
-	// Load remaining faces (ensure they match dimensions)
-	for (int i = 1; i < 6; i++)
-	{
-		int w, h, c;
-		faceData[i] = stbi_load(faceFiles[i].c_str(), &w, &h, &c, 4);
-		if (!faceData[i] || w != width || h != height)
-		{
-			fmt::println(
-			"Failed to load or dimension mismatch for cubemap face: {}",
-			faceFiles[i]);
-			// Clean up loaded faces
-			for (int j = 0; j <= i; j++)
-			{
-				if (faceData[j])
-					stbi_image_free(faceData[j]);
-			}
-			throw std::runtime_error("Failed to load cubemap face");
-		}
-	}
-
-	// Calculate total size for all 6 faces
-	size_t faceSize  = width * height * 4; // 4 bytes per pixel (RGBA)
-	size_t totalSize = faceSize * 6;
-
-	// Create staging buffer
-	AllocatedBuffer uploadBuffer = m_resourceManager.createBuffer(
-	totalSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-	// Copy all faces into staging buffer
-	uint8_t* bufferData = (uint8_t*) uploadBuffer.m_info.pMappedData;
-	for (int i = 0; i < 6; i++)
-	{
-		memcpy(bufferData + (i * faceSize), faceData[i], faceSize);
-		stbi_image_free(faceData[i]);
-	}
-
-	// Create cubemap image
-	AllocatedImage cubemap;
-	cubemap.m_imageFormat = format;
-	cubemap.m_imageExtent = {(uint32_t) width, (uint32_t) height, 1};
-
-	VkImageCreateInfo img_info = vkinit::imageCreateInfo(
-	format,
-	usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-	cubemap.m_imageExtent);
-
-	// Set cubemap-specific flags
-	img_info.arrayLayers = 6;
-	img_info.flags       = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-
-	if (mipmapped)
-	{
-		img_info.mipLevels =
-		static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) +
-		1;
-	}
-
-	// Allocate image on GPU
-	VmaAllocationCreateInfo allocInfo = {};
-	allocInfo.usage                   = VMA_MEMORY_USAGE_GPU_ONLY;
-	allocInfo.requiredFlags =
-	VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-	VK_CHECK(vmaCreateImage(m_resourceManager.getAllocator(),
-	                        &img_info,
-	                        &allocInfo,
-	                        &cubemap.m_image,
-	                        &cubemap.m_allocation,
-	                        nullptr));
-
-	// Create image view for cubemap
-	VkImageViewCreateInfo view_info = vkinit::imageViewCreateInfo(
-	format, cubemap.m_image, VK_IMAGE_ASPECT_COLOR_BIT);
-	view_info.viewType                    = VK_IMAGE_VIEW_TYPE_CUBE;
-	view_info.subresourceRange.layerCount = 6;
-	view_info.subresourceRange.levelCount = img_info.mipLevels;
-
-	VK_CHECK(
-	vkCreateImageView(m_device, &view_info, nullptr, &cubemap.m_imageView));
-
-	// Upload data to GPU
-	immediateSubmit(
-	[&](VkCommandBuffer cmd)
-	{
-		// Transition to transfer dst
-		VkImageMemoryBarrier2 barrier {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
-		barrier.srcStageMask  = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-		barrier.srcAccessMask = 0;
-		barrier.dstStageMask  = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-		barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-		barrier.oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
-		barrier.newLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		barrier.image         = cubemap.m_image;
-		barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-		barrier.subresourceRange.baseMipLevel   = 0;
-		barrier.subresourceRange.levelCount     = img_info.mipLevels;
-		barrier.subresourceRange.baseArrayLayer = 0;
-		barrier.subresourceRange.layerCount     = 6;
-
-		VkDependencyInfo depInfo {.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
-		depInfo.imageMemoryBarrierCount = 1;
-		depInfo.pImageMemoryBarriers    = &barrier;
-		vkCmdPipelineBarrier2(cmd, &depInfo);
-
-		// Copy each face from buffer to image
-		for (uint32_t face = 0; face < 6; face++)
-		{
-			VkBufferImageCopy copyRegion           = {};
-			copyRegion.bufferOffset                = face * faceSize;
-			copyRegion.bufferRowLength             = 0;
-			copyRegion.bufferImageHeight           = 0;
-			copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			copyRegion.imageSubresource.mipLevel   = 0;
-			copyRegion.imageSubresource.baseArrayLayer = face;
-			copyRegion.imageSubresource.layerCount     = 1;
-			copyRegion.imageExtent = {(uint32_t) width, (uint32_t) height, 1};
-
-			vkCmdCopyBufferToImage(cmd,
-			                       uploadBuffer.m_buffer,
-			                       cubemap.m_image,
-			                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			                       1,
-			                       &copyRegion);
-		}
-
-		// Transition to shader read
-		barrier.srcStageMask  = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-		barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-		barrier.dstStageMask  = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-		barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
-		barrier.oldLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		barrier.newLayout     = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-		vkCmdPipelineBarrier2(cmd, &depInfo);
-	});
-
-	m_resourceManager.destroyBuffer(uploadBuffer);
-
-	return cubemap;
-}
-
 // Note that this pattern is not very efficient, as we are waiting for the GPU
 // command to fully execute before continuing with our CPU side logic. This is
 // something people generally put on a background thread, whose sole job is to
@@ -1806,7 +1597,7 @@ GPUMeshBuffers AgniEngine::uploadMesh(std::span<uint32_t> indices,
 	// copy index buffer
 	memcpy((char*) data + vertexBufferSize, indices.data(), indexBufferSize);
 
-	immediateSubmit(
+	m_resourceManager.immediateSubmit(
 	[&](VkCommandBuffer cmd)
 	{
 		VkBufferCopy vertexCopy {0};
