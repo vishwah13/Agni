@@ -62,6 +62,7 @@ nunit-*.xml
 *.received.*
 
 # Build Results of an ATL Project
+[Bb]ackUp/
 [Cc]make_build/
 [Bb]uild/
 [Dd]ebugPS/
