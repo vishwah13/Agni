@@ -113,8 +113,8 @@ void Skybox::cleanup(AgniEngine* engine)
 	clearPipelineResources(engine->m_device);
 
 	// Cleanup mesh buffers
-	engine->destroyBuffer(m_meshBuffers.m_indexBuffer);
-	engine->destroyBuffer(m_meshBuffers.m_vertexBuffer);
+	engine->m_resourceManager.destroyBuffer(m_meshBuffers.m_indexBuffer);
+	engine->m_resourceManager.destroyBuffer(m_meshBuffers.m_vertexBuffer);
 
 	// Cleanup material
 	if (m_skyboxMaterial)
@@ -125,7 +125,7 @@ void Skybox::cleanup(AgniEngine* engine)
 
 	// Cleanup cubemap resources
 	vkDestroySampler(engine->m_device, m_cubemapSampler, nullptr);
-	engine->destroyImage(m_cubemapImage);
+	engine->m_resourceManager.destroyImage(m_cubemapImage);
 }
 
 void Skybox::draw(VkCommandBuffer cmd,
