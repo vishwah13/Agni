@@ -6,6 +6,7 @@
 #include <Camera.hpp>
 #include <Descriptors.hpp>
 #include <Loader.hpp>
+#include <ResourceManager.hpp>
 #include <Scene.hpp>
 #include <Skybox.hpp>
 #include <Types.hpp>
@@ -23,27 +24,6 @@ struct EngineStats
 	int   m_drawcallCount;
 	float m_sceneUpdateTime;
 	float m_meshDrawTime;
-};
-
-struct DeletionQueue
-{
-	std::deque<std::function<void()>> deletors;
-
-	void push_function(std::function<void()>&& function)
-	{
-		deletors.push_back(function);
-	}
-
-	void flush()
-	{
-		// reverse iterate the deletion queue to execute all the functions
-		for (auto it = deletors.rbegin(); it != deletors.rend(); it++)
-		{
-			(*it)(); // call functors
-		}
-
-		deletors.clear();
-	}
 };
 
 struct FrameData
@@ -186,9 +166,7 @@ public:
 
 	static AgniEngine& Get();
 
-	DeletionQueue m_mainDeletionQueue;
-
-	VmaAllocator m_allocator;
+	ResourceManager m_resourceManager;
 
 	VkInstance               m_instance;       // Vulkan library handle
 	VkDebugUtilsMessengerEXT m_debugMessenger; // Vulkan debug output handle
@@ -288,29 +266,6 @@ public:
 	// m_skybox
 	Skybox m_skybox;
 
-	// creating and destroying buffers can go in their own class later ??
-	AllocatedBuffer createBuffer(size_t             allocSize,
-	                             VkBufferUsageFlags usage,
-	                             VmaMemoryUsage     memoryUsage);
-
-	void destroyBuffer(const AllocatedBuffer& buffer);
-
-	// creating and destroying images can go in their own class later ??
-	AllocatedImage
-	createImage(VkExtent3D            size,
-	            VkFormat              format,
-	            VkImageUsageFlags     usage,
-	            bool                  mipmapped  = false,
-	            VkSampleCountFlagBits numSamples = VK_SAMPLE_COUNT_1_BIT);
-	AllocatedImage
-	     createImage(void*                 m_data,
-	                 VkExtent3D            size,
-	                 VkFormat              format,
-	                 VkImageUsageFlags     usage,
-	                 bool                  mipmapped  = false,
-	                 VkSampleCountFlagBits numSamples = VK_SAMPLE_COUNT_1_BIT);
-	void destroyImage(const AllocatedImage& img);
-
 	AllocatedImage createCubemap(const std::array<std::string, 6>& faceFiles,
 	                             VkFormat                          format,
 	                             VkImageUsageFlags                 usage,
@@ -336,8 +291,6 @@ private:
 	void createSwapchain(uint32_t width, uint32_t height);
 	void resizeSwapchain();
 	void destroySwapchain();
-
-	void initVMA();
 
 	void initDescriptors();
 

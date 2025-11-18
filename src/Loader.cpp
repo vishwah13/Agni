@@ -170,10 +170,11 @@ std::optional<AllocatedImage> loadImage(AgniEngine*      engine,
 			imagesize.height = height;
 			imagesize.depth  = 1;
 
-			newImage = engine->createImage(data,
+			newImage = engine->m_resourceManager.createImage(data,
 			                               imagesize,
 			                               VK_FORMAT_R8G8B8A8_UNORM,
 			                               VK_IMAGE_USAGE_SAMPLED_BIT,
+			                               [engine](auto&& fn) { engine->immediateSubmit(std::move(fn)); },
 			                               mipmapped);
 
 			stbi_image_free(data);
@@ -201,10 +202,11 @@ std::optional<AllocatedImage> loadImage(AgniEngine*      engine,
 			imagesize.height = height;
 			imagesize.depth  = 1;
 
-			newImage = engine->createImage(data,
+			newImage = engine->m_resourceManager.createImage(data,
 			                               imagesize,
 			                               VK_FORMAT_R8G8B8A8_UNORM,
 			                               VK_IMAGE_USAGE_SAMPLED_BIT,
+			                               [engine](auto&& fn) { engine->immediateSubmit(std::move(fn)); },
 			                               mipmapped);
 
 			stbi_image_free(data);
@@ -245,10 +247,11 @@ std::optional<AllocatedImage> loadImage(AgniEngine*      engine,
 				imagesize.height = height;
 				imagesize.depth  = 1;
 
-				newImage = engine->createImage(data,
+				newImage = engine->m_resourceManager.createImage(data,
 				                               imagesize,
 				                               VK_FORMAT_R8G8B8A8_UNORM,
 				                               VK_IMAGE_USAGE_SAMPLED_BIT,
+				                               [engine](auto&& fn) { engine->immediateSubmit(std::move(fn)); },
 				                               mipmapped);
 
 				stbi_image_free(data);
@@ -276,10 +279,11 @@ std::optional<AllocatedImage> loadImage(AgniEngine*      engine,
 				imagesize.height = height;
 				imagesize.depth  = 1;
 
-				newImage = engine->createImage(data,
+				newImage = engine->m_resourceManager.createImage(data,
 				                               imagesize,
 				                               VK_FORMAT_R8G8B8A8_UNORM,
 				                               VK_IMAGE_USAGE_SAMPLED_BIT,
+				                               [engine](auto&& fn) { engine->immediateSubmit(std::move(fn)); },
 				                               mipmapped);
 
 				stbi_image_free(data);
@@ -447,7 +451,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 	}
 
 	// create buffer to hold the material data
-	file.m_materialDataBuffer = engine->createBuffer(
+	file.m_materialDataBuffer = engine->m_resourceManager.createBuffer(
 	sizeof(GltfPbrMaterial::MaterialConstants) * gltf.materials.size(),
 	VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 	VMA_MEMORY_USAGE_CPU_TO_GPU);
@@ -824,13 +828,13 @@ void LoadedGLTF::clearAll()
 	VkDevice dv = m_creator->m_device;
 
 	m_descriptorPool.destroyPools(dv);
-	m_creator->destroyBuffer(m_materialDataBuffer);
+	m_creator->m_resourceManager.destroyBuffer(m_materialDataBuffer);
 
 	for (auto& [k, v] : meshes)
 	{
 
-		m_creator->destroyBuffer(v->m_meshBuffers.m_indexBuffer);
-		m_creator->destroyBuffer(v->m_meshBuffers.m_vertexBuffer);
+		m_creator->m_resourceManager.destroyBuffer(v->m_meshBuffers.m_indexBuffer);
+		m_creator->m_resourceManager.destroyBuffer(v->m_meshBuffers.m_vertexBuffer);
 	}
 
 	for (auto& [k, v] : m_images)
@@ -841,7 +845,7 @@ void LoadedGLTF::clearAll()
 			// dont destroy the default images
 			continue;
 		}
-		m_creator->destroyImage(v);
+		m_creator->m_resourceManager.destroyImage(v);
 	}
 
 

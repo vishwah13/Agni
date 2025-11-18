@@ -13,6 +13,8 @@ add_executable (engine
   Pipelines.cpp
   AgniEngine.hpp
   AgniEngine.cpp
+  ResourceManager.hpp
+  ResourceManager.cpp
   Loader.hpp
   Loader.cpp
   Camera.cpp

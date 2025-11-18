@@ -155,7 +155,7 @@ void AgniEngine::cleanup()
 		m_skybox.cleanup(this);
 
 		// flush the global deletion queue
-		m_mainDeletionQueue.flush();
+		m_resourceManager.getMainDeletionQueue().flush();
 
 		destroySwapchain();
 
@@ -655,8 +655,8 @@ void AgniEngine::initVulkan()
 	m_graphicsQueueFamily =
 	vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
 
-	// initializing VMA
-	initVMA();
+	// initializing ResourceManager
+	m_resourceManager.init(m_instance, m_chosenGPU, m_device);
 }
 
 void AgniEngine::initSwapchain()
@@ -683,29 +683,30 @@ void AgniEngine::initSwapchain()
 	VkImageUsageFlags depthImageUsages {};
 	depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
-	m_drawImage = createImage(
+	m_drawImage = m_resourceManager.createImage(
 	drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageUsages);
 
 	// Create MSAA images with multisampling enabled
-	m_msaaColorImage = createImage(drawImageExtent,
-	                               VK_FORMAT_R16G16B16A16_SFLOAT,
-	                               msaaImageUsages,
-	                               false,
-	                               m_msaaSamples);
+	m_msaaColorImage =
+	m_resourceManager.createImage(drawImageExtent,
+	                              VK_FORMAT_R16G16B16A16_SFLOAT,
+	                              msaaImageUsages,
+	                              false,
+	                              m_msaaSamples);
 
-	m_depthImage = createImage(drawImageExtent,
-	                           VK_FORMAT_D32_SFLOAT,
-	                           depthImageUsages,
-	                           false,
-	                           m_msaaSamples);
+	m_depthImage = m_resourceManager.createImage(drawImageExtent,
+	                                             VK_FORMAT_D32_SFLOAT,
+	                                             depthImageUsages,
+	                                             false,
+	                                             m_msaaSamples);
 
 	// add to deletion queues
-	m_mainDeletionQueue.push_function(
+	m_resourceManager.getMainDeletionQueue().push_function(
 	[=]()
 	{
-		destroyImage(m_drawImage);
-		destroyImage(m_msaaColorImage);
-		destroyImage(m_depthImage);
+		m_resourceManager.destroyImage(m_drawImage);
+		m_resourceManager.destroyImage(m_msaaColorImage);
+		m_resourceManager.destroyImage(m_depthImage);
 	});
 }
 
@@ -742,7 +743,7 @@ void AgniEngine::initCommands()
 	VK_CHECK(
 	vkAllocateCommandBuffers(m_device, &cmdAllocInfo, &m_immCommandBuffer));
 
-	m_mainDeletionQueue.push_function(
+	m_resourceManager.getMainDeletionQueue().push_function(
 	[=]() { vkDestroyCommandPool(m_device, m_immCommandPool, nullptr); });
 }
 
@@ -774,7 +775,7 @@ void AgniEngine::initSyncStructures()
 	}
 
 	VK_CHECK(vkCreateFence(m_device, &fenceCreateInfo, nullptr, &m_immFence));
-	m_mainDeletionQueue.push_function(
+	m_resourceManager.getMainDeletionQueue().push_function(
 	[=]() { vkDestroyFence(m_device, m_immFence, nullptr); });
 }
 
@@ -838,9 +839,9 @@ void AgniEngine::resizeSwapchain()
 	vkDeviceWaitIdle(m_device);
 
 	// Destroy old images
-	destroyImage(m_drawImage);
-	destroyImage(m_msaaColorImage);
-	destroyImage(m_depthImage);
+	m_resourceManager.destroyImage(m_drawImage);
+	m_resourceManager.destroyImage(m_msaaColorImage);
+	m_resourceManager.destroyImage(m_depthImage);
 
 	// Destroy and rebuild pipelines with new MSAA settings
 	m_metalRoughMaterial.clearResources(m_device);
@@ -873,21 +874,22 @@ void AgniEngine::resizeSwapchain()
 	VkImageUsageFlags depthImageUsages {};
 	depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
-	m_drawImage = createImage(
+	m_drawImage = m_resourceManager.createImage(
 	drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageUsages);
 
 	// Create MSAA images with multisampling enabled
-	m_msaaColorImage = createImage(drawImageExtent,
-	                               VK_FORMAT_R16G16B16A16_SFLOAT,
-	                               msaaImageUsages,
-	                               false,
-	                               m_msaaSamples);
+	m_msaaColorImage =
+	m_resourceManager.createImage(drawImageExtent,
+	                              VK_FORMAT_R16G16B16A16_SFLOAT,
+	                              msaaImageUsages,
+	                              false,
+	                              m_msaaSamples);
 
-	m_depthImage = createImage(drawImageExtent,
-	                           VK_FORMAT_D32_SFLOAT,
-	                           depthImageUsages,
-	                           false,
-	                           m_msaaSamples);
+	m_depthImage = m_resourceManager.createImage(drawImageExtent,
+	                                             VK_FORMAT_D32_SFLOAT,
+	                                             depthImageUsages,
+	                                             false,
+	                                             m_msaaSamples);
 
 	// Rebuild pipelines with new MSAA settings
 	m_metalRoughMaterial.buildPipelines(this);
@@ -908,27 +910,6 @@ void AgniEngine::destroySwapchain()
 	{
 		vkDestroyImageView(m_device, m_swapchainImageViews[i], nullptr);
 	}
-}
-
-void AgniEngine::initVMA()
-{
-
-	// initialize the memory allocator
-	VmaAllocatorCreateInfo allocatorInfo = {};
-	allocatorInfo.physicalDevice         = m_chosenGPU;
-	allocatorInfo.device                 = m_device;
-	allocatorInfo.instance               = m_instance;
-	allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT |
-	                      VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT;
-
-	VmaVulkanFunctions vulkanFunctions = {};
-	vmaImportVulkanFunctionsFromVolk(&allocatorInfo, &vulkanFunctions);
-	allocatorInfo.pVulkanFunctions = &vulkanFunctions;
-	allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_4;
-	VK_CHECK(vmaCreateAllocator(&allocatorInfo, &m_allocator));
-
-	m_mainDeletionQueue.push_function([&]()
-	                                  { vmaDestroyAllocator(m_allocator); });
 }
 
 void AgniEngine::initDescriptors()
@@ -989,12 +970,12 @@ void AgniEngine::initDescriptors()
 		m_frames[i].m_frameDescriptors = DescriptorAllocatorGrowable {};
 		m_frames[i].m_frameDescriptors.init(m_device, 1000, frame_sizes);
 
-		m_mainDeletionQueue.push_function(
+		m_resourceManager.getMainDeletionQueue().push_function(
 		[&, i]() { m_frames[i].m_frameDescriptors.destroyPools(m_device); });
 	}
 
 	// adding vkDestroyDescriptorPool to the deletion queue
-	m_mainDeletionQueue.push_function(
+	m_resourceManager.getMainDeletionQueue().push_function(
 	[&]()
 	{
 		m_globalDescriptorAllocator.destroyPools(m_device);
@@ -1108,7 +1089,7 @@ void AgniEngine::initBackgroundPipelines()
 	vkDestroyShaderModule(m_device, gradientShader, nullptr);
 	vkDestroyShaderModule(m_device, skyShader, nullptr);
 
-	m_mainDeletionQueue.push_function(
+	m_resourceManager.getMainDeletionQueue().push_function(
 	[=, this]()
 	{
 		vkDestroyPipelineLayout(m_device, m_gradientPipelineLayout, nullptr);
@@ -1184,7 +1165,7 @@ void AgniEngine::initImgui()
 	ImGui_ImplVulkan_Init(&init_info);
 
 	// add the destroy the imgui created structures
-	m_mainDeletionQueue.push_function(
+	m_resourceManager.getMainDeletionQueue().push_function(
 	[=]()
 	{
 		ImGui_ImplVulkan_Shutdown();
@@ -1208,22 +1189,28 @@ void AgniEngine::initDefaultData()
 
 	// 3 default textures, white, grey, black. 1 pixel each
 	uint32_t white = glm::packUnorm4x8(glm::vec4(1, 1, 1, 1));
-	m_whiteImage   = createImage((void*) &white,
-                               VkExtent3D {1, 1, 1},
-                               VK_FORMAT_R8G8B8A8_UNORM,
-                               VK_IMAGE_USAGE_SAMPLED_BIT);
+	m_whiteImage   = m_resourceManager.createImage(
+    (void*) &white,
+    VkExtent3D {1, 1, 1},
+    VK_FORMAT_R8G8B8A8_UNORM,
+    VK_IMAGE_USAGE_SAMPLED_BIT,
+    [this](auto&& fn) { immediateSubmit(std::move(fn)); });
 
 	uint32_t grey = glm::packUnorm4x8(glm::vec4(0.66f, 0.66f, 0.66f, 1));
-	m_greyImage   = createImage((void*) &grey,
-                              VkExtent3D {1, 1, 1},
-                              VK_FORMAT_R8G8B8A8_UNORM,
-                              VK_IMAGE_USAGE_SAMPLED_BIT);
+	m_greyImage   = m_resourceManager.createImage(
+    (void*) &grey,
+    VkExtent3D {1, 1, 1},
+    VK_FORMAT_R8G8B8A8_UNORM,
+    VK_IMAGE_USAGE_SAMPLED_BIT,
+    [this](auto&& fn) { immediateSubmit(std::move(fn)); });
 
 	uint32_t black = glm::packUnorm4x8(glm::vec4(0, 0, 0, 0));
-	m_blackImage   = createImage((void*) &black,
-                               VkExtent3D {1, 1, 1},
-                               VK_FORMAT_R8G8B8A8_UNORM,
-                               VK_IMAGE_USAGE_SAMPLED_BIT);
+	m_blackImage   = m_resourceManager.createImage(
+    (void*) &black,
+    VkExtent3D {1, 1, 1},
+    VK_FORMAT_R8G8B8A8_UNORM,
+    VK_IMAGE_USAGE_SAMPLED_BIT,
+    [this](auto&& fn) { immediateSubmit(std::move(fn)); });
 
 	// checkerboard image
 	uint32_t magenta = glm::packUnorm4x8(glm::vec4(1, 0, 1, 1));
@@ -1235,10 +1222,12 @@ void AgniEngine::initDefaultData()
 			pixels[y * 16 + x] = ((x % 2) ^ (y % 2)) ? magenta : black;
 		}
 	}
-	m_errorCheckerboardImage = createImage(pixels.data(),
-	                                       VkExtent3D {16, 16, 1},
-	                                       VK_FORMAT_R8G8B8A8_UNORM,
-	                                       VK_IMAGE_USAGE_SAMPLED_BIT);
+	m_errorCheckerboardImage = m_resourceManager.createImage(
+	pixels.data(),
+	VkExtent3D {16, 16, 1},
+	VK_FORMAT_R8G8B8A8_UNORM,
+	VK_IMAGE_USAGE_SAMPLED_BIT,
+	[this](auto&& fn) { immediateSubmit(std::move(fn)); });
 
 	VkSamplerCreateInfo sampl = {.sType =
 	                             VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
@@ -1265,9 +1254,9 @@ void AgniEngine::initDefaultData()
 
 	// set the uniform buffer for the material data
 	AllocatedBuffer materialConstants =
-	createBuffer(sizeof(GltfPbrMaterial::MaterialConstants),
-	             VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-	             VMA_MEMORY_USAGE_CPU_TO_GPU);
+	m_resourceManager.createBuffer(sizeof(GltfPbrMaterial::MaterialConstants),
+	                               VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+	                               VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 	// write the buffer
 	GltfPbrMaterial::MaterialConstants* sceneUniformData =
@@ -1309,19 +1298,19 @@ void AgniEngine::initDefaultData()
 
 	m_skybox.init(this, cubemapFaces);
 
-	m_mainDeletionQueue.push_function([=, this]()
-	                                  { destroyBuffer(materialConstants); });
+	m_resourceManager.getMainDeletionQueue().push_function(
+	[=, this]() { m_resourceManager.destroyBuffer(materialConstants); });
 
-	m_mainDeletionQueue.push_function(
+	m_resourceManager.getMainDeletionQueue().push_function(
 	[&]()
 	{
 		vkDestroySampler(m_device, m_defaultSamplerNearest, nullptr);
 		vkDestroySampler(m_device, m_defaultSamplerLinear, nullptr);
 
-		destroyImage(m_whiteImage);
-		destroyImage(m_greyImage);
-		destroyImage(m_blackImage);
-		destroyImage(m_errorCheckerboardImage);
+		m_resourceManager.destroyImage(m_whiteImage);
+		m_resourceManager.destroyImage(m_greyImage);
+		m_resourceManager.destroyImage(m_blackImage);
+		m_resourceManager.destroyImage(m_errorCheckerboardImage);
 	});
 }
 
@@ -1426,14 +1415,14 @@ void AgniEngine::drawGeometry(VkCommandBuffer cmd)
 	// and passes where you might want to do it this way.
 	//  allocate a new uniform buffer for the scene data
 	AllocatedBuffer gpuSceneDataBuffer =
-	createBuffer(sizeof(GPUSceneData),
-	             VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-	             VMA_MEMORY_USAGE_CPU_TO_GPU);
+	m_resourceManager.createBuffer(sizeof(GPUSceneData),
+	                               VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+	                               VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 	// add it to the deletion queue of this frame so it gets deleted once its
 	// been used
 	getCurrentFrame().m_deletionQueue.push_function(
-	[=, this]() { destroyBuffer(gpuSceneDataBuffer); });
+	[=, this]() { m_resourceManager.destroyBuffer(gpuSceneDataBuffer); });
 
 	// write the buffer
 	GPUSceneData* sceneUniformData =
@@ -1611,166 +1600,6 @@ void AgniEngine::updateScene()
 	std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 	m_stats.m_sceneUpdateTime = elapsed.count() / 1000.f;
 }
-// maybe put these func in separate class or make it private later !!!!
-AllocatedBuffer AgniEngine::createBuffer(size_t             allocSize,
-                                         VkBufferUsageFlags usage,
-                                         VmaMemoryUsage     memoryUsage)
-{
-	// allocate buffer
-	VkBufferCreateInfo bufferInfo = {.sType =
-	                                 VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-	bufferInfo.pNext              = nullptr;
-	bufferInfo.size               = allocSize;
-
-	bufferInfo.usage = usage;
-
-	VmaAllocationCreateInfo vmaallocInfo = {};
-	vmaallocInfo.usage                   = memoryUsage;
-	vmaallocInfo.flags                   = VMA_ALLOCATION_CREATE_MAPPED_BIT;
-	AllocatedBuffer newBuffer;
-
-	// allocate the buffer
-	VK_CHECK(vmaCreateBuffer(m_allocator,
-	                         &bufferInfo,
-	                         &vmaallocInfo,
-	                         &newBuffer.m_buffer,
-	                         &newBuffer.m_allocation,
-	                         &newBuffer.m_info));
-
-	return newBuffer;
-}
-
-void AgniEngine::destroyBuffer(const AllocatedBuffer& buffer)
-{
-	vmaDestroyBuffer(m_allocator, buffer.m_buffer, buffer.m_allocation);
-}
-
-AllocatedImage AgniEngine::createImage(VkExtent3D            size,
-                                       VkFormat              format,
-                                       VkImageUsageFlags     usage,
-                                       bool                  mipmapped,
-                                       VkSampleCountFlagBits numSamples)
-{
-	AllocatedImage newImage;
-	newImage.m_imageFormat = format;
-	newImage.m_imageExtent = size;
-
-	VkImageCreateInfo img_info =
-	vkinit::imageCreateInfo(format, usage, size, 0, 1, numSamples);
-	if (mipmapped)
-	{
-		img_info.mipLevels = static_cast<uint32_t>(std::floor(
-		                     std::log2(std::max(size.width, size.height)))) +
-		                     1;
-	}
-
-	// always allocate images on dedicated GPU memory
-	VmaAllocationCreateInfo allocinfo = {};
-	allocinfo.usage                   = VMA_MEMORY_USAGE_GPU_ONLY;
-	allocinfo.requiredFlags =
-	VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-	// allocate and create the image
-	VK_CHECK(vmaCreateImage(m_allocator,
-	                        &img_info,
-	                        &allocinfo,
-	                        &newImage.m_image,
-	                        &newImage.m_allocation,
-	                        nullptr));
-
-	// if the format is a depth format, we will need to have it use the correct
-	// aspect flag
-	VkImageAspectFlags aspectFlag = VK_IMAGE_ASPECT_COLOR_BIT;
-	if (format == VK_FORMAT_D32_SFLOAT)
-	{
-		aspectFlag = VK_IMAGE_ASPECT_DEPTH_BIT;
-	}
-
-	// build a image-view for the image
-	VkImageViewCreateInfo view_info =
-	vkinit::imageViewCreateInfo(format, newImage.m_image, aspectFlag);
-	view_info.subresourceRange.levelCount = img_info.mipLevels;
-
-	VK_CHECK(
-	vkCreateImageView(m_device, &view_info, nullptr, &newImage.m_imageView));
-
-	return newImage;
-}
-
-AllocatedImage AgniEngine::createImage(void*                 m_data,
-                                       VkExtent3D            size,
-                                       VkFormat              format,
-                                       VkImageUsageFlags     usage,
-                                       bool                  mipmapped,
-                                       VkSampleCountFlagBits numSamples)
-{
-	size_t          data_size    = size.depth * size.width * size.height * 4;
-	AllocatedBuffer uploadbuffer = createBuffer(
-	data_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-	memcpy(uploadbuffer.m_info.pMappedData, m_data, data_size);
-
-	AllocatedImage new_image = createImage(
-	size,
-	format,
-	usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-	mipmapped,
-	numSamples);
-
-	immediateSubmit(
-	[&](VkCommandBuffer cmd)
-	{
-		vkutil::transitionImage(cmd,
-		                        new_image.m_image,
-		                        VK_IMAGE_LAYOUT_UNDEFINED,
-		                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-		VkBufferImageCopy copyRegion = {};
-		copyRegion.bufferOffset      = 0;
-		copyRegion.bufferRowLength   = 0;
-		copyRegion.bufferImageHeight = 0;
-
-		copyRegion.imageSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-		copyRegion.imageSubresource.mipLevel       = 0;
-		copyRegion.imageSubresource.baseArrayLayer = 0;
-		copyRegion.imageSubresource.layerCount     = 1;
-		copyRegion.imageExtent                     = size;
-
-		// copy the buffer into the image
-		vkCmdCopyBufferToImage(cmd,
-		                       uploadbuffer.m_buffer,
-		                       new_image.m_image,
-		                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		                       1,
-		                       &copyRegion);
-
-		if (mipmapped)
-		{
-			vkutil::generateMipmaps(
-			cmd,
-			new_image.m_image,
-			VkExtent2D {new_image.m_imageExtent.width,
-			            new_image.m_imageExtent.height});
-		}
-		else
-		{
-			vkutil::transitionImage(cmd,
-			                        new_image.m_image,
-			                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-		}
-	});
-
-	destroyBuffer(uploadbuffer);
-
-	return new_image;
-}
-
-void AgniEngine::destroyImage(const AllocatedImage& img)
-{
-	vkDestroyImageView(m_device, img.m_imageView, nullptr);
-	vmaDestroyImage(m_allocator, img.m_image, img.m_allocation);
-}
 
 AllocatedImage
 AgniEngine::createCubemap(const std::array<std::string, 6>& faceFiles,
@@ -1816,7 +1645,7 @@ AgniEngine::createCubemap(const std::array<std::string, 6>& faceFiles,
 	size_t totalSize = faceSize * 6;
 
 	// Create staging buffer
-	AllocatedBuffer uploadBuffer = createBuffer(
+	AllocatedBuffer uploadBuffer = m_resourceManager.createBuffer(
 	totalSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 	// Copy all faces into staging buffer
@@ -1854,7 +1683,7 @@ AgniEngine::createCubemap(const std::array<std::string, 6>& faceFiles,
 	allocInfo.requiredFlags =
 	VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-	VK_CHECK(vmaCreateImage(m_allocator,
+	VK_CHECK(vmaCreateImage(m_resourceManager.getAllocator(),
 	                        &img_info,
 	                        &allocInfo,
 	                        &cubemap.m_image,
@@ -1928,7 +1757,7 @@ AgniEngine::createCubemap(const std::array<std::string, 6>& faceFiles,
 		vkCmdPipelineBarrier2(cmd, &depInfo);
 	});
 
-	destroyBuffer(uploadBuffer);
+	m_resourceManager.destroyBuffer(uploadBuffer);
 
 	return cubemap;
 }
@@ -1946,7 +1775,7 @@ GPUMeshBuffers AgniEngine::uploadMesh(std::span<uint32_t> indices,
 	GPUMeshBuffers newSurface;
 
 	// create vertex buffer
-	newSurface.m_vertexBuffer = createBuffer(
+	newSurface.m_vertexBuffer = m_resourceManager.createBuffer(
 	vertexBufferSize,
 	VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
 	VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
@@ -1960,14 +1789,15 @@ GPUMeshBuffers AgniEngine::uploadMesh(std::span<uint32_t> indices,
 	vkGetBufferDeviceAddress(m_device, &deviceAdressInfo);
 
 	// create index buffer
-	newSurface.m_indexBuffer = createBuffer(indexBufferSize,
-	                                        VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-	                                        VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-	                                        VMA_MEMORY_USAGE_GPU_ONLY);
+	newSurface.m_indexBuffer = m_resourceManager.createBuffer(
+	indexBufferSize,
+	VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+	VMA_MEMORY_USAGE_GPU_ONLY);
 
-	AllocatedBuffer staging = createBuffer(vertexBufferSize + indexBufferSize,
-	                                       VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-	                                       VMA_MEMORY_USAGE_CPU_ONLY);
+	AllocatedBuffer staging =
+	m_resourceManager.createBuffer(vertexBufferSize + indexBufferSize,
+	                               VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+	                               VMA_MEMORY_USAGE_CPU_ONLY);
 
 	void* data = staging.m_allocation->GetMappedData();
 
@@ -2002,7 +1832,7 @@ GPUMeshBuffers AgniEngine::uploadMesh(std::span<uint32_t> indices,
 		                &indexCopy);
 	});
 
-	destroyBuffer(staging);
+	m_resourceManager.destroyBuffer(staging);
 
 	return newSurface;
 }
