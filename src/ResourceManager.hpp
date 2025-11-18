@@ -36,10 +36,13 @@ public:
 	ResourceManager& operator=(ResourceManager&& other)      = delete;
 
 	// Initialize the resource manager with Vulkan objects
-	void init(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device);
+	void init(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, uint32_t graphicsQueueFamily);
 
 	// Cleanup all resources
 	void cleanup();
+
+	// Immediate submit for one-time GPU commands (uploads, transitions, etc.)
+	void immediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function);
 
 	// Buffer management
 	AllocatedBuffer createBuffer(size_t             allocSize,
@@ -55,12 +58,10 @@ public:
 	                            VkSampleCountFlagBits numSamples = VK_SAMPLE_COUNT_1_BIT);
 
 	// Image management (with initial data)
-	// Note: Requires immediateSubmit callback for uploading data
-	AllocatedImage createImage(void*                                          data,
-	                            VkExtent3D                                     size,
-	                            VkFormat                                       format,
-	                            VkImageUsageFlags                              usage,
-	                            std::function<void(std::function<void(VkCommandBuffer)>)> immediateSubmit,
+	AllocatedImage createImage(void*                 data,
+	                            VkExtent3D            size,
+	                            VkFormat              format,
+	                            VkImageUsageFlags     usage,
 	                            bool                  mipmapped  = false,
 	                            VkSampleCountFlagBits numSamples = VK_SAMPLE_COUNT_1_BIT);
 
@@ -78,10 +79,17 @@ public:
 	}
 
 private:
-	VmaAllocator  m_allocator {VK_NULL_HANDLE};
-	VkDevice      m_device {VK_NULL_HANDLE};
-	VkInstance    m_instance {VK_NULL_HANDLE};
+	VmaAllocator     m_allocator {VK_NULL_HANDLE};
+	VkDevice         m_device {VK_NULL_HANDLE};
+	VkInstance       m_instance {VK_NULL_HANDLE};
 	VkPhysicalDevice m_physicalDevice {VK_NULL_HANDLE};
+	VkQueue          m_graphicsQueue {VK_NULL_HANDLE};
+	uint32_t         m_graphicsQueueFamily {0};
+
+	// Immediate submit resources for one-time GPU commands
+	VkFence         m_immFence {VK_NULL_HANDLE};
+	VkCommandBuffer m_immCommandBuffer {VK_NULL_HANDLE};
+	VkCommandPool   m_immCommandPool {VK_NULL_HANDLE};
 
 	DeletionQueue m_mainDeletionQueue;
 };
