@@ -157,7 +157,7 @@ void AgniEngine::cleanup()
 		// flush the global deletion queue
 		m_resourceManager.getMainDeletionQueue().flush();
 
-		destroySwapchain();
+		m_swapchainManager.cleanup(m_device);
 
 		vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
 		vkDestroyDevice(m_device, nullptr);
@@ -188,14 +188,14 @@ void AgniEngine::draw()
 	// request image from the swapchain
 	uint32_t swapchainImageIndex;
 	VkResult e = vkAcquireNextImageKHR(m_device,
-	                                   m_swapchain,
+	                                   m_swapchainManager.getSwapchain(),
 	                                   1000000000,
 	                                   getCurrentFrame().m_swapchainSemaphore,
 	                                   nullptr,
 	                                   &swapchainImageIndex);
 	if (e == VK_ERROR_OUT_OF_DATE_KHR)
 	{
-		m_resizeRequested = true;
+		m_swapchainManager.requestResize();
 		return;
 	}
 
@@ -211,10 +211,10 @@ void AgniEngine::draw()
 	vkinit::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
 	m_drawExtent.width =
-	std::min(m_swapchainExtent.width, m_drawImage.m_imageExtent.width) *
+	std::min(m_swapchainManager.getSwapchainExtent().width, m_drawImage.m_imageExtent.width) *
 	m_renderScale;
 	m_drawExtent.height =
-	std::min(m_swapchainExtent.height, m_drawImage.m_imageExtent.height) *
+	std::min(m_swapchainManager.getSwapchainExtent().height, m_drawImage.m_imageExtent.height) *
 	m_renderScale;
 
 	// start the command buffer recording
@@ -256,27 +256,27 @@ void AgniEngine::draw()
 	                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
 	vkutil::transitionImage(cmd,
-	                        m_swapchainImages[swapchainImageIndex],
+	                        m_swapchainManager.getSwapchainImages()[swapchainImageIndex],
 	                        VK_IMAGE_LAYOUT_UNDEFINED,
 	                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 	// execute a copy from the draw image into the swapchain
 	vkutil::copyImageToImage(cmd,
 	                         m_drawImage.m_image,
-	                         m_swapchainImages[swapchainImageIndex],
+	                         m_swapchainManager.getSwapchainImages()[swapchainImageIndex],
 	                         m_drawExtent,
-	                         m_swapchainExtent);
+	                         m_swapchainManager.getSwapchainExtent());
 
 	vkutil::transitionImage(cmd,
-	                        m_swapchainImages[swapchainImageIndex],
+	                        m_swapchainManager.getSwapchainImages()[swapchainImageIndex],
 	                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 	                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-	drawImgui(cmd, m_swapchainImageViews[swapchainImageIndex]);
+	drawImgui(cmd, m_swapchainManager.getSwapchainImageViews()[swapchainImageIndex]);
 
 	// make the swapchain image into presentable mode
 	vkutil::transitionImage(cmd,
-	                        m_swapchainImages[swapchainImageIndex],
+	                        m_swapchainManager.getSwapchainImages()[swapchainImageIndex],
 	                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	                        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
@@ -309,10 +309,11 @@ void AgniEngine::draw()
 	//  we want to wait on the _renderSemaphore for that,
 	//  as its necessary that drawing commands have finished before the image is
 	//  displayed to the user
+	VkSwapchainKHR swapchain = m_swapchainManager.getSwapchain();
 	VkPresentInfoKHR presentInfo = {};
 	presentInfo.sType            = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	presentInfo.pNext            = nullptr;
-	presentInfo.pSwapchains      = &m_swapchain;
+	presentInfo.pSwapchains      = &swapchain;
 	presentInfo.swapchainCount   = 1;
 
 	presentInfo.pWaitSemaphores    = &getCurrentFrame().m_renderSemaphore;
@@ -323,7 +324,7 @@ void AgniEngine::draw()
 	VkResult presentResult = vkQueuePresentKHR(m_graphicsQueue, &presentInfo);
 	if (presentResult == VK_ERROR_OUT_OF_DATE_KHR)
 	{
-		m_resizeRequested = true;
+		m_swapchainManager.requestResize();
 	}
 
 	// increase the number of frames drawn
@@ -381,7 +382,7 @@ void AgniEngine::drawImgui(VkCommandBuffer cmd, VkImageView targetImageView)
 	VkRenderingAttachmentInfo colorAttachment = vkinit::attachmentInfo(
 	targetImageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	VkRenderingInfo renderInfo =
-	vkinit::renderingInfo(m_swapchainExtent, &colorAttachment, nullptr);
+	vkinit::renderingInfo(m_swapchainManager.getSwapchainExtent(), &colorAttachment, nullptr);
 
 	vkCmdBeginRendering(cmd, &renderInfo);
 
@@ -450,7 +451,7 @@ void AgniEngine::run()
 			continue;
 		}
 
-		if (m_resizeRequested)
+		if (m_swapchainManager.isResizeRequested())
 		{
 			resizeSwapchain();
 		}
@@ -524,7 +525,7 @@ void AgniEngine::run()
 					m_msaaSamples = newSamples;
 					// Request resize to recreate images and pipelines with new
 					// sample count
-					m_resizeRequested = true;
+					m_swapchainManager.requestResize();
 				}
 			}
 
@@ -634,8 +635,7 @@ void AgniEngine::initVulkan()
 
 void AgniEngine::initSwapchain()
 {
-
-	createSwapchain(m_windowExtent.width, m_windowExtent.height);
+	m_swapchainManager.init(m_chosenGPU, m_device, m_surface, m_windowExtent);
 
 	// draw and depth image creation.
 	// draw and depth image size will match the window
@@ -763,33 +763,6 @@ void AgniEngine::endRenderDocFrameCapture()
 	}
 }
 
-void AgniEngine::createSwapchain(uint32_t width, uint32_t height)
-{
-
-	vkb::SwapchainBuilder swapchainBuilder {m_chosenGPU, m_device, m_surface};
-
-	m_swapchainImageFormat = VK_FORMAT_B8G8R8A8_UNORM;
-
-	vkb::Swapchain vkbSwapchain =
-	swapchainBuilder
-	//.use_default_format_selection()
-	.set_desired_format(
-	VkSurfaceFormatKHR {.format     = m_swapchainImageFormat,
-	                    .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
-	// use vsync present mode
-	.set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
-	.set_desired_extent(width, height)
-	.add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
-	.build()
-	.value();
-
-	m_swapchainExtent = vkbSwapchain.extent;
-	// store swapchain and its related images
-	m_swapchain           = vkbSwapchain.swapchain;
-	m_swapchainImages     = vkbSwapchain.get_images().value();
-	m_swapchainImageViews = vkbSwapchain.get_image_views().value();
-}
-
 void AgniEngine::resizeSwapchain()
 {
 	vkDeviceWaitIdle(m_device);
@@ -803,14 +776,12 @@ void AgniEngine::resizeSwapchain()
 	m_metalRoughMaterial.clearResources(m_device);
 	m_skybox.clearPipelineResources(m_device);
 
-	destroySwapchain();
-
 	int w, h;
 	SDL_GetWindowSize(m_window, &w, &h);
 	m_windowExtent.width  = w;
 	m_windowExtent.height = h;
 
-	createSwapchain(m_windowExtent.width, m_windowExtent.height);
+	m_swapchainManager.resize(m_chosenGPU, m_device, m_surface, m_windowExtent);
 
 	// Recreate images with potentially new MSAA sample count
 	VkExtent3D drawImageExtent = {
@@ -850,22 +821,6 @@ void AgniEngine::resizeSwapchain()
 	// Rebuild pipelines with new MSAA settings
 	m_metalRoughMaterial.buildPipelines(this);
 	m_skybox.buildPipelines(this);
-
-	m_resizeRequested = false;
-}
-
-void AgniEngine::destroySwapchain()
-{
-	if (m_device != VK_NULL_HANDLE && m_swapchain != VK_NULL_HANDLE)
-	{
-		vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
-	}
-
-	// destroy swapchain resources
-	for (int i = 0; i < m_swapchainImageViews.size(); i++)
-	{
-		vkDestroyImageView(m_device, m_swapchainImageViews[i], nullptr);
-	}
 }
 
 void AgniEngine::initDescriptors()
@@ -1113,8 +1068,9 @@ void AgniEngine::initImgui()
 	.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
 	init_info.PipelineInfoMain.PipelineRenderingCreateInfo
 	.colorAttachmentCount = 1;
+	VkFormat swapchainFormat = m_swapchainManager.getSwapchainImageFormat();
 	init_info.PipelineInfoMain.PipelineRenderingCreateInfo
-	.pColorAttachmentFormats = &m_swapchainImageFormat;
+	.pColorAttachmentFormats = &swapchainFormat;
 
 	init_info.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
 

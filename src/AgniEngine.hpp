@@ -9,6 +9,7 @@
 #include <ResourceManager.hpp>
 #include <Scene.hpp>
 #include <Skybox.hpp>
+#include <SwapchainManager.hpp>
 #include <Types.hpp>
 
 #include <deque>
@@ -166,21 +167,14 @@ public:
 
 	static AgniEngine& Get();
 
-	ResourceManager m_resourceManager;
+	ResourceManager   m_resourceManager;
+	SwapchainManager  m_swapchainManager;
 
 	VkInstance               m_instance;       // Vulkan library handle
 	VkDebugUtilsMessengerEXT m_debugMessenger; // Vulkan debug output handle
 	VkPhysicalDevice         m_chosenGPU; // GPU chosen as the default device
 	VkDevice                 m_device;    // Vulkan device for commands
 	VkSurfaceKHR             m_surface;   // Vulkan window surface
-
-	VkSwapchainKHR m_swapchain;
-	VkFormat       m_swapchainImageFormat;
-
-	std::vector<VkImage>     m_swapchainImages;
-	std::vector<VkImageView> m_swapchainImageViews;
-	VkExtent2D               m_swapchainExtent;
-	bool                     m_resizeRequested {false};
 
 	FrameData m_frames[FRAME_OVERLAP];
 
@@ -277,9 +271,7 @@ private:
 	void captureRenderDocFrame();
 	void endRenderDocFrameCapture();
 
-	void createSwapchain(uint32_t width, uint32_t height);
 	void resizeSwapchain();
-	void destroySwapchain();
 
 	void initDescriptors();
 

@@ -15,6 +15,8 @@ add_executable (engine
   AgniEngine.cpp
   ResourceManager.hpp
   ResourceManager.cpp
+  SwapchainManager.hpp
+  SwapchainManager.cpp
   Loader.hpp
   Loader.cpp
   Camera.cpp
