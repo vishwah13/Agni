@@ -21,6 +21,8 @@ add_executable (engine
   Loader.cpp
   Material.hpp
   Material.cpp
+  Texture.hpp
+  Texture.cpp
   Camera.cpp
   Camera.hpp
   Skybox.hpp

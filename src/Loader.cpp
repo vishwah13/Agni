@@ -439,7 +439,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		{
 			// we failed to load, so lets give the slot a default white texture
 			// to not completely break loading
-			images.push_back(engine->m_errorCheckerboardImage);
+			images.push_back(engine->m_errorCheckerboardTexture.image);
 			std::cout << "gltf failed to load texture " << image.name
 			          << std::endl;
 		}
@@ -481,14 +481,10 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 
 		GltfPbrMaterial::MaterialResources materialResources;
 		// default the material textures
-		materialResources.m_colorImage        = engine->m_whiteImage;
-		materialResources.m_colorSampler      = engine->m_defaultSamplerLinear;
-		materialResources.m_metalRoughImage   = engine->m_whiteImage;
-		materialResources.m_metalRoughSampler = engine->m_defaultSamplerLinear;
-		materialResources.m_normalImage       = engine->m_whiteImage;
-		materialResources.m_normalSampler     = engine->m_defaultSamplerLinear;
-		materialResources.m_aoImage           = engine->m_whiteImage;
-		materialResources.m_aoSampler         = engine->m_defaultSamplerLinear;
+		materialResources.m_colorTexture      = engine->m_whiteTexture;
+		materialResources.m_metalRoughTexture = engine->m_whiteTexture;
+		materialResources.m_normalTexture     = engine->m_whiteTexture;
+		materialResources.m_aoTexture         = engine->m_whiteTexture;
 
 		// set the uniform buffer for the material data
 		materialResources.m_dataBuffer = file.m_materialDataBuffer.m_buffer;
@@ -504,8 +500,8 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 			gltf.textures[mat.pbrData.baseColorTexture.value().textureIndex]
 			.samplerIndex.value();
 
-			materialResources.m_colorImage   = images[img];
-			materialResources.m_colorSampler = file.m_samplers[sampler];
+			materialResources.m_colorTexture.image   = images[img];
+			materialResources.m_colorTexture.sampler = file.m_samplers[sampler];
 		}
 		if (mat.pbrData.metallicRoughnessTexture.has_value())
 		{
@@ -518,8 +514,8 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 			.textures[mat.pbrData.metallicRoughnessTexture.value().textureIndex]
 			.samplerIndex.value();
 
-			materialResources.m_metalRoughImage   = images[img];
-			materialResources.m_metalRoughSampler = file.m_samplers[sampler];
+			materialResources.m_metalRoughTexture.image   = images[img];
+			materialResources.m_metalRoughTexture.sampler = file.m_samplers[sampler];
 		}
 		if (mat.normalTexture.has_value())
 		{
@@ -529,8 +525,8 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 			gltf.textures[mat.normalTexture.value().textureIndex]
 			.samplerIndex.value();
 
-			materialResources.m_normalImage   = images[img];
-			materialResources.m_normalSampler = file.m_samplers[sampler];
+			materialResources.m_normalTexture.image   = images[img];
+			materialResources.m_normalTexture.sampler = file.m_samplers[sampler];
 		}
 		if (mat.occlusionTexture.has_value())
 		{
@@ -541,8 +537,8 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 			gltf.textures[mat.occlusionTexture.value().textureIndex]
 			.samplerIndex.value();
 
-			materialResources.m_aoImage   = images[img];
-			materialResources.m_aoSampler = file.m_samplers[sampler];
+			materialResources.m_aoTexture.image   = images[img];
+			materialResources.m_aoTexture.sampler = file.m_samplers[sampler];
 		}
 		// build material
 		newMat->m_data = engine->m_metalRoughMaterial.writeMaterial(
@@ -836,7 +832,7 @@ void LoadedGLTF::clearAll()
 	for (auto& [k, v] : m_images)
 	{
 
-		if (v.m_image == m_creator->m_errorCheckerboardImage.m_image)
+		if (v.m_image == m_creator->m_errorCheckerboardTexture.image.m_image)
 		{
 			// dont destroy the default images
 			continue;
