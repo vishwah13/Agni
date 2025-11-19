@@ -72,22 +72,3 @@ struct GPUSceneData
 	glm::vec4 m_sunlightColor;
 	glm::vec3 m_cameraPosition;
 };
-
-enum class MaterialPass : uint8_t
-{
-	MainColor,
-	Transparent,
-	Other
-};
-struct MaterialPipeline
-{
-	VkPipeline       m_pipeline;
-	VkPipelineLayout m_layout;
-};
-
-struct MaterialInstance
-{
-	MaterialPipeline* m_pipeline;
-	VkDescriptorSet   m_materialSet;
-	MaterialPass      m_passType;
-};
