@@ -1128,6 +1128,7 @@ void AgniEngine::initDefaultData()
 	materialResources.m_dataBuffer       = materialConstants.m_buffer;
 	materialResources.m_dataBufferOffset = 0;
 
+	// need to move the default material to assetLoader or somewhere appropriate
 	m_defaultData =
 	m_metalRoughMaterial.writeMaterial(m_device,
 	                                   MaterialPass::MainColor,
