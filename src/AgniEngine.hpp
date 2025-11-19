@@ -201,10 +201,10 @@ public:
 	                          std::span<Vertex>   vertices);
 
 	// default textures
-	TextureData m_whiteTexture;
-	TextureData m_blackTexture;
-	TextureData m_greyTexture;
-	TextureData m_errorCheckerboardTexture;
+	Texture m_whiteTexture;
+	Texture m_blackTexture;
+	Texture m_greyTexture;
+	Texture m_errorCheckerboardTexture;
 
 	// default materials
 	MaterialInstance m_defaultData;
