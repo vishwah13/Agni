@@ -46,10 +46,10 @@ struct GltfPbrMaterial
 
 	struct MaterialResources
 	{
-		TextureData m_colorTexture;
-		TextureData m_metalRoughTexture;
-		TextureData m_normalTexture;
-		TextureData m_aoTexture;
+		Texture m_colorTexture;
+		Texture m_metalRoughTexture;
+		Texture m_normalTexture;
+		Texture m_aoTexture;
 		VkBuffer    m_dataBuffer;
 		uint32_t    m_dataBufferOffset;
 	};

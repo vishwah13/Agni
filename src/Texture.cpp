@@ -6,7 +6,7 @@
 #include <glm/gtc/packing.hpp>
 #include <vector>
 
-void TextureData::createSolidColor(ResourceManager& resourceManager,
+void Texture::createSolidColor(ResourceManager& resourceManager,
                                    VkDevice         device,
                                    float            r,
                                    float            g,
@@ -25,7 +25,7 @@ void TextureData::createSolidColor(ResourceManager& resourceManager,
 	sampler = createSampler(device, filter, filter);
 }
 
-void TextureData::createCheckerboard(ResourceManager& resourceManager,
+void Texture::createCheckerboard(ResourceManager& resourceManager,
                                      VkDevice         device,
                                      int              width,
                                      int              height,
@@ -62,7 +62,7 @@ void TextureData::createCheckerboard(ResourceManager& resourceManager,
 	sampler = createSampler(device, filter, filter);
 }
 
-void TextureData::destroy(ResourceManager& resourceManager, VkDevice device)
+void Texture::destroy(ResourceManager& resourceManager, VkDevice device)
 {
 	// Destroy sampler
 	if (sampler != VK_NULL_HANDLE)
@@ -75,7 +75,7 @@ void TextureData::destroy(ResourceManager& resourceManager, VkDevice device)
 	resourceManager.destroyImage(image);
 }
 
-VkSampler TextureData::createSampler(VkDevice             device,
+VkSampler Texture::createSampler(VkDevice             device,
                                      VkFilter             magFilter,
                                      VkFilter             minFilter,
                                      VkSamplerAddressMode addressMode)
