@@ -11,6 +11,7 @@
 #include <Scene.hpp>
 #include <Skybox.hpp>
 #include <SwapchainManager.hpp>
+#include <Texture.hpp>
 #include <Types.hpp>
 
 #include <deque>
@@ -129,6 +130,7 @@ public:
 
 	ResourceManager   m_resourceManager;
 	SwapchainManager  m_swapchainManager;
+	Texture           m_texture;
 
 	VkInstance               m_instance;       // Vulkan library handle
 	VkDebugUtilsMessengerEXT m_debugMessenger; // Vulkan debug output handle
@@ -197,15 +199,12 @@ public:
 
 	GPUMeshBuffers uploadMesh(std::span<uint32_t> indices,
 	                          std::span<Vertex>   vertices);
-	// default textures
-	AllocatedImage m_whiteImage;
-	AllocatedImage m_blackImage;
-	AllocatedImage m_greyImage;
-	AllocatedImage m_errorCheckerboardImage;
 
-	// default sampleres
-	VkSampler m_defaultSamplerLinear;
-	VkSampler m_defaultSamplerNearest;
+	// default textures
+	TextureData m_whiteTexture;
+	TextureData m_blackTexture;
+	TextureData m_greyTexture;
+	TextureData m_errorCheckerboardTexture;
 
 	// default materials
 	MaterialInstance m_defaultData;

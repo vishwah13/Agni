@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Descriptors.hpp>
+#include <Texture.hpp>
 #include <Types.hpp>
 
 #include <vk_mem_alloc.h>
@@ -45,16 +46,12 @@ struct GltfPbrMaterial
 
 	struct MaterialResources
 	{
-		AllocatedImage m_colorImage;
-		VkSampler      m_colorSampler;
-		AllocatedImage m_metalRoughImage;
-		VkSampler      m_metalRoughSampler;
-		AllocatedImage m_normalImage;
-		VkSampler      m_normalSampler;
-		AllocatedImage m_aoImage;
-		VkSampler      m_aoSampler;
-		VkBuffer       m_dataBuffer;
-		uint32_t       m_dataBufferOffset;
+		TextureData m_colorTexture;
+		TextureData m_metalRoughTexture;
+		TextureData m_normalTexture;
+		TextureData m_aoTexture;
+		VkBuffer    m_dataBuffer;
+		uint32_t    m_dataBufferOffset;
 	};
 
 	DescriptorWriter m_writer;

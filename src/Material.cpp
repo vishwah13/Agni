@@ -130,23 +130,23 @@ GltfPbrMaterial::writeMaterial(VkDevice                     device,
 	                     resources.m_dataBufferOffset,
 	                     VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 	m_writer.writeImage(/*binding*/ 1,
-	                    resources.m_colorImage.m_imageView,
-	                    resources.m_colorSampler,
+	                    resources.m_colorTexture.image.m_imageView,
+	                    resources.m_colorTexture.sampler,
 	                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	                    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 	m_writer.writeImage(/*binding*/ 2,
-	                    resources.m_metalRoughImage.m_imageView,
-	                    resources.m_metalRoughSampler,
+	                    resources.m_metalRoughTexture.image.m_imageView,
+	                    resources.m_metalRoughTexture.sampler,
 	                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	                    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 	m_writer.writeImage(/*binding*/ 3,
-	                    resources.m_normalImage.m_imageView,
-	                    resources.m_normalSampler,
+	                    resources.m_normalTexture.image.m_imageView,
+	                    resources.m_normalTexture.sampler,
 	                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	                    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 	m_writer.writeImage(/*binding*/ 4,
-	                    resources.m_aoImage.m_imageView,
-	                    resources.m_aoSampler,
+	                    resources.m_aoTexture.image.m_imageView,
+	                    resources.m_aoTexture.sampler,
 	                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	                    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 

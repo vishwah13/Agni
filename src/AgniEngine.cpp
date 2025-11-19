@@ -1099,66 +1099,18 @@ void AgniEngine::initDefaultData()
 	m_mainCamera.m_speed            = .1f;
 	m_mainCamera.m_mouseSensitivity = 0.3f;
 
-	// 3 default textures, white, grey, black. 1 pixel each
-	uint32_t white = glm::packUnorm4x8(glm::vec4(1, 1, 1, 1));
-	m_whiteImage   = m_resourceManager.createImage(
-    (void*) &white,
-    VkExtent3D {1, 1, 1},
-    VK_FORMAT_R8G8B8A8_UNORM,
-    VK_IMAGE_USAGE_SAMPLED_BIT);
-
-	uint32_t grey = glm::packUnorm4x8(glm::vec4(0.66f, 0.66f, 0.66f, 1));
-	m_greyImage   = m_resourceManager.createImage(
-    (void*) &grey,
-    VkExtent3D {1, 1, 1},
-    VK_FORMAT_R8G8B8A8_UNORM,
-    VK_IMAGE_USAGE_SAMPLED_BIT);
-
-	uint32_t black = glm::packUnorm4x8(glm::vec4(0, 0, 0, 0));
-	m_blackImage   = m_resourceManager.createImage(
-    (void*) &black,
-    VkExtent3D {1, 1, 1},
-    VK_FORMAT_R8G8B8A8_UNORM,
-    VK_IMAGE_USAGE_SAMPLED_BIT);
-
-	// checkerboard image
-	uint32_t magenta = glm::packUnorm4x8(glm::vec4(1, 0, 1, 1));
-	std::array<uint32_t, 16 * 16> pixels; // for 16x16 checkerboard texture
-	for (int x = 0; x < 16; x++)
-	{
-		for (int y = 0; y < 16; y++)
-		{
-			pixels[y * 16 + x] = ((x % 2) ^ (y % 2)) ? magenta : black;
-		}
-	}
-	m_errorCheckerboardImage = m_resourceManager.createImage(
-	pixels.data(),
-	VkExtent3D {16, 16, 1},
-	VK_FORMAT_R8G8B8A8_UNORM,
-	VK_IMAGE_USAGE_SAMPLED_BIT);
-
-	VkSamplerCreateInfo sampl = {.sType =
-	                             VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
-
-	sampl.magFilter = VK_FILTER_NEAREST;
-	sampl.minFilter = VK_FILTER_NEAREST;
-
-	vkCreateSampler(m_device, &sampl, nullptr, &m_defaultSamplerNearest);
-
-	sampl.magFilter = VK_FILTER_LINEAR;
-	sampl.minFilter = VK_FILTER_LINEAR;
-	vkCreateSampler(m_device, &sampl, nullptr, &m_defaultSamplerLinear);
+	// Create default textures (image + sampler)
+	m_whiteTexture.createSolidColor(m_resourceManager, m_device, 1.0f, 1.0f, 1.0f, 1.0f, VK_FILTER_LINEAR);
+	m_greyTexture.createSolidColor(m_resourceManager, m_device, 0.66f, 0.66f, 0.66f, 1.0f, VK_FILTER_LINEAR);
+	m_blackTexture.createSolidColor(m_resourceManager, m_device, 0.0f, 0.0f, 0.0f, 0.0f, VK_FILTER_LINEAR);
+	m_errorCheckerboardTexture.createCheckerboard(m_resourceManager, m_device, 16, 16, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, VK_FILTER_NEAREST);
 
 	GltfPbrMaterial::MaterialResources materialResources;
 	// default the material textures
-	materialResources.m_colorImage        = m_whiteImage;
-	materialResources.m_colorSampler      = m_defaultSamplerLinear;
-	materialResources.m_metalRoughImage   = m_whiteImage;
-	materialResources.m_metalRoughSampler = m_defaultSamplerLinear;
-	materialResources.m_normalImage       = m_whiteImage;
-	materialResources.m_normalSampler     = m_defaultSamplerLinear;
-	materialResources.m_aoImage           = m_whiteImage;
-	materialResources.m_aoSampler         = m_defaultSamplerLinear;
+	materialResources.m_colorTexture      = m_whiteTexture;
+	materialResources.m_metalRoughTexture = m_whiteTexture;
+	materialResources.m_normalTexture     = m_whiteTexture;
+	materialResources.m_aoTexture         = m_whiteTexture;
 
 	// set the uniform buffer for the material data
 	AllocatedBuffer materialConstants =
@@ -1212,13 +1164,10 @@ void AgniEngine::initDefaultData()
 	m_resourceManager.getMainDeletionQueue().push_function(
 	[&]()
 	{
-		vkDestroySampler(m_device, m_defaultSamplerNearest, nullptr);
-		vkDestroySampler(m_device, m_defaultSamplerLinear, nullptr);
-
-		m_resourceManager.destroyImage(m_whiteImage);
-		m_resourceManager.destroyImage(m_greyImage);
-		m_resourceManager.destroyImage(m_blackImage);
-		m_resourceManager.destroyImage(m_errorCheckerboardImage);
+		m_whiteTexture.destroy(m_resourceManager, m_device);
+		m_greyTexture.destroy(m_resourceManager, m_device);
+		m_blackTexture.destroy(m_resourceManager, m_device);
+		m_errorCheckerboardTexture.destroy(m_resourceManager, m_device);
 	});
 }
 
