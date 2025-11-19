@@ -19,6 +19,8 @@ add_executable (engine
   SwapchainManager.cpp
   Loader.hpp
   Loader.cpp
+  Material.hpp
+  Material.cpp
   Camera.cpp
   Camera.hpp
   Skybox.hpp
