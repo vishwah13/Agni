@@ -200,11 +200,8 @@ public:
 	GPUMeshBuffers uploadMesh(std::span<uint32_t> indices,
 	                          std::span<Vertex>   vertices);
 
-	// default textures
-	Texture m_whiteTexture;
-	Texture m_blackTexture;
-	Texture m_greyTexture;
-	Texture m_errorCheckerboardTexture;
+	// Asset loader (manages default textures, materials, and loading)
+	AssetLoader m_assetLoader;
 
 	// default materials
 	MaterialInstance m_defaultData;

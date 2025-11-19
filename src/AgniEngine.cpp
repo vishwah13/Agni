@@ -154,6 +154,9 @@ void AgniEngine::cleanup()
 		// Cleanup m_skybox resources
 		m_skybox.cleanup(this);
 
+		// Cleanup asset loader (default textures and shared samplers)
+		m_assetLoader.cleanup();
+
 		// flush the global deletion queue
 		m_resourceManager.getMainDeletionQueue().flush();
 
@@ -1099,18 +1102,15 @@ void AgniEngine::initDefaultData()
 	m_mainCamera.m_speed            = .1f;
 	m_mainCamera.m_mouseSensitivity = 0.3f;
 
-	// Create default textures (image + sampler)
-	m_whiteTexture.createSolidColor(m_resourceManager, m_device, 1.0f, 1.0f, 1.0f, 1.0f, VK_FILTER_LINEAR);
-	m_greyTexture.createSolidColor(m_resourceManager, m_device, 0.66f, 0.66f, 0.66f, 1.0f, VK_FILTER_LINEAR);
-	m_blackTexture.createSolidColor(m_resourceManager, m_device, 0.0f, 0.0f, 0.0f, 0.0f, VK_FILTER_LINEAR);
-	m_errorCheckerboardTexture.createCheckerboard(m_resourceManager, m_device, 16, 16, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, VK_FILTER_NEAREST);
+	// Initialize asset loader (creates default textures and shared samplers)
+	m_assetLoader.init(&m_resourceManager, m_device);
 
 	GltfPbrMaterial::MaterialResources materialResources;
 	// default the material textures
-	materialResources.m_colorTexture      = m_whiteTexture;
-	materialResources.m_metalRoughTexture = m_whiteTexture;
-	materialResources.m_normalTexture     = m_whiteTexture;
-	materialResources.m_aoTexture         = m_whiteTexture;
+	materialResources.m_colorTexture      = m_assetLoader.getWhiteTexture();
+	materialResources.m_metalRoughTexture = m_assetLoader.getWhiteTexture();
+	materialResources.m_normalTexture     = m_assetLoader.getWhiteTexture();
+	materialResources.m_aoTexture         = m_assetLoader.getWhiteTexture();
 
 	// set the uniform buffer for the material data
 	AllocatedBuffer materialConstants =
@@ -1136,8 +1136,8 @@ void AgniEngine::initDefaultData()
 
 	// std::string structurePath = {"../../assets/structure.glb"};
 	std::string helmetPath = {"../../assets/flighthelmet/helmet.glb"};
-	// auto        structureFile = loadGltf(this, structurePath);
-	auto helmetPathFile = loadGltf(this, helmetPath);
+	// auto        structureFile = m_assetLoader.loadGltf(this, structurePath);
+	auto helmetPathFile = m_assetLoader.loadGltf(this, helmetPath);
 
 	assert(helmetPathFile.has_value());
 
@@ -1160,15 +1160,6 @@ void AgniEngine::initDefaultData()
 
 	m_resourceManager.getMainDeletionQueue().push_function(
 	[=, this]() { m_resourceManager.destroyBuffer(materialConstants); });
-
-	m_resourceManager.getMainDeletionQueue().push_function(
-	[&]()
-	{
-		m_whiteTexture.destroy(m_resourceManager, m_device);
-		m_greyTexture.destroy(m_resourceManager, m_device);
-		m_blackTexture.destroy(m_resourceManager, m_device);
-		m_errorCheckerboardTexture.destroy(m_resourceManager, m_device);
-	});
 }
 
 void AgniEngine::drawGeometry(VkCommandBuffer cmd)
