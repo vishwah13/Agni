@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include <Descriptors.hpp>
+#include <Material.hpp>
 #include <Scene.hpp>
 #include <Types.hpp>
 

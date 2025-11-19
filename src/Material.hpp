@@ -8,6 +8,26 @@
 // Forward declaration
 class AgniEngine;
 
+enum class MaterialPass : uint8_t
+{
+	MainColor,
+	Transparent,
+	Other
+};
+
+struct MaterialPipeline
+{
+	VkPipeline       m_pipeline;
+	VkPipelineLayout m_layout;
+};
+
+struct MaterialInstance
+{
+	MaterialPipeline* m_pipeline;
+	VkDescriptorSet   m_materialSet;
+	MaterialPass      m_passType;
+};
+
 struct GltfPbrMaterial
 {
 	MaterialPipeline m_opaquePipeline;
