@@ -7,6 +7,10 @@
 #include <filesystem>
 #include <unordered_map>
 
+#include <fastgltf/core.hpp>
+#include <fastgltf/glm_element_traits.hpp>
+#include <fastgltf/tools.hpp>
+
 struct GLTFMaterial
 {
 	MaterialInstance m_data;
@@ -35,9 +39,8 @@ struct MeshAsset
 	GPUMeshBuffers          m_meshBuffers;
 };
 
-// forward declaration
+// forward declarations
 class AgniEngine;
-
 
 struct LoadedGLTF : public IRenderable
 {
@@ -51,8 +54,6 @@ struct LoadedGLTF : public IRenderable
 	// nodes that dont have a parent, for iterating through the file in tree
 	// order
 	std::vector<std::shared_ptr<Node>> m_topNodes;
-
-	std::vector<VkSampler> m_samplers;
 
 	DescriptorAllocatorGrowable m_descriptorPool;
 
@@ -71,8 +72,70 @@ private:
 	void clearAll();
 };
 
-// I can make a new class called AssetLoader or something that will have this
-// loadGltf func and AgniEngine as an friend class so that i can access its
-// internals
-std::optional<std::shared_ptr<LoadedGLTF>>
-loadGltf(AgniEngine* engine, std::filesystem::path filePath);
+class AssetLoader
+{
+public:
+	void init(ResourceManager* resourceManager, VkDevice device);
+	void cleanup();
+
+	// Default texture getters
+	const Texture& getWhiteTexture() const
+	{
+		return m_whiteTexture;
+	}
+	const Texture& getBlackTexture() const
+	{
+		return m_blackTexture;
+	}
+	const Texture& getGreyTexture() const
+	{
+		return m_greyTexture;
+	}
+	const Texture& getErrorTexture() const
+	{
+		return m_errorCheckerboardTexture;
+	}
+
+	// Shared sampler getters
+	VkSampler getLinearSampler() const
+	{
+		return m_linearSampler;
+	}
+	VkSampler getNearestSampler() const
+	{
+		return m_nearestSampler;
+	}
+	VkSampler getLinearMipmapSampler() const
+	{
+		return m_linearMipmapSampler;
+	}
+	VkSampler getNearestMipmapSampler() const
+	{
+		return m_nearestMipmapSampler;
+	}
+
+	// Image loading
+	std::optional<AllocatedImage> loadImage(fastgltf::Asset& asset,
+	                                        fastgltf::Image& image,
+	                                        bool             mipmapped = false);
+
+	// glTF loading
+	std::optional<std::shared_ptr<LoadedGLTF>>
+	loadGltf(AgniEngine* engine, std::filesystem::path filePath);
+
+private:
+	// Default textures
+	Texture m_whiteTexture;
+	Texture m_blackTexture;
+	Texture m_greyTexture;
+	Texture m_errorCheckerboardTexture;
+
+	// Shared samplers
+	VkSampler m_linearSampler        = VK_NULL_HANDLE;
+	VkSampler m_nearestSampler       = VK_NULL_HANDLE;
+	VkSampler m_linearMipmapSampler  = VK_NULL_HANDLE;
+	VkSampler m_nearestMipmapSampler = VK_NULL_HANDLE;
+
+	ResourceManager* m_resourceManager = nullptr;
+	VkDevice         m_device          = VK_NULL_HANDLE;
+};

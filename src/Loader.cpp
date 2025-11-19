@@ -12,9 +12,7 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
 
-#include <fastgltf/core.hpp>
-#include <fastgltf/glm_element_traits.hpp>
-#include <fastgltf/tools.hpp>
+
 
 #include <mikktspace.h>
 
@@ -55,6 +53,115 @@ VkSamplerMipmapMode extractMipmapMode(fastgltf::Filter filter)
 			return VK_SAMPLER_MIPMAP_MODE_LINEAR;
 	}
 }
+
+// ============================================================================
+// AssetLoader Implementation
+// ============================================================================
+
+void AssetLoader::init(ResourceManager* resourceManager, VkDevice device)
+{
+	m_resourceManager = resourceManager;
+	m_device          = device;
+
+	// Create default textures
+	m_whiteTexture.createSolidColor(*m_resourceManager,
+	                                m_device,
+	                                1.0f,
+	                                1.0f,
+	                                1.0f,
+	                                1.0f,
+	                                VK_FILTER_LINEAR);
+	m_greyTexture.createSolidColor(*m_resourceManager,
+	                               m_device,
+	                               0.66f,
+	                               0.66f,
+	                               0.66f,
+	                               1.0f,
+	                               VK_FILTER_LINEAR);
+	m_blackTexture.createSolidColor(*m_resourceManager,
+	                                m_device,
+	                                0.0f,
+	                                0.0f,
+	                                0.0f,
+	                                0.0f,
+	                                VK_FILTER_LINEAR);
+	m_errorCheckerboardTexture.createCheckerboard(*m_resourceManager,
+	                                              m_device,
+	                                              16,
+	                                              16,
+	                                              1.0f,
+	                                              0.0f,
+	                                              1.0f,
+	                                              0.0f,
+	                                              0.0f,
+	                                              0.0f,
+	                                              VK_FILTER_NEAREST);
+
+	// Create shared samplers
+	VkSamplerCreateInfo samplerInfo = {
+	.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO, .pNext = nullptr};
+	samplerInfo.maxLod = VK_LOD_CLAMP_NONE;
+	samplerInfo.minLod = 0;
+
+	// Linear sampler (no mipmaps)
+	samplerInfo.magFilter  = VK_FILTER_LINEAR;
+	samplerInfo.minFilter  = VK_FILTER_LINEAR;
+	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	vkCreateSampler(m_device, &samplerInfo, nullptr, &m_linearSampler);
+
+	// Nearest sampler (no mipmaps)
+	samplerInfo.magFilter  = VK_FILTER_NEAREST;
+	samplerInfo.minFilter  = VK_FILTER_NEAREST;
+	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+	vkCreateSampler(m_device, &samplerInfo, nullptr, &m_nearestSampler);
+
+	// Linear sampler with mipmaps
+	samplerInfo.magFilter  = VK_FILTER_LINEAR;
+	samplerInfo.minFilter  = VK_FILTER_LINEAR;
+	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	vkCreateSampler(m_device, &samplerInfo, nullptr, &m_linearMipmapSampler);
+
+	// Nearest sampler with mipmaps
+	samplerInfo.magFilter  = VK_FILTER_NEAREST;
+	samplerInfo.minFilter  = VK_FILTER_NEAREST;
+	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+	vkCreateSampler(m_device, &samplerInfo, nullptr, &m_nearestMipmapSampler);
+}
+
+void AssetLoader::cleanup()
+{
+	// Destroy default textures
+	m_whiteTexture.destroy(*m_resourceManager, m_device);
+	m_greyTexture.destroy(*m_resourceManager, m_device);
+	m_blackTexture.destroy(*m_resourceManager, m_device);
+	m_errorCheckerboardTexture.destroy(*m_resourceManager, m_device);
+
+	// Destroy shared samplers
+	if (m_linearSampler != VK_NULL_HANDLE)
+	{
+		vkDestroySampler(m_device, m_linearSampler, nullptr);
+		m_linearSampler = VK_NULL_HANDLE;
+	}
+	if (m_nearestSampler != VK_NULL_HANDLE)
+	{
+		vkDestroySampler(m_device, m_nearestSampler, nullptr);
+		m_nearestSampler = VK_NULL_HANDLE;
+	}
+	if (m_linearMipmapSampler != VK_NULL_HANDLE)
+	{
+		vkDestroySampler(m_device, m_linearMipmapSampler, nullptr);
+		m_linearMipmapSampler = VK_NULL_HANDLE;
+	}
+	if (m_nearestMipmapSampler != VK_NULL_HANDLE)
+	{
+		vkDestroySampler(m_device, m_nearestMipmapSampler, nullptr);
+		m_nearestMipmapSampler = VK_NULL_HANDLE;
+	}
+}
+
+// ============================================================================
+// MikkTSpace Implementation
+// ============================================================================
 
 // MikkTSpace implementation for tangent generation
 struct MikkTSpaceUserData
@@ -140,10 +247,9 @@ void mikkSetTSpaceBasic(const SMikkTSpaceContext* pContext,
 	vertex.m_tangent.w  = fSign; // store handedness in w component
 }
 
-std::optional<AllocatedImage> loadImage(AgniEngine*      engine,
-                                        fastgltf::Asset& asset,
-                                        fastgltf::Image& image,
-                                        bool             mipmapped = false)
+std::optional<AllocatedImage> AssetLoader::loadImage(fastgltf::Asset& asset,
+                                                      fastgltf::Image& image,
+                                                      bool             mipmapped)
 {
 	AllocatedImage newImage {};
 
@@ -170,7 +276,7 @@ std::optional<AllocatedImage> loadImage(AgniEngine*      engine,
 			imagesize.height = height;
 			imagesize.depth  = 1;
 
-			newImage = engine->m_resourceManager.createImage(data,
+			newImage = m_resourceManager->createImage(data,
 			                               imagesize,
 			                               VK_FORMAT_R8G8B8A8_UNORM,
 			                               VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -201,7 +307,7 @@ std::optional<AllocatedImage> loadImage(AgniEngine*      engine,
 			imagesize.height = height;
 			imagesize.depth  = 1;
 
-			newImage = engine->m_resourceManager.createImage(data,
+			newImage = m_resourceManager->createImage(data,
 			                               imagesize,
 			                               VK_FORMAT_R8G8B8A8_UNORM,
 			                               VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -245,7 +351,7 @@ std::optional<AllocatedImage> loadImage(AgniEngine*      engine,
 				imagesize.height = height;
 				imagesize.depth  = 1;
 
-				newImage = engine->m_resourceManager.createImage(data,
+				newImage = m_resourceManager->createImage(data,
 				                               imagesize,
 				                               VK_FORMAT_R8G8B8A8_UNORM,
 				                               VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -276,7 +382,7 @@ std::optional<AllocatedImage> loadImage(AgniEngine*      engine,
 				imagesize.height = height;
 				imagesize.depth  = 1;
 
-				newImage = engine->m_resourceManager.createImage(data,
+				newImage = m_resourceManager->createImage(data,
 				                               imagesize,
 				                               VK_FORMAT_R8G8B8A8_UNORM,
 				                               VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -308,7 +414,7 @@ std::optional<AllocatedImage> loadImage(AgniEngine*      engine,
 }
 
 std::optional<std::shared_ptr<LoadedGLTF>>
-loadGltf(AgniEngine* engine, std::filesystem::path filePath)
+AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 {
 	fmt::print("Loading GLTF: {}\n", filePath.string());
 
@@ -382,27 +488,34 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 
 	file.m_descriptorPool.init(engine->m_device, gltf.materials.size(), sizes);
 
-	// load samplers
+	// Map glTF samplers to shared samplers
+	// Instead of creating new samplers, we map to our shared samplers
+	std::vector<VkSampler> samplerMapping;
 	for (fastgltf::Sampler& sampler : gltf.samplers)
 	{
+		VkFilter magFilter =
+		extractFilter(sampler.magFilter.value_or(fastgltf::Filter::Linear));
+		VkFilter minFilter =
+		extractFilter(sampler.minFilter.value_or(fastgltf::Filter::Linear));
+		VkSamplerMipmapMode mipmapMode = extractMipmapMode(
+		sampler.minFilter.value_or(fastgltf::Filter::Linear));
 
-		VkSamplerCreateInfo sampl = {
-		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO, .pNext = nullptr};
-		sampl.maxLod = VK_LOD_CLAMP_NONE;
-		sampl.minLod = 0;
+		// Select appropriate shared sampler based on filter settings
+		VkSampler sharedSampler;
+		if (magFilter == VK_FILTER_LINEAR && minFilter == VK_FILTER_LINEAR)
+		{
+			sharedSampler = (mipmapMode == VK_SAMPLER_MIPMAP_MODE_LINEAR)
+			                ? m_linearMipmapSampler
+			                : m_linearSampler;
+		}
+		else
+		{
+			sharedSampler = (mipmapMode == VK_SAMPLER_MIPMAP_MODE_LINEAR)
+			                ? m_nearestMipmapSampler
+			                : m_nearestSampler;
+		}
 
-		sampl.magFilter =
-		extractFilter(sampler.magFilter.value_or(fastgltf::Filter::Nearest));
-		sampl.minFilter =
-		extractFilter(sampler.minFilter.value_or(fastgltf::Filter::Nearest));
-
-		sampl.mipmapMode = extractMipmapMode(
-		sampler.minFilter.value_or(fastgltf::Filter::Nearest));
-
-		VkSampler newSampler;
-		vkCreateSampler(engine->m_device, &sampl, nullptr, &newSampler);
-
-		file.m_samplers.push_back(newSampler);
+		samplerMapping.push_back(sharedSampler);
 	}
 
 	// temporal arrays for all the objects to use while creating the GLTF data
@@ -419,7 +532,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 	for (fastgltf::Image& image : gltf.images)
 	{
 		std::optional<AllocatedImage> img =
-		loadImage(engine, gltf, image, true);
+		loadImage(gltf, image, true);
 
 		// Generate a unique name for this image (use name if available,
 		// otherwise use index)
@@ -439,7 +552,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		{
 			// we failed to load, so lets give the slot a default white texture
 			// to not completely break loading
-			images.push_back(engine->m_errorCheckerboardTexture.image);
+			images.push_back(m_errorCheckerboardTexture.image);
 			std::cout << "gltf failed to load texture " << image.name
 			          << std::endl;
 		}
@@ -481,10 +594,10 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 
 		GltfPbrMaterial::MaterialResources materialResources;
 		// default the material textures
-		materialResources.m_colorTexture      = engine->m_whiteTexture;
-		materialResources.m_metalRoughTexture = engine->m_whiteTexture;
-		materialResources.m_normalTexture     = engine->m_whiteTexture;
-		materialResources.m_aoTexture         = engine->m_whiteTexture;
+		materialResources.m_colorTexture      = m_whiteTexture;
+		materialResources.m_metalRoughTexture = m_whiteTexture;
+		materialResources.m_normalTexture     = m_whiteTexture;
+		materialResources.m_aoTexture         = m_whiteTexture;
 
 		// set the uniform buffer for the material data
 		materialResources.m_dataBuffer = file.m_materialDataBuffer.m_buffer;
@@ -501,7 +614,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 			.samplerIndex.value();
 
 			materialResources.m_colorTexture.image   = images[img];
-			materialResources.m_colorTexture.sampler = file.m_samplers[sampler];
+			materialResources.m_colorTexture.sampler = samplerMapping[sampler];
 		}
 		if (mat.pbrData.metallicRoughnessTexture.has_value())
 		{
@@ -515,7 +628,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 			.samplerIndex.value();
 
 			materialResources.m_metalRoughTexture.image   = images[img];
-			materialResources.m_metalRoughTexture.sampler = file.m_samplers[sampler];
+			materialResources.m_metalRoughTexture.sampler = samplerMapping[sampler];
 		}
 		if (mat.normalTexture.has_value())
 		{
@@ -526,7 +639,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 			.samplerIndex.value();
 
 			materialResources.m_normalTexture.image   = images[img];
-			materialResources.m_normalTexture.sampler = file.m_samplers[sampler];
+			materialResources.m_normalTexture.sampler = samplerMapping[sampler];
 		}
 		if (mat.occlusionTexture.has_value())
 		{
@@ -538,7 +651,7 @@ loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 			.samplerIndex.value();
 
 			materialResources.m_aoTexture.image   = images[img];
-			materialResources.m_aoTexture.sampler = file.m_samplers[sampler];
+			materialResources.m_aoTexture.sampler = samplerMapping[sampler];
 		}
 		// build material
 		newMat->m_data = engine->m_metalRoughMaterial.writeMaterial(
@@ -832,7 +945,7 @@ void LoadedGLTF::clearAll()
 	for (auto& [k, v] : m_images)
 	{
 
-		if (v.m_image == m_creator->m_errorCheckerboardTexture.image.m_image)
+		if (v.m_image == m_creator->m_assetLoader.getErrorTexture().image.m_image)
 		{
 			// dont destroy the default images
 			continue;
@@ -840,9 +953,5 @@ void LoadedGLTF::clearAll()
 		m_creator->m_resourceManager.destroyImage(v);
 	}
 
-
-	for (auto& sampler : m_samplers)
-	{
-		vkDestroySampler(dv, sampler, nullptr);
-	}
+	// Note: Samplers are now shared and managed by AssetLoader, not per-file
 }
