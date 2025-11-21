@@ -67,6 +67,10 @@ public:
 
 	void destroyImage(const AllocatedImage& img);
 
+	// Mesh upload (creates vertex + index buffers and uploads data)
+	GPUMeshBuffers uploadMesh(std::span<uint32_t> indices,
+	                          std::span<Vertex>   vertices);
+
 	// Accessors
 	VmaAllocator getAllocator() const
 	{

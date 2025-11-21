@@ -7,6 +7,8 @@
 #include <cmath>
 #include <cstring>
 
+#include <vk_mem_alloc.h>
+
 void ResourceManager::init(VkInstance       instance,
                            VkPhysicalDevice physicalDevice,
                            VkDevice         device,
@@ -253,4 +255,79 @@ void ResourceManager::immediateSubmit(
 	VK_CHECK(vkQueueSubmit2(m_graphicsQueue, 1, &submit, m_immFence));
 
 	VK_CHECK(vkWaitForFences(m_device, 1, &m_immFence, true, 9999999999));
+}
+
+// Note that this pattern is not very efficient, as we are waiting for the GPU
+// command to fully execute before continuing with our CPU side logic. This is
+// something people generally put on a background thread, whose sole job is to
+// execute uploads like this one, and deleting/reusing the staging buffers.
+GPUMeshBuffers ResourceManager::uploadMesh(std::span<uint32_t> indices,
+                                           std::span<Vertex>   vertices)
+{
+	const size_t vertexBufferSize = vertices.size() * sizeof(Vertex);
+	const size_t indexBufferSize  = indices.size() * sizeof(uint32_t);
+
+	GPUMeshBuffers newSurface;
+
+	// create vertex buffer
+	newSurface.m_vertexBuffer = createBuffer(
+	vertexBufferSize,
+	VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+	VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+	VMA_MEMORY_USAGE_GPU_ONLY);
+
+	// find the address of the vertex buffer
+	VkBufferDeviceAddressInfo deviceAdressInfo {
+	.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+	.buffer = newSurface.m_vertexBuffer.m_buffer};
+	newSurface.m_vertexBufferAddress =
+	vkGetBufferDeviceAddress(m_device, &deviceAdressInfo);
+
+	// create index buffer
+	newSurface.m_indexBuffer = createBuffer(
+	indexBufferSize,
+	VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+	VMA_MEMORY_USAGE_GPU_ONLY);
+
+	AllocatedBuffer staging =
+	createBuffer(vertexBufferSize + indexBufferSize,
+	             VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+	             VMA_MEMORY_USAGE_CPU_ONLY);
+
+	void* data = staging.m_info.pMappedData;
+
+	// copy vertex buffer
+	memcpy(data, vertices.data(), vertexBufferSize);
+	// copy index buffer
+	memcpy((char*) data + vertexBufferSize, indices.data(), indexBufferSize);
+
+	immediateSubmit(
+	[&](VkCommandBuffer cmd)
+	{
+		VkBufferCopy vertexCopy {0};
+		vertexCopy.dstOffset = 0;
+		vertexCopy.srcOffset = 0;
+		vertexCopy.size      = vertexBufferSize;
+
+		vkCmdCopyBuffer(cmd,
+		                staging.m_buffer,
+		                newSurface.m_vertexBuffer.m_buffer,
+		                1,
+		                &vertexCopy);
+
+		VkBufferCopy indexCopy {0};
+		indexCopy.dstOffset = 0;
+		indexCopy.srcOffset = vertexBufferSize;
+		indexCopy.size      = indexBufferSize;
+
+		vkCmdCopyBuffer(cmd,
+		                staging.m_buffer,
+		                newSurface.m_indexBuffer.m_buffer,
+		                1,
+		                &indexCopy);
+	});
+
+	destroyBuffer(staging);
+
+	return newSurface;
 }
