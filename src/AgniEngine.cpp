@@ -72,11 +72,15 @@ void AgniEngine::init()
 	initDescriptors();
 
 	// Initialize renderer (creates render targets, pipelines, descriptors)
-	m_renderer.init(this);
+	m_renderer.init(m_device,
+	                &m_resourceManager,
+	                &m_swapchainManager,
+	                &m_mainCamera,
+	                &m_skybox,
+	                &m_globalDescriptorAllocator,
+	                m_windowExtent);
 
 	initPipelines();
-
-	
 
 	initImgui();
 	initDefaultData();
@@ -111,7 +115,7 @@ void AgniEngine::cleanup()
 		m_skybox.cleanup(this);
 
 		// Cleanup renderer (render targets, pipelines, descriptors, scenes)
-		m_renderer.cleanup(this);
+		m_renderer.cleanup();
 
 		// Cleanup asset loader (default textures and shared samplers)
 		m_assetLoader.cleanup();
@@ -138,7 +142,7 @@ void AgniEngine::cleanup()
 void AgniEngine::draw()
 {
 	// Update scene for this frame
-	m_renderer.updateScene(this, m_deltaTime);
+	m_renderer.updateScene(m_deltaTime, m_windowExtent);
 
 	// wait until the gpu has finished rendering the last frame. Timeout of 1
 	// second
@@ -178,7 +182,7 @@ void AgniEngine::draw()
 	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
 	// Render the frame
-	m_renderer.renderFrame(this, cmd, swapchainImageIndex);
+	m_renderer.renderFrame(cmd, swapchainImageIndex, getCurrentFrame(), m_windowExtent);
 
 	// finalize the command buffer (we can no longer add commands, but it can
 	// now be executed)
@@ -553,7 +557,7 @@ void AgniEngine::resizeSwapchain()
 	m_swapchainManager.resize(m_chosenGPU, m_device, m_surface, m_windowExtent);
 
 	// Resize renderer (recreates render targets with new extent and MSAA settings)
-	m_renderer.resize(this, m_windowExtent, m_renderer.getMsaaSamples());
+	m_renderer.resize(m_windowExtent, m_renderer.getMsaaSamples());
 
 	// Rebuild pipelines with new MSAA settings
 	m_assetLoader.buildPipelines(this);
