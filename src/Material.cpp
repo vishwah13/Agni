@@ -40,7 +40,7 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 	                                       VK_SHADER_STAGE_VERTEX_BIT |
 	                                       VK_SHADER_STAGE_FRAGMENT_BIT);
 
-	VkDescriptorSetLayout layouts[] = {engine->m_gpuSceneDataDescriptorLayout,
+	VkDescriptorSetLayout layouts[] = {engine->m_renderer.getGpuSceneDataDescriptorLayout(),
 	                                   m_materialLayout};
 
 	VkPipelineLayoutCreateInfo mesh_layout_info =
@@ -65,14 +65,14 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 	pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
 	pipelineBuilder.setCullMode(VK_CULL_MODE_FRONT_BIT,
 	                            VK_FRONT_FACE_CLOCKWISE);
-	pipelineBuilder.enableMultisampling(engine->m_msaaSamples);
+	pipelineBuilder.enableMultisampling(engine->m_renderer.getMsaaSamples());
 	pipelineBuilder.disableBlending();
 	pipelineBuilder.enableDepthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
 	// render format
 	pipelineBuilder.setColorAttachmentFormat(
-	engine->m_msaaColorImage.m_imageFormat);
-	pipelineBuilder.setDepthFormat(engine->m_depthImage.m_imageFormat);
+	engine->m_renderer.getMsaaColorImage().m_imageFormat);
+	pipelineBuilder.setDepthFormat(engine->m_renderer.getDepthImage().m_imageFormat);
 
 	// use the triangle layout we created
 	pipelineBuilder.m_pipelineLayout = newLayout;

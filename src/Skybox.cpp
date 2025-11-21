@@ -70,7 +70,7 @@ void Skybox::buildPipelines(AgniEngine* engine)
 	                                             VK_SHADER_STAGE_VERTEX_BIT |
 	                                             VK_SHADER_STAGE_FRAGMENT_BIT);
 
-	VkDescriptorSetLayout layouts[] = {engine->m_gpuSceneDataDescriptorLayout,
+	VkDescriptorSetLayout layouts[] = {engine->m_renderer.getGpuSceneDataDescriptorLayout(),
 	                                   m_skyboxMaterialLayout};
 
 	VkPipelineLayoutCreateInfo mesh_layout_info =
@@ -93,7 +93,7 @@ void Skybox::buildPipelines(AgniEngine* engine)
 	pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 	pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
 	pipelineBuilder.setCullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE);
-	pipelineBuilder.enableMultisampling(engine->m_msaaSamples);
+	pipelineBuilder.enableMultisampling(engine->m_renderer.getMsaaSamples());
 	pipelineBuilder.disableBlending();
 	// turning off depth buffer writes for skybox, but enable depth test with
 	// reversed-Z
@@ -101,8 +101,8 @@ void Skybox::buildPipelines(AgniEngine* engine)
 
 	// render format
 	pipelineBuilder.setColorAttachmentFormat(
-	engine->m_msaaColorImage.m_imageFormat);
-	pipelineBuilder.setDepthFormat(engine->m_depthImage.m_imageFormat);
+	engine->m_renderer.getMsaaColorImage().m_imageFormat);
+	pipelineBuilder.setDepthFormat(engine->m_renderer.getDepthImage().m_imageFormat);
 
 	// use the triangle layout we created
 	pipelineBuilder.m_pipelineLayout = newLayout;

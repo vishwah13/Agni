@@ -38,52 +38,6 @@ constexpr bool bUseValidationLayers = false;
 constexpr bool bUseValidationLayers = true;
 #endif
 
-bool isVisible(const RenderObject& obj, const glm::mat4& viewproj)
-{
-	std::array<glm::vec3, 8> corners {
-	glm::vec3 {1, 1, 1},
-	glm::vec3 {1, 1, -1},
-	glm::vec3 {1, -1, 1},
-	glm::vec3 {1, -1, -1},
-	glm::vec3 {-1, 1, 1},
-	glm::vec3 {-1, 1, -1},
-	glm::vec3 {-1, -1, 1},
-	glm::vec3 {-1, -1, -1},
-	};
-
-	glm::mat4 matrix = viewproj * obj.m_transform;
-
-	glm::vec3 min = {1.5, 1.5, 1.5};
-	glm::vec3 max = {-1.5, -1.5, -1.5};
-
-	for (int c = 0; c < 8; c++)
-	{
-		// project each corner into clip space
-		glm::vec4 v = matrix * glm::vec4(obj.m_bounds.m_origin +
-		                                 (corners[c] * obj.m_bounds.m_extents),
-		                                 1.f);
-
-		// perspective correction
-		v.x = v.x / v.w;
-		v.y = v.y / v.w;
-		v.z = v.z / v.w;
-
-		min = glm::min(glm::vec3 {v.x, v.y, v.z}, min);
-		max = glm::max(glm::vec3 {v.x, v.y, v.z}, max);
-	}
-
-	// check the clip space box is within the view
-	if (min.z > 1.f || max.z < 0.f || min.x > 1.f || max.x < -1.f ||
-	    min.y > 1.f || max.y < -1.f)
-	{
-		return false;
-	}
-	else
-	{
-		return true;
-	}
-}
-
 AgniEngine* loadedEngine = nullptr;
 
 AgniEngine& AgniEngine::Get()
@@ -117,7 +71,13 @@ void AgniEngine::init()
 
 	initDescriptors();
 
+	// Initialize renderer (creates render targets, pipelines, descriptors)
+	m_renderer.init(this);
+
 	initPipelines();
+
+	
+
 	initImgui();
 	initDefaultData();
 
@@ -132,8 +92,6 @@ void AgniEngine::cleanup()
 	if (m_isInitialized)
 	{
 		vkDeviceWaitIdle(m_device);
-
-		m_loadedScenes.clear();
 
 		for (int i = 0; i < FRAME_OVERLAP; i++)
 		{
@@ -151,6 +109,9 @@ void AgniEngine::cleanup()
 
 		// Cleanup m_skybox resources
 		m_skybox.cleanup(this);
+
+		// Cleanup renderer (render targets, pipelines, descriptors, scenes)
+		m_renderer.cleanup(this);
 
 		// Cleanup asset loader (default textures and shared samplers)
 		m_assetLoader.cleanup();
@@ -176,7 +137,9 @@ void AgniEngine::cleanup()
 
 void AgniEngine::draw()
 {
-	updateScene();
+	// Update scene for this frame
+	m_renderer.updateScene(this, m_deltaTime);
+
 	// wait until the gpu has finished rendering the last frame. Timeout of 1
 	// second
 	VK_CHECK(vkWaitForFences(
@@ -211,75 +174,11 @@ void AgniEngine::draw()
 	VkCommandBufferBeginInfo cmdBeginInfo =
 	vkinit::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
-	m_drawExtent.width =
-	std::min(m_swapchainManager.getSwapchainExtent().width, m_drawImage.m_imageExtent.width) *
-	m_renderScale;
-	m_drawExtent.height =
-	std::min(m_swapchainManager.getSwapchainExtent().height, m_drawImage.m_imageExtent.height) *
-	m_renderScale;
-
 	// start the command buffer recording
 	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
-	// transition our main draw image into general layout so we can write into
-	// it we will overwrite it all so we dont care about what was the older
-	// layout
-	// vkutil::transitionImage(
-	// cmd, m_drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED,
-	// VK_IMAGE_LAYOUT_GENERAL);
-
-	//// drawing the compute shader based background
-	// drawBackground(cmd);
-
-	// Transition MSAA images for rendering
-	vkutil::transitionImage(cmd,
-	                        m_msaaColorImage.m_image,
-	                        VK_IMAGE_LAYOUT_UNDEFINED,
-	                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	vkutil::transitionImage(cmd,
-	                        m_depthImage.m_image,
-	                        VK_IMAGE_LAYOUT_UNDEFINED,
-	                        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-
-	// Transition resolve target (draw image) for resolve operation
-	vkutil::transitionImage(cmd,
-	                        m_drawImage.m_image,
-	                        VK_IMAGE_LAYOUT_UNDEFINED,
-	                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-	drawGeometry(cmd);
-
-	// transtion the draw image and the swapchain image into their correct
-	// transfer layouts
-	vkutil::transitionImage(cmd,
-	                        m_drawImage.m_image,
-	                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-	                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-
-	vkutil::transitionImage(cmd,
-	                        m_swapchainManager.getSwapchainImages()[swapchainImageIndex],
-	                        VK_IMAGE_LAYOUT_UNDEFINED,
-	                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-	// execute a copy from the draw image into the swapchain
-	vkutil::copyImageToImage(cmd,
-	                         m_drawImage.m_image,
-	                         m_swapchainManager.getSwapchainImages()[swapchainImageIndex],
-	                         m_drawExtent,
-	                         m_swapchainManager.getSwapchainExtent());
-
-	vkutil::transitionImage(cmd,
-	                        m_swapchainManager.getSwapchainImages()[swapchainImageIndex],
-	                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-	                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-	drawImgui(cmd, m_swapchainManager.getSwapchainImageViews()[swapchainImageIndex]);
-
-	// make the swapchain image into presentable mode
-	vkutil::transitionImage(cmd,
-	                        m_swapchainManager.getSwapchainImages()[swapchainImageIndex],
-	                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-	                        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+	// Render the frame
+	m_renderer.renderFrame(this, cmd, swapchainImageIndex);
 
 	// finalize the command buffer (we can no longer add commands, but it can
 	// now be executed)
@@ -330,66 +229,6 @@ void AgniEngine::draw()
 
 	// increase the number of frames drawn
 	m_frameNumber++;
-}
-
-void AgniEngine::drawBackground(VkCommandBuffer cmd)
-{
-
-	// make a clear-color from frame number. This will flash with a 120 frame
-	// period.
-	VkClearColorValue clearValue;
-	float             flash = std::abs(std::sin(m_frameNumber / 120.f));
-	clearValue              = {{0.0f, 0.0f, flash, 1.0f}};
-
-	VkImageSubresourceRange clearRange =
-	vkinit::imageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT);
-
-	ComputeEffect& effect = m_backgroundEffects[m_currentBackgroundEffect];
-
-	// bind the gradient drawing compute pipeline
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.m_pipeline);
-
-	// bind the descriptor set containing the draw image for the compute
-	// pipeline
-	vkCmdBindDescriptorSets(cmd,
-	                        VK_PIPELINE_BIND_POINT_COMPUTE,
-	                        m_gradientPipelineLayout,
-	                        0,
-	                        1,
-	                        &m_drawImageDescriptors,
-	                        0,
-	                        nullptr);
-
-	vkCmdPushConstants(cmd,
-	                   m_gradientPipelineLayout,
-	                   VK_SHADER_STAGE_COMPUTE_BIT,
-	                   0,
-	                   sizeof(ComputePushConstants),
-	                   &effect.m_data);
-
-	// execute the compute pipeline dispatch. We are using 16x16 workgroup size
-	// so we need to divide by it
-	vkCmdDispatch(cmd,
-	              static_cast<uint32_t>(std::ceil(m_drawExtent.width / 16.0)),
-	              static_cast<uint32_t>(std::ceil(m_drawExtent.height / 16.0)),
-	              1);
-}
-
-// way to improve it would be to run it on a different queue than the graphics
-// queue, and that way we could overlap the execution from this with the main
-// render loop.
-void AgniEngine::drawImgui(VkCommandBuffer cmd, VkImageView targetImageView)
-{
-	VkRenderingAttachmentInfo colorAttachment = vkinit::attachmentInfo(
-	targetImageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	VkRenderingInfo renderInfo =
-	vkinit::renderingInfo(m_swapchainManager.getSwapchainExtent(), &colorAttachment, nullptr);
-
-	vkCmdBeginRendering(cmd, &renderInfo);
-
-	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
-
-	vkCmdEndRendering(cmd);
 }
 
 void AgniEngine::run()
@@ -467,23 +306,23 @@ void AgniEngine::run()
 
 		if (ImGui::Begin("Stats"))
 		{
-			ImGui::Text("frametime %f ms", m_stats.m_frametime);
-			ImGui::Text("draw time %f ms", m_stats.m_meshDrawTime);
-			ImGui::Text("update time %f ms", m_stats.m_sceneUpdateTime);
-			ImGui::Text("triangles %i", m_stats.m_triangleCount);
-			ImGui::Text("draws %i", m_stats.m_drawcallCount);
+			ImGui::Text("frametime %f ms", m_renderer.getStats().m_frametime);
+			ImGui::Text("draw time %f ms", m_renderer.getStats().m_meshDrawTime);
+			ImGui::Text("update time %f ms", m_renderer.getStats().m_sceneUpdateTime);
+			ImGui::Text("triangles %i", m_renderer.getStats().m_triangleCount);
+			ImGui::Text("draws %i", m_renderer.getStats().m_drawcallCount);
 		}
 		ImGui::End();
 
 		if (ImGui::Begin("background"))
 		{
-			ImGui::SliderFloat("Render Scale", &m_renderScale, 0.3f, 1.f);
+			ImGui::SliderFloat("Render Scale", &m_renderer.getRenderScale(), 0.3f, 1.f);
 
 			// MSAA sample count selector
 			const char* msaaSampleNames[] = {
 			"1x (No MSAA)", "2x MSAA", "4x MSAA", "8x MSAA"};
 			int currentMsaaIndex = 0;
-			switch (m_msaaSamples)
+			switch (m_renderer.getMsaaSamples())
 			{
 				case VK_SAMPLE_COUNT_1_BIT:
 					currentMsaaIndex = 0;
@@ -521,35 +360,14 @@ void AgniEngine::run()
 						newSamples = VK_SAMPLE_COUNT_8_BIT;
 						break;
 				}
-				if (newSamples != m_msaaSamples)
+				if (newSamples != m_renderer.getMsaaSamples())
 				{
-					m_msaaSamples = newSamples;
+					m_renderer.getMsaaSamples() = newSamples;
 					// Request resize to recreate images and pipelines with new
 					// sample count
 					m_swapchainManager.requestResize();
 				}
 			}
-
-			ComputeEffect& selected =
-			m_backgroundEffects[m_currentBackgroundEffect];
-
-			ImGui::Text("Selected effect: ", selected.m_name);
-
-			ImGui::SliderInt("Effect Index",
-			                 &m_currentBackgroundEffect,
-			                 0,
-			                 static_cast<int>(m_backgroundEffects.size()) - 1);
-
-			ImGui::InputFloat4("data1",
-			                   glm::value_ptr(selected.m_data.m_data1));
-			ImGui::InputFloat4("data2",
-			                   glm::value_ptr(selected.m_data.m_data2));
-			ImGui::InputFloat4("data3",
-			                   glm::value_ptr(selected.m_data.m_data3));
-			ImGui::InputFloat4("data4",
-			                   glm::value_ptr(selected.m_data.m_data4));
-
-			// ImGui::InputFloat3("color", glm::value_ptr(pcForTriangle.color));
 		}
 		ImGui::End();
 
@@ -563,7 +381,7 @@ void AgniEngine::run()
 		// convert to microseconds (integer), and then come back to miliseconds
 		auto frameElapsed =
 		std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-		m_stats.m_frametime = frameElapsed.count() / 1000.f; // in milliseconds
+		m_renderer.getStats().m_frametime = frameElapsed.count() / 1000.f; // in milliseconds
 	}
 }
 
@@ -637,51 +455,6 @@ void AgniEngine::initVulkan()
 void AgniEngine::initSwapchain()
 {
 	m_swapchainManager.init(m_chosenGPU, m_device, m_surface, m_windowExtent);
-
-	// draw and depth image creation.
-	// draw and depth image size will match the window
-	VkExtent3D drawImageExtent = {
-	m_windowExtent.width, m_windowExtent.height, 1};
-
-	VkImageUsageFlags drawImageUsages {};
-	drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-	drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-	drawImageUsages |= VK_IMAGE_USAGE_STORAGE_BIT;
-	drawImageUsages |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-	VkImageUsageFlags msaaImageUsages {};
-	msaaImageUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-	msaaImageUsages |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-	msaaImageUsages |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-	VkImageUsageFlags depthImageUsages {};
-	depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-
-	m_drawImage = m_resourceManager.createImage(
-	drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageUsages);
-
-	// Create MSAA images with multisampling enabled
-	m_msaaColorImage =
-	m_resourceManager.createImage(drawImageExtent,
-	                              VK_FORMAT_R16G16B16A16_SFLOAT,
-	                              msaaImageUsages,
-	                              false,
-	                              m_msaaSamples);
-
-	m_depthImage = m_resourceManager.createImage(drawImageExtent,
-	                                             VK_FORMAT_D32_SFLOAT,
-	                                             depthImageUsages,
-	                                             false,
-	                                             m_msaaSamples);
-
-	// add to deletion queues
-	m_resourceManager.getMainDeletionQueue().push_function(
-	[=]()
-	{
-		m_resourceManager.destroyImage(m_drawImage);
-		m_resourceManager.destroyImage(m_msaaColorImage);
-		m_resourceManager.destroyImage(m_depthImage);
-	});
 }
 
 void AgniEngine::initCommands()
@@ -768,11 +541,6 @@ void AgniEngine::resizeSwapchain()
 {
 	vkDeviceWaitIdle(m_device);
 
-	// Destroy old images
-	m_resourceManager.destroyImage(m_drawImage);
-	m_resourceManager.destroyImage(m_msaaColorImage);
-	m_resourceManager.destroyImage(m_depthImage);
-
 	// Destroy and rebuild pipelines with new MSAA settings
 	m_assetLoader.getMaterialSystem().clearResources(m_device);
 	m_skybox.clearPipelineResources(m_device);
@@ -784,40 +552,8 @@ void AgniEngine::resizeSwapchain()
 
 	m_swapchainManager.resize(m_chosenGPU, m_device, m_surface, m_windowExtent);
 
-	// Recreate images with potentially new MSAA sample count
-	VkExtent3D drawImageExtent = {
-	m_windowExtent.width, m_windowExtent.height, 1};
-
-	VkImageUsageFlags drawImageUsages {};
-	drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-	drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-	drawImageUsages |= VK_IMAGE_USAGE_STORAGE_BIT;
-	drawImageUsages |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-	VkImageUsageFlags msaaImageUsages {};
-	msaaImageUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-	msaaImageUsages |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-	msaaImageUsages |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-	VkImageUsageFlags depthImageUsages {};
-	depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-
-	m_drawImage = m_resourceManager.createImage(
-	drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageUsages);
-
-	// Create MSAA images with multisampling enabled
-	m_msaaColorImage =
-	m_resourceManager.createImage(drawImageExtent,
-	                              VK_FORMAT_R16G16B16A16_SFLOAT,
-	                              msaaImageUsages,
-	                              false,
-	                              m_msaaSamples);
-
-	m_depthImage = m_resourceManager.createImage(drawImageExtent,
-	                                             VK_FORMAT_D32_SFLOAT,
-	                                             depthImageUsages,
-	                                             false,
-	                                             m_msaaSamples);
+	// Resize renderer (recreates render targets with new extent and MSAA settings)
+	m_renderer.resize(this, m_windowExtent, m_renderer.getMsaaSamples());
 
 	// Rebuild pipelines with new MSAA settings
 	m_assetLoader.buildPipelines(this);
@@ -834,40 +570,12 @@ void AgniEngine::initDescriptors()
 
 	m_globalDescriptorAllocator.init(m_device, 10, sizes);
 
-	// make the descriptor set layout for our compute draw
-	{
-		DescriptorLayoutBuilder builder;
-		builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-		m_drawImageDescriptorLayout =
-		builder.build(m_device, VK_SHADER_STAGE_COMPUTE_BIT);
-	}
-
-	m_drawImageDescriptors =
-	m_globalDescriptorAllocator.allocate(m_device, m_drawImageDescriptorLayout);
-
 	{
 		DescriptorLayoutBuilder builder;
 		builder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 		m_singleImageDescriptorLayout =
 		builder.build(m_device, VK_SHADER_STAGE_FRAGMENT_BIT);
 	}
-
-	{
-		DescriptorLayoutBuilder builder;
-		builder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-		m_gpuSceneDataDescriptorLayout = builder.build(
-		m_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-	}
-
-	DescriptorWriter writer;
-	writer.writeImage(0,
-	                  m_drawImage.m_imageView,
-	                  VK_NULL_HANDLE,
-	                  VK_IMAGE_LAYOUT_GENERAL,
-	                  VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-
-	writer.updateSet(m_device, m_drawImageDescriptors);
-
 
 	for (int i = 0; i < FRAME_OVERLAP; i++)
 	{
@@ -892,122 +600,14 @@ void AgniEngine::initDescriptors()
 	{
 		m_globalDescriptorAllocator.destroyPools(m_device);
 		vkDestroyDescriptorSetLayout(
-		m_device, m_drawImageDescriptorLayout, nullptr);
-		vkDestroyDescriptorSetLayout(
 		m_device, m_singleImageDescriptorLayout, nullptr);
-		vkDestroyDescriptorSetLayout(
-		m_device, m_gpuSceneDataDescriptorLayout, nullptr);
 	});
 }
 
 void AgniEngine::initPipelines()
 {
-
-	initBackgroundPipelines();
-
 	m_assetLoader.buildPipelines(this);
-
 	m_skybox.buildPipelines(this);
-}
-
-void AgniEngine::initBackgroundPipelines()
-{
-
-	VkPipelineLayoutCreateInfo computeLayout {};
-	computeLayout.sType       = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	computeLayout.pNext       = nullptr;
-	computeLayout.pSetLayouts = &m_drawImageDescriptorLayout;
-	computeLayout.setLayoutCount = 1;
-
-	VkPushConstantRange pushConstant {};
-	pushConstant.offset     = 0;
-	pushConstant.size       = sizeof(ComputePushConstants);
-	pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-	computeLayout.pPushConstantRanges    = &pushConstant;
-	computeLayout.pushConstantRangeCount = 1;
-
-	VK_CHECK(vkCreatePipelineLayout(
-	m_device, &computeLayout, nullptr, &m_gradientPipelineLayout));
-
-	VkShaderModule gradientShader;
-	if (!vkutil::loadShaderModule("../../shaders/glsl/gradient_color.comp.spv",
-	                              m_device,
-	                              &gradientShader))
-	{
-		fmt::print("Error when building the compute shader \n");
-	}
-
-	VkShaderModule skyShader;
-	if (!vkutil::loadShaderModule(
-	    "../../shaders//glsl/sky.comp.spv", m_device, &skyShader))
-	{
-		fmt::print("Error when building the compute shader \n");
-	}
-
-	VkPipelineShaderStageCreateInfo stageinfo {};
-	stageinfo.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	stageinfo.pNext  = nullptr;
-	stageinfo.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
-	stageinfo.module = gradientShader;
-	stageinfo.pName  = "main";
-
-	VkComputePipelineCreateInfo computePipelineCreateInfo {};
-	computePipelineCreateInfo.sType =
-	VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-	computePipelineCreateInfo.pNext              = nullptr;
-	computePipelineCreateInfo.layout             = m_gradientPipelineLayout;
-	computePipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
-	computePipelineCreateInfo.stage              = stageinfo;
-
-	ComputeEffect gradient;
-	gradient.m_layout = m_gradientPipelineLayout;
-	gradient.m_name   = "gradient";
-	gradient.m_data   = {};
-
-	// default colors
-	gradient.m_data.m_data1 = glm::vec4(1, 0, 0, 1);
-	gradient.m_data.m_data2 = glm::vec4(0, 0, 1, 1);
-
-	VK_CHECK(vkCreateComputePipelines(m_device,
-	                                  VK_NULL_HANDLE,
-	                                  1,
-	                                  &computePipelineCreateInfo,
-	                                  nullptr,
-	                                  &gradient.m_pipeline));
-
-	// change the shader module only to create the sky shader
-	computePipelineCreateInfo.stage.module = skyShader;
-
-	ComputeEffect sky;
-	sky.m_layout = m_gradientPipelineLayout;
-	sky.m_name   = "sky";
-	sky.m_data   = {};
-	// default sky parameters
-	sky.m_data.m_data1 = glm::vec4(0.1, 0.2, 0.4, 0.97);
-
-	VK_CHECK(vkCreateComputePipelines(m_device,
-	                                  VK_NULL_HANDLE,
-	                                  1,
-	                                  &computePipelineCreateInfo,
-	                                  nullptr,
-	                                  &sky.m_pipeline));
-
-	// add the 2 background effects into the array
-	m_backgroundEffects.push_back(gradient);
-	m_backgroundEffects.push_back(sky);
-
-
-	vkDestroyShaderModule(m_device, gradientShader, nullptr);
-	vkDestroyShaderModule(m_device, skyShader, nullptr);
-
-	m_resourceManager.getMainDeletionQueue().push_function(
-	[=, this]()
-	{
-		vkDestroyPipelineLayout(m_device, m_gradientPipelineLayout, nullptr);
-		vkDestroyPipeline(m_device, sky.m_pipeline, nullptr);
-		vkDestroyPipeline(m_device, gradient.m_pipeline, nullptr);
-	});
 }
 
 void AgniEngine::initImgui()
@@ -1110,8 +710,8 @@ void AgniEngine::initDefaultData()
 
 	assert(helmetPathFile.has_value());
 
-	// m_loadedScenes["structure"] = *structureFile;
-	m_loadedScenes["helmet"] = *helmetPathFile;
+	// m_renderer.getLoadedScenes()["structure"] = *structureFile;
+	m_renderer.getLoadedScenes()["helmet"] = *helmetPathFile;
 
 	// Initialize m_skybox
 	// Load cubemap faces (order: right, left, top, bottom, front, back for
@@ -1126,293 +726,6 @@ void AgniEngine::initDefaultData()
 	};
 
 	m_skybox.init(this, cubemapFaces);
-}
-
-void AgniEngine::drawGeometry(VkCommandBuffer cmd)
-{
-	// reset counters
-	m_stats.m_drawcallCount = 0;
-	m_stats.m_triangleCount = 0;
-	// begin clock
-	auto start = std::chrono::system_clock::now();
-
-	std::vector<uint32_t> opaqueDraws;
-	opaqueDraws.reserve(m_mainDrawContext.m_OpaqueSurfaces.size());
-	std::vector<uint32_t> transparentDraws;
-	transparentDraws.reserve(m_mainDrawContext.m_TransparentSurfaces.size());
-
-	for (uint32_t i = 0; i < m_mainDrawContext.m_OpaqueSurfaces.size(); i++)
-	{
-		if (isVisible(m_mainDrawContext.m_OpaqueSurfaces[i],
-		              m_sceneData.m_viewproj))
-		{
-			opaqueDraws.push_back(i);
-		}
-	}
-	for (uint32_t i = 0; i < m_mainDrawContext.m_TransparentSurfaces.size();
-	     i++)
-	{
-		if (isVisible(m_mainDrawContext.m_TransparentSurfaces[i],
-		              m_sceneData.m_viewproj))
-		{
-			transparentDraws.push_back(i);
-		}
-	}
-	// std::algorithms has a very handy sort function we can use to sort the
-	// opaqueDraws vector. We give it a lambda that defines a < operator, and
-	// it sorts it efficiently for us.
-
-	// We will first index the draw array, and check if the material is the
-	// same, and if it is, sort by indexBuffer. But if its not, then we directly
-	// compare the material pointer. Another way of doing this is that we would
-	// calculate a sort key , and then our opaqueDraws would be something like
-	// 20 bits draw index, and 44 bits for sort key/hash. That way would be
-	// faster than this as it can be sorted through faster methods.
-
-	//  sort the opaque surfaces by material and mesh
-	std::sort(opaqueDraws.begin(),
-	          opaqueDraws.end(),
-	          [&](const auto& iA, const auto& iB)
-	          {
-		          const RenderObject& A =
-		          m_mainDrawContext.m_OpaqueSurfaces[iA];
-		          const RenderObject& B =
-		          m_mainDrawContext.m_OpaqueSurfaces[iB];
-		          if (A.m_material == B.m_material)
-		          {
-			          return A.m_indexBuffer < B.m_indexBuffer;
-		          }
-		          else
-		          {
-			          return A.m_material < B.m_material;
-		          }
-	          });
-
-	//  sort the transparent surfaces by distance from bounds to the camera
-	std::sort(
-	transparentDraws.begin(),
-	transparentDraws.end(),
-	[&](const auto& iA, const auto& iB)
-	{
-		const RenderObject& A = m_mainDrawContext.m_TransparentSurfaces[iA];
-		const RenderObject& B = m_mainDrawContext.m_TransparentSurfaces[iB];
-		// Calculate distance from camera to object center
-		glm::vec3 centerA =
-		glm::vec3(A.m_transform * glm::vec4(A.m_bounds.m_origin, 1.0f));
-		glm::vec3 centerB =
-		glm::vec3(B.m_transform * glm::vec4(B.m_bounds.m_origin, 1.0f));
-
-		float distA = glm::length(m_mainCamera.m_position - centerA);
-		float distB = glm::length(m_mainCamera.m_position - centerB);
-
-		// Sort back to front (larger distance first)
-		return distA > distB;
-	});
-
-
-	// begin a render pass with MSAA images that resolve to draw image
-	VkRenderingAttachmentInfo colorAttachment =
-	vkinit::attachmentInfoMsaa(m_msaaColorImage.m_imageView,
-	                           m_drawImage.m_imageView,
-	                           nullptr,
-	                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	VkRenderingAttachmentInfo depthAttachment = vkinit::depthAttachmentInfo(
-	m_depthImage.m_imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-
-	VkRenderingInfo renderInfo =
-	vkinit::renderingInfo(m_drawExtent, &colorAttachment, &depthAttachment);
-	vkCmdBeginRendering(cmd, &renderInfo);
-
-	// this is not the best way to do it. it's just one way to do it. It would
-	// be better to hold the buffers cached in our FrameData structure, but we
-	// will be doing it this way to show how. There are cases with dynamic draws
-	// and passes where you might want to do it this way.
-	//  allocate a new uniform buffer for the scene data
-	AllocatedBuffer gpuSceneDataBuffer =
-	m_resourceManager.createBuffer(sizeof(GPUSceneData),
-	                               VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-	                               VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-	// add it to the deletion queue of this frame so it gets deleted once its
-	// been used
-	getCurrentFrame().m_deletionQueue.push_function(
-	[=, this]() { m_resourceManager.destroyBuffer(gpuSceneDataBuffer); });
-
-	// write the buffer
-	GPUSceneData* sceneUniformData =
-	(GPUSceneData*) gpuSceneDataBuffer.m_allocation->GetMappedData();
-	*sceneUniformData = m_sceneData;
-
-	// create a descriptor set that binds that buffer and update it
-	VkDescriptorSet globalDescriptor =
-	getCurrentFrame().m_frameDescriptors.allocate(
-	m_device, m_gpuSceneDataDescriptorLayout);
-
-	DescriptorWriter writer;
-	writer.writeBuffer(0,
-	                   gpuSceneDataBuffer.m_buffer,
-	                   sizeof(GPUSceneData),
-	                   0,
-	                   VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-	writer.updateSet(m_device, globalDescriptor);
-
-	// keep track of what state we are binding, and only call it again if we
-	// have to as it changes with the draw.
-	// this is the state we will try to skip
-	MaterialPipeline* lastPipeline    = nullptr;
-	MaterialInstance* lastMaterial    = nullptr;
-	VkBuffer          lastIndexBuffer = VK_NULL_HANDLE;
-
-
-	auto draw = [&](const RenderObject& r)
-	{
-		if (r.m_material != lastMaterial)
-		{
-			lastMaterial = r.m_material;
-
-			// rebind pipeline and descriptors if the material changed
-			if (r.m_material->m_pipeline != lastPipeline)
-			{
-
-				lastPipeline = r.m_material->m_pipeline;
-				vkCmdBindPipeline(cmd,
-				                  VK_PIPELINE_BIND_POINT_GRAPHICS,
-				                  r.m_material->m_pipeline->m_pipeline);
-				vkCmdBindDescriptorSets(cmd,
-				                        VK_PIPELINE_BIND_POINT_GRAPHICS,
-				                        r.m_material->m_pipeline->m_layout,
-				                        0,
-				                        1,
-				                        &globalDescriptor,
-				                        0,
-				                        nullptr);
-
-				// set dynamic viewport and scissor
-				VkViewport viewport = {};
-				viewport.x          = 0;
-				viewport.y          = 0;
-				viewport.width      = static_cast<float>(m_drawExtent.width);
-				viewport.height     = static_cast<float>(m_drawExtent.height);
-				viewport.minDepth   = 0.f;
-				viewport.maxDepth   = 1.f;
-
-				vkCmdSetViewport(cmd, 0, 1, &viewport);
-
-				VkRect2D scissor      = {};
-				scissor.offset.x      = 0;
-				scissor.offset.y      = 0;
-				scissor.extent.width  = m_drawExtent.width;
-				scissor.extent.height = m_drawExtent.height;
-
-				vkCmdSetScissor(cmd, 0, 1, &scissor);
-			}
-
-			vkCmdBindDescriptorSets(cmd,
-			                        VK_PIPELINE_BIND_POINT_GRAPHICS,
-			                        r.m_material->m_pipeline->m_layout,
-			                        1,
-			                        1,
-			                        &r.m_material->m_materialSet,
-			                        0,
-			                        nullptr);
-		}
-
-		// rebind index buffer if needed
-		if (r.m_indexBuffer != lastIndexBuffer)
-		{
-			lastIndexBuffer = r.m_indexBuffer;
-			vkCmdBindIndexBuffer(cmd, r.m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-		}
-
-		// calculate final mesh matrix
-		GPUDrawPushConstants push_constants;
-		push_constants.m_worldMatrix  = r.m_transform;
-		push_constants.m_vertexBuffer = r.m_vertexBufferAddress;
-
-		vkCmdPushConstants(cmd,
-		                   r.m_material->m_pipeline->m_layout,
-		                   VK_SHADER_STAGE_VERTEX_BIT,
-		                   0,
-		                   sizeof(GPUDrawPushConstants),
-		                   &push_constants);
-
-		vkCmdDrawIndexed(cmd, r.m_indexCount, 1, r.m_firstIndex, 0, 0);
-
-		// add counters for triangles and draws
-		m_stats.m_drawcallCount++;
-		m_stats.m_triangleCount += r.m_indexCount / 3;
-	};
-
-	for (auto& r : opaqueDraws)
-	{
-		draw(m_mainDrawContext.m_OpaqueSurfaces[r]);
-	}
-
-	for (auto& r : transparentDraws)
-	{
-		draw(m_mainDrawContext.m_TransparentSurfaces[r]);
-	}
-
-	// Draw m_skybox last (after all geometry)
-	m_skybox.draw(cmd, globalDescriptor, m_drawExtent);
-
-	vkCmdEndRendering(cmd);
-
-	auto end = std::chrono::system_clock::now();
-
-	// convert to microseconds (integer), and then come back to miliseconds
-	auto elapsed =
-	std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-	m_stats.m_meshDrawTime = elapsed.count() / 1000.f;
-}
-
-void AgniEngine::updateScene()
-{
-	// begin clock
-	auto start = std::chrono::system_clock::now();
-
-	m_mainDrawContext.m_OpaqueSurfaces.clear();
-	m_mainDrawContext.m_TransparentSurfaces.clear();
-
-	m_mainCamera.update(m_deltaTime);
-	// camera view
-	glm::mat4 view = m_mainCamera.getViewMatrix();
-	// camera projection
-	glm::mat4 projection = glm::perspective(glm::radians(70.f),
-	                                        (float) m_windowExtent.width /
-	                                        (float) m_windowExtent.height,
-	                                        10000.f,
-	                                        0.1f);
-
-	// invert the Y direction on projection matrix so that we are more similar
-	// to opengl and gltf axis
-	projection[1][1] *= -1;
-
-	// m_loadedScenes["structure"]->Draw(glm::mat4 {1.f}, m_mainDrawContext);
-	m_loadedScenes["helmet"]->Draw(glm::mat4 {1.f}, m_mainDrawContext);
-
-
-	m_sceneData.m_view = view;
-	// camera projection
-	m_sceneData.m_proj = projection;
-
-	// invert the Y direction on projection matrix so that we are more similar
-	// to opengl and gltf axis
-	// m_sceneData.proj[1][1] *= -1;
-	m_sceneData.m_viewproj = projection * view;
-
-	// some default lighting parameters
-	m_sceneData.m_ambientColor      = glm::vec4(.1f);
-	m_sceneData.m_sunlightColor     = glm::vec4(1.f);
-	m_sceneData.m_sunlightDirection = glm::vec4(0, 1, 0.5, 1.f);
-	m_sceneData.m_cameraPosition    = m_mainCamera.m_position;
-
-	auto end = std::chrono::system_clock::now();
-
-	// convert to microseconds (integer), and then come back to miliseconds
-	auto elapsed =
-	std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-	m_stats.m_sceneUpdateTime = elapsed.count() / 1000.f;
 }
 
 void MeshNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
