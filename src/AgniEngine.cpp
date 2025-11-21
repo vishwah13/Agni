@@ -149,8 +149,6 @@ void AgniEngine::cleanup()
 			m_frames[i].m_deletionQueue.flush();
 		}
 
-		m_metalRoughMaterial.clearResources(m_device);
-
 		// Cleanup m_skybox resources
 		m_skybox.cleanup(this);
 
@@ -776,7 +774,7 @@ void AgniEngine::resizeSwapchain()
 	m_resourceManager.destroyImage(m_depthImage);
 
 	// Destroy and rebuild pipelines with new MSAA settings
-	m_metalRoughMaterial.clearResources(m_device);
+	m_assetLoader.getMaterialSystem().clearResources(m_device);
 	m_skybox.clearPipelineResources(m_device);
 
 	int w, h;
@@ -822,7 +820,7 @@ void AgniEngine::resizeSwapchain()
 	                                             m_msaaSamples);
 
 	// Rebuild pipelines with new MSAA settings
-	m_metalRoughMaterial.buildPipelines(this);
+	m_assetLoader.buildPipelines(this);
 	m_skybox.buildPipelines(this);
 }
 
@@ -907,7 +905,7 @@ void AgniEngine::initPipelines()
 
 	initBackgroundPipelines();
 
-	m_metalRoughMaterial.buildPipelines(this);
+	m_assetLoader.buildPipelines(this);
 
 	m_skybox.buildPipelines(this);
 }
@@ -1105,36 +1103,6 @@ void AgniEngine::initDefaultData()
 	// Initialize asset loader (creates default textures and shared samplers)
 	m_assetLoader.init(&m_resourceManager, m_device);
 
-	GltfPbrMaterial::MaterialResources materialResources;
-	// default the material textures
-	materialResources.m_colorTexture      = m_assetLoader.getWhiteTexture();
-	materialResources.m_metalRoughTexture = m_assetLoader.getWhiteTexture();
-	materialResources.m_normalTexture     = m_assetLoader.getWhiteTexture();
-	materialResources.m_aoTexture         = m_assetLoader.getWhiteTexture();
-
-	// set the uniform buffer for the material data
-	AllocatedBuffer materialConstants =
-	m_resourceManager.createBuffer(sizeof(GltfPbrMaterial::MaterialConstants),
-	                               VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-	                               VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-	// write the buffer
-	GltfPbrMaterial::MaterialConstants* sceneUniformData =
-	(GltfPbrMaterial::MaterialConstants*)
-	materialConstants.m_allocation->GetMappedData();
-	sceneUniformData->m_colorFactors        = glm::vec4 {1, 1, 1, 1};
-	sceneUniformData->m_metal_rough_factors = glm::vec4 {1, 0.5, 0, 0};
-
-	materialResources.m_dataBuffer       = materialConstants.m_buffer;
-	materialResources.m_dataBufferOffset = 0;
-
-	// need to move the default material to assetLoader or somewhere appropriate
-	m_defaultData =
-	m_metalRoughMaterial.writeMaterial(m_device,
-	                                   MaterialPass::MainColor,
-	                                   materialResources,
-	                                   m_globalDescriptorAllocator);
-
 	// std::string structurePath = {"../../assets/structure.glb"};
 	std::string helmetPath = {"../../assets/flighthelmet/helmet.glb"};
 	// auto        structureFile = m_assetLoader.loadGltf(this, structurePath);
@@ -1158,9 +1126,6 @@ void AgniEngine::initDefaultData()
 	};
 
 	m_skybox.init(this, cubemapFaces);
-
-	m_resourceManager.getMainDeletionQueue().push_function(
-	[=, this]() { m_resourceManager.destroyBuffer(materialConstants); });
 }
 
 void AgniEngine::drawGeometry(VkCommandBuffer cmd)

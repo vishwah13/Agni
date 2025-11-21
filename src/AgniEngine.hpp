@@ -200,10 +200,6 @@ public:
 	// Asset loader (manages default textures, materials, and loading)
 	AssetLoader m_assetLoader;
 
-	// default materials
-	MaterialInstance m_defaultData;
-	GltfPbrMaterial  m_metalRoughMaterial;
-
 	// m_skybox
 	Skybox m_skybox;
 
