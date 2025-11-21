@@ -840,7 +840,7 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 			newmesh->m_surfaces.push_back(newSurface);
 		}
 
-		newmesh->m_meshBuffers = engine->uploadMesh(indices, vertices);
+		newmesh->m_meshBuffers = engine->m_resourceManager.uploadMesh(indices, vertices);
 	}
 
 	// load all nodes and their meshes

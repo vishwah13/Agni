@@ -197,9 +197,6 @@ public:
 	// run main loop
 	void run();
 
-	GPUMeshBuffers uploadMesh(std::span<uint32_t> indices,
-	                          std::span<Vertex>   vertices);
-
 	// Asset loader (manages default textures, materials, and loading)
 	AssetLoader m_assetLoader;
 

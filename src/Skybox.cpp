@@ -248,7 +248,7 @@ void Skybox::createCubeMesh(AgniEngine* engine)
 	20, 21, 22, 22, 23, 20  // Left
 	};
 
-	m_meshBuffers = engine->uploadMesh(cubeIndices, cubeVertices);
+	m_meshBuffers = engine->m_resourceManager.uploadMesh(cubeIndices, cubeVertices);
 	m_indexCount  = static_cast<uint32_t>(cubeIndices.size());
 	m_firstIndex  = 0;
 }
