@@ -10,6 +10,11 @@
 
 // Forward declarations
 class AgniEngine;
+class SwapchainManager;
+class ResourceManager;
+class Camera;
+class Skybox;
+struct FrameData;
 
 struct EngineStats
 {
@@ -62,14 +67,21 @@ public:
 	Renderer()  = default;
 	~Renderer() = default;
 
-	void init(AgniEngine* engine);
-	void cleanup(AgniEngine* engine);
-	void resize(AgniEngine* engine, VkExtent2D newExtent, VkSampleCountFlagBits msaaSamples);
+	void init(VkDevice                     device,
+	          ResourceManager*             resourceManager,
+	          SwapchainManager*            swapchainManager,
+	          Camera*                      camera,
+	          Skybox*                      skybox,
+	          DescriptorAllocatorGrowable* globalDescriptorAllocator,
+	          VkExtent2D                   windowExtent);
+	void cleanup();
+	void resize(VkExtent2D newExtent, VkSampleCountFlagBits msaaSamples);
 
-	void renderFrame(AgniEngine*     engine,
-	                 VkCommandBuffer cmd,
-	                 uint32_t        swapchainImageIndex);
-	void updateScene(AgniEngine* engine, float deltaTime);
+	void renderFrame(VkCommandBuffer cmd,
+	                 uint32_t        swapchainImageIndex,
+	                 FrameData&      currentFrame,
+	                 VkExtent2D      windowExtent);
+	void updateScene(float deltaTime, VkExtent2D windowExtent);
 
 	// Accessors
 	float& getRenderScale()
@@ -111,6 +123,14 @@ public:
 	}
 
 private:
+	// Dependencies (set during init)
+	VkDevice                        m_device                     = VK_NULL_HANDLE;
+	ResourceManager*                m_resourceManager            = nullptr;
+	SwapchainManager*               m_swapchainManager           = nullptr;
+	Camera*                         m_camera                     = nullptr;
+	Skybox*                         m_skybox                     = nullptr;
+	DescriptorAllocatorGrowable*    m_globalDescriptorAllocator = nullptr;
+
 	// Render targets
 	AllocatedImage m_drawImage;
 	AllocatedImage m_depthImage;
@@ -141,12 +161,12 @@ private:
 	EngineStats m_stats;
 
 	// Private rendering functions
-	void drawBackground(AgniEngine* engine, VkCommandBuffer cmd);
-	void drawGeometry(AgniEngine* engine, VkCommandBuffer cmd);
-	void drawImgui(AgniEngine* engine, VkCommandBuffer cmd, VkImageView targetImageView);
+	void drawBackground(VkCommandBuffer cmd);
+	void drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame);
+	void drawImgui(VkCommandBuffer cmd, VkImageView targetImageView);
 
 	// Initialization helpers
-	void initRenderTargets(AgniEngine* engine);
-	void initDescriptors(AgniEngine* engine);
-	void initBackgroundPipelines(AgniEngine* engine);
+	void initRenderTargets(VkExtent2D windowExtent);
+	void initDescriptors();
+	void initBackgroundPipelines();
 };

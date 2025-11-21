@@ -57,43 +57,56 @@ static bool isVisible(const RenderObject& obj, const glm::mat4& viewproj)
 	}
 }
 
-void Renderer::init(AgniEngine* engine)
+void Renderer::init(VkDevice                     device,
+                    ResourceManager*             resourceManager,
+                    SwapchainManager*            swapchainManager,
+                    Camera*                      camera,
+                    Skybox*                      skybox,
+                    DescriptorAllocatorGrowable* globalDescriptorAllocator,
+                    VkExtent2D                   windowExtent)
 {
-	initRenderTargets(engine);
-	initDescriptors(engine);
-	initBackgroundPipelines(engine);
+	m_device                     = device;
+	m_resourceManager            = resourceManager;
+	m_swapchainManager           = swapchainManager;
+	m_camera                     = camera;
+	m_skybox                     = skybox;
+	m_globalDescriptorAllocator  = globalDescriptorAllocator;
+
+	initRenderTargets(windowExtent);
+	initDescriptors();
+	initBackgroundPipelines();
 }
 
-void Renderer::cleanup(AgniEngine* engine)
+void Renderer::cleanup()
 {
 	// Cleanup render targets
-	engine->m_resourceManager.destroyImage(m_drawImage);
-	engine->m_resourceManager.destroyImage(m_msaaColorImage);
-	engine->m_resourceManager.destroyImage(m_depthImage);
+	m_resourceManager->destroyImage(m_drawImage);
+	m_resourceManager->destroyImage(m_msaaColorImage);
+	m_resourceManager->destroyImage(m_depthImage);
 
 	// Cleanup pipelines
-	vkDestroyPipelineLayout(engine->m_device, m_gradientPipelineLayout, nullptr);
+	vkDestroyPipelineLayout(m_device, m_gradientPipelineLayout, nullptr);
 	for (auto& effect : m_backgroundEffects)
 	{
-		vkDestroyPipeline(engine->m_device, effect.m_pipeline, nullptr);
+		vkDestroyPipeline(m_device, effect.m_pipeline, nullptr);
 	}
 
 	// Cleanup descriptor layouts
-	vkDestroyDescriptorSetLayout(engine->m_device, m_drawImageDescriptorLayout, nullptr);
-	vkDestroyDescriptorSetLayout(engine->m_device, m_gpuSceneDataDescriptorLayout, nullptr);
+	vkDestroyDescriptorSetLayout(m_device, m_drawImageDescriptorLayout, nullptr);
+	vkDestroyDescriptorSetLayout(m_device, m_gpuSceneDataDescriptorLayout, nullptr);
 
 	// Clear loaded scenes
 	m_loadedScenes.clear();
 }
 
-void Renderer::resize(AgniEngine* engine, VkExtent2D newExtent, VkSampleCountFlagBits msaaSamples)
+void Renderer::resize(VkExtent2D newExtent, VkSampleCountFlagBits msaaSamples)
 {
 	m_msaaSamples = msaaSamples;
 
 	// Destroy old render targets
-	engine->m_resourceManager.destroyImage(m_drawImage);
-	engine->m_resourceManager.destroyImage(m_msaaColorImage);
-	engine->m_resourceManager.destroyImage(m_depthImage);
+	m_resourceManager->destroyImage(m_drawImage);
+	m_resourceManager->destroyImage(m_msaaColorImage);
+	m_resourceManager->destroyImage(m_depthImage);
 
 	// Recreate render targets with new extent and MSAA settings
 	VkExtent3D drawImageExtent = {newExtent.width, newExtent.height, 1};
@@ -112,27 +125,27 @@ void Renderer::resize(AgniEngine* engine, VkExtent2D newExtent, VkSampleCountFla
 	VkImageUsageFlags depthImageUsages {};
 	depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
-	m_drawImage = engine->m_resourceManager.createImage(
+	m_drawImage = m_resourceManager->createImage(
 	drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageUsages);
 
 	m_msaaColorImage =
-	engine->m_resourceManager.createImage(drawImageExtent,
+	m_resourceManager->createImage(drawImageExtent,
 	                              VK_FORMAT_R16G16B16A16_SFLOAT,
 	                              msaaImageUsages,
 	                              false,
 	                              m_msaaSamples);
 
-	m_depthImage = engine->m_resourceManager.createImage(drawImageExtent,
+	m_depthImage = m_resourceManager->createImage(drawImageExtent,
 	                                             VK_FORMAT_D32_SFLOAT,
 	                                             depthImageUsages,
 	                                             false,
 	                                             m_msaaSamples);
 }
 
-void Renderer::initRenderTargets(AgniEngine* engine)
+void Renderer::initRenderTargets(VkExtent2D windowExtent)
 {
 	VkExtent3D drawImageExtent = {
-	engine->m_windowExtent.width, engine->m_windowExtent.height, 1};
+	windowExtent.width, windowExtent.height, 1};
 
 	VkImageUsageFlags drawImageUsages {};
 	drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
@@ -148,42 +161,42 @@ void Renderer::initRenderTargets(AgniEngine* engine)
 	VkImageUsageFlags depthImageUsages {};
 	depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
-	m_drawImage = engine->m_resourceManager.createImage(
+	m_drawImage = m_resourceManager->createImage(
 	drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageUsages);
 
 	m_msaaColorImage =
-	engine->m_resourceManager.createImage(drawImageExtent,
+	m_resourceManager->createImage(drawImageExtent,
 	                              VK_FORMAT_R16G16B16A16_SFLOAT,
 	                              msaaImageUsages,
 	                              false,
 	                              m_msaaSamples);
 
-	m_depthImage = engine->m_resourceManager.createImage(drawImageExtent,
+	m_depthImage = m_resourceManager->createImage(drawImageExtent,
 	                                             VK_FORMAT_D32_SFLOAT,
 	                                             depthImageUsages,
 	                                             false,
 	                                             m_msaaSamples);
 }
 
-void Renderer::initDescriptors(AgniEngine* engine)
+void Renderer::initDescriptors()
 {
 	// Create descriptor set layout for draw image (compute shader)
 	{
 		DescriptorLayoutBuilder builder;
 		builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		m_drawImageDescriptorLayout =
-		builder.build(engine->m_device, VK_SHADER_STAGE_COMPUTE_BIT);
+		builder.build(m_device, VK_SHADER_STAGE_COMPUTE_BIT);
 	}
 
 	m_drawImageDescriptors =
-	engine->m_globalDescriptorAllocator.allocate(engine->m_device, m_drawImageDescriptorLayout);
+	m_globalDescriptorAllocator->allocate(m_device, m_drawImageDescriptorLayout);
 
 	// Create descriptor set layout for GPU scene data
 	{
 		DescriptorLayoutBuilder builder;
 		builder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 		m_gpuSceneDataDescriptorLayout = builder.build(
-		engine->m_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+		m_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 	}
 
 	// Write descriptor for draw image
@@ -194,10 +207,10 @@ void Renderer::initDescriptors(AgniEngine* engine)
 	                  VK_IMAGE_LAYOUT_GENERAL,
 	                  VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
-	writer.updateSet(engine->m_device, m_drawImageDescriptors);
+	writer.updateSet(m_device, m_drawImageDescriptors);
 }
 
-void Renderer::initBackgroundPipelines(AgniEngine* engine)
+void Renderer::initBackgroundPipelines()
 {
 	VkPipelineLayoutCreateInfo computeLayout {};
 	computeLayout.sType       = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -214,11 +227,11 @@ void Renderer::initBackgroundPipelines(AgniEngine* engine)
 	computeLayout.pushConstantRangeCount = 1;
 
 	VK_CHECK(vkCreatePipelineLayout(
-	engine->m_device, &computeLayout, nullptr, &m_gradientPipelineLayout));
+	m_device, &computeLayout, nullptr, &m_gradientPipelineLayout));
 
 	VkShaderModule gradientShader;
 	if (!vkutil::loadShaderModule("../../shaders/glsl/gradient_color.comp.spv",
-	                              engine->m_device,
+	                              m_device,
 	                              &gradientShader))
 	{
 		fmt::print("Error when building the compute shader \n");
@@ -226,7 +239,7 @@ void Renderer::initBackgroundPipelines(AgniEngine* engine)
 
 	VkShaderModule skyShader;
 	if (!vkutil::loadShaderModule(
-	    "../../shaders//glsl/sky.comp.spv", engine->m_device, &skyShader))
+	    "../../shaders//glsl/sky.comp.spv", m_device, &skyShader))
 	{
 		fmt::print("Error when building the compute shader \n");
 	}
@@ -255,7 +268,7 @@ void Renderer::initBackgroundPipelines(AgniEngine* engine)
 	gradient.m_data.m_data1 = glm::vec4(1, 0, 0, 1);
 	gradient.m_data.m_data2 = glm::vec4(0, 0, 1, 1);
 
-	VK_CHECK(vkCreateComputePipelines(engine->m_device,
+	VK_CHECK(vkCreateComputePipelines(m_device,
 	                                  VK_NULL_HANDLE,
 	                                  1,
 	                                  &computePipelineCreateInfo,
@@ -272,7 +285,7 @@ void Renderer::initBackgroundPipelines(AgniEngine* engine)
 	// default sky parameters
 	sky.m_data.m_data1 = glm::vec4(0.1, 0.2, 0.4, 0.97);
 
-	VK_CHECK(vkCreateComputePipelines(engine->m_device,
+	VK_CHECK(vkCreateComputePipelines(m_device,
 	                                  VK_NULL_HANDLE,
 	                                  1,
 	                                  &computePipelineCreateInfo,
@@ -283,19 +296,20 @@ void Renderer::initBackgroundPipelines(AgniEngine* engine)
 	m_backgroundEffects.push_back(gradient);
 	m_backgroundEffects.push_back(sky);
 
-	vkDestroyShaderModule(engine->m_device, gradientShader, nullptr);
-	vkDestroyShaderModule(engine->m_device, skyShader, nullptr);
+	vkDestroyShaderModule(m_device, gradientShader, nullptr);
+	vkDestroyShaderModule(m_device, skyShader, nullptr);
 }
 
-void Renderer::renderFrame(AgniEngine*     engine,
-                            VkCommandBuffer cmd,
-                            uint32_t        swapchainImageIndex)
+void Renderer::renderFrame(VkCommandBuffer cmd,
+                            uint32_t        swapchainImageIndex,
+                            FrameData&      currentFrame,
+                            VkExtent2D      windowExtent)
 {
 	m_drawExtent.width =
-	std::min(engine->m_swapchainManager.getSwapchainExtent().width, m_drawImage.m_imageExtent.width) *
+	std::min(m_swapchainManager->getSwapchainExtent().width, m_drawImage.m_imageExtent.width) *
 	m_renderScale;
 	m_drawExtent.height =
-	std::min(engine->m_swapchainManager.getSwapchainExtent().height, m_drawImage.m_imageExtent.height) *
+	std::min(m_swapchainManager->getSwapchainExtent().height, m_drawImage.m_imageExtent.height) *
 	m_renderScale;
 
 	// Transition MSAA images for rendering
@@ -314,7 +328,7 @@ void Renderer::renderFrame(AgniEngine*     engine,
 	                        VK_IMAGE_LAYOUT_UNDEFINED,
 	                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-	drawGeometry(engine, cmd);
+	drawGeometry(cmd, currentFrame);
 
 	// transtion the draw image and the swapchain image into their correct
 	// transfer layouts
@@ -324,32 +338,32 @@ void Renderer::renderFrame(AgniEngine*     engine,
 	                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
 	vkutil::transitionImage(cmd,
-	                        engine->m_swapchainManager.getSwapchainImages()[swapchainImageIndex],
+	                        m_swapchainManager->getSwapchainImages()[swapchainImageIndex],
 	                        VK_IMAGE_LAYOUT_UNDEFINED,
 	                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 	// execute a copy from the draw image into the swapchain
 	vkutil::copyImageToImage(cmd,
 	                         m_drawImage.m_image,
-	                         engine->m_swapchainManager.getSwapchainImages()[swapchainImageIndex],
+	                         m_swapchainManager->getSwapchainImages()[swapchainImageIndex],
 	                         m_drawExtent,
-	                         engine->m_swapchainManager.getSwapchainExtent());
+	                         m_swapchainManager->getSwapchainExtent());
 
 	vkutil::transitionImage(cmd,
-	                        engine->m_swapchainManager.getSwapchainImages()[swapchainImageIndex],
+	                        m_swapchainManager->getSwapchainImages()[swapchainImageIndex],
 	                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 	                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-	drawImgui(engine, cmd, engine->m_swapchainManager.getSwapchainImageViews()[swapchainImageIndex]);
+	drawImgui(cmd, m_swapchainManager->getSwapchainImageViews()[swapchainImageIndex]);
 
 	// make the swapchain image into presentable mode
 	vkutil::transitionImage(cmd,
-	                        engine->m_swapchainManager.getSwapchainImages()[swapchainImageIndex],
+	                        m_swapchainManager->getSwapchainImages()[swapchainImageIndex],
 	                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	                        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 }
 
-void Renderer::drawBackground(AgniEngine* engine, VkCommandBuffer cmd)
+void Renderer::drawBackground(VkCommandBuffer cmd)
 {
 	ComputeEffect& effect = m_backgroundEffects[m_currentBackgroundEffect];
 
@@ -382,12 +396,12 @@ void Renderer::drawBackground(AgniEngine* engine, VkCommandBuffer cmd)
 	              1);
 }
 
-void Renderer::drawImgui(AgniEngine* engine, VkCommandBuffer cmd, VkImageView targetImageView)
+void Renderer::drawImgui(VkCommandBuffer cmd, VkImageView targetImageView)
 {
 	VkRenderingAttachmentInfo colorAttachment = vkinit::attachmentInfo(
 	targetImageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	VkRenderingInfo renderInfo =
-	vkinit::renderingInfo(engine->m_swapchainManager.getSwapchainExtent(), &colorAttachment, nullptr);
+	vkinit::renderingInfo(m_swapchainManager->getSwapchainExtent(), &colorAttachment, nullptr);
 
 	vkCmdBeginRendering(cmd, &renderInfo);
 
@@ -396,7 +410,7 @@ void Renderer::drawImgui(AgniEngine* engine, VkCommandBuffer cmd, VkImageView ta
 	vkCmdEndRendering(cmd);
 }
 
-void Renderer::drawGeometry(AgniEngine* engine, VkCommandBuffer cmd)
+void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 {
 	// reset counters
 	m_stats.m_drawcallCount = 0;
@@ -460,8 +474,8 @@ void Renderer::drawGeometry(AgniEngine* engine, VkCommandBuffer cmd)
 		glm::vec3 centerB =
 		glm::vec3(B.m_transform * glm::vec4(B.m_bounds.m_origin, 1.0f));
 
-		float distA = glm::length(engine->m_mainCamera.m_position - centerA);
-		float distB = glm::length(engine->m_mainCamera.m_position - centerB);
+		float distA = glm::length(m_camera->m_position - centerA);
+		float distB = glm::length(m_camera->m_position - centerB);
 
 		// Sort back to front (larger distance first)
 		return distA > distB;
@@ -482,14 +496,15 @@ void Renderer::drawGeometry(AgniEngine* engine, VkCommandBuffer cmd)
 
 	//  allocate a new uniform buffer for the scene data
 	AllocatedBuffer gpuSceneDataBuffer =
-	engine->m_resourceManager.createBuffer(sizeof(GPUSceneData),
+	m_resourceManager->createBuffer(sizeof(GPUSceneData),
 	                               VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 	                               VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 	// add it to the deletion queue of this frame so it gets deleted once its
 	// been used
-	engine->getCurrentFrame().m_deletionQueue.push_function(
-	[engine, gpuSceneDataBuffer]() { engine->m_resourceManager.destroyBuffer(gpuSceneDataBuffer); });
+	ResourceManager* rm = m_resourceManager;
+	currentFrame.m_deletionQueue.push_function(
+	[rm, gpuSceneDataBuffer]() { rm->destroyBuffer(gpuSceneDataBuffer); });
 
 	// write the buffer
 	GPUSceneData* sceneUniformData =
@@ -498,8 +513,8 @@ void Renderer::drawGeometry(AgniEngine* engine, VkCommandBuffer cmd)
 
 	// create a descriptor set that binds that buffer and update it
 	VkDescriptorSet globalDescriptor =
-	engine->getCurrentFrame().m_frameDescriptors.allocate(
-	engine->m_device, m_gpuSceneDataDescriptorLayout);
+	currentFrame.m_frameDescriptors.allocate(
+	m_device, m_gpuSceneDataDescriptorLayout);
 
 	DescriptorWriter writer;
 	writer.writeBuffer(0,
@@ -507,7 +522,7 @@ void Renderer::drawGeometry(AgniEngine* engine, VkCommandBuffer cmd)
 	                   sizeof(GPUSceneData),
 	                   0,
 	                   VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-	writer.updateSet(engine->m_device, globalDescriptor);
+	writer.updateSet(m_device, globalDescriptor);
 
 	// keep track of what state we are binding
 	MaterialPipeline* lastPipeline    = nullptr;
@@ -603,7 +618,7 @@ void Renderer::drawGeometry(AgniEngine* engine, VkCommandBuffer cmd)
 	}
 
 	// Draw skybox last (after all geometry)
-	engine->m_skybox.draw(cmd, globalDescriptor, m_drawExtent);
+	m_skybox->draw(cmd, globalDescriptor, m_drawExtent);
 
 	vkCmdEndRendering(cmd);
 
@@ -615,7 +630,7 @@ void Renderer::drawGeometry(AgniEngine* engine, VkCommandBuffer cmd)
 	m_stats.m_meshDrawTime = elapsed.count() / 1000.f;
 }
 
-void Renderer::updateScene(AgniEngine* engine, float deltaTime)
+void Renderer::updateScene(float deltaTime, VkExtent2D windowExtent)
 {
 	// begin clock
 	auto start = std::chrono::system_clock::now();
@@ -623,13 +638,13 @@ void Renderer::updateScene(AgniEngine* engine, float deltaTime)
 	m_mainDrawContext.m_OpaqueSurfaces.clear();
 	m_mainDrawContext.m_TransparentSurfaces.clear();
 
-	engine->m_mainCamera.update(deltaTime);
+	m_camera->update(deltaTime);
 	// camera view
-	glm::mat4 view = engine->m_mainCamera.getViewMatrix();
+	glm::mat4 view = m_camera->getViewMatrix();
 	// camera projection
 	glm::mat4 projection = glm::perspective(glm::radians(70.f),
-	                                        (float) engine->m_windowExtent.width /
-	                                        (float) engine->m_windowExtent.height,
+	                                        (float) windowExtent.width /
+	                                        (float) windowExtent.height,
 	                                        10000.f,
 	                                        0.1f);
 
@@ -652,7 +667,7 @@ void Renderer::updateScene(AgniEngine* engine, float deltaTime)
 	m_sceneData.m_ambientColor      = glm::vec4(.1f);
 	m_sceneData.m_sunlightColor     = glm::vec4(1.f);
 	m_sceneData.m_sunlightDirection = glm::vec4(0, 1, 0.5, 1.f);
-	m_sceneData.m_cameraPosition    = engine->m_mainCamera.m_position;
+	m_sceneData.m_cameraPosition    = m_camera->m_position;
 
 	auto end = std::chrono::system_clock::now();
 
