@@ -3,6 +3,7 @@
 add_executable (engine
   main.cpp
   Types.hpp
+  Components.hpp
   Initializers.cpp
   Initializers.hpp
   Images.hpp

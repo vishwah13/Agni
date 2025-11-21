@@ -55,6 +55,14 @@ struct GPUMeshBuffers
 	VkDeviceAddress m_vertexBufferAddress;
 };
 
+// bounding volume for frustum culling
+struct Bounds
+{
+	glm::vec3 m_origin;
+	float     m_sphereRadius;
+	glm::vec3 m_extents;
+};
+
 // push constants for our mesh object draws
 struct GPUDrawPushConstants
 {
