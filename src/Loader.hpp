@@ -77,6 +77,7 @@ class AssetLoader
 public:
 	void init(ResourceManager* resourceManager, VkDevice device);
 	void cleanup();
+	void buildPipelines(AgniEngine* engine);
 
 	// Default texture getters
 	const Texture& getWhiteTexture() const
@@ -123,6 +124,12 @@ public:
 	std::optional<std::shared_ptr<LoadedGLTF>>
 	loadGltf(AgniEngine* engine, std::filesystem::path filePath);
 
+	// PBR Material system (used by all glTF materials)
+	GltfPbrMaterial& getMaterialSystem()
+	{
+		return m_metalRoughMaterial;
+	}
+
 private:
 	// Default textures
 	Texture m_whiteTexture;
@@ -135,6 +142,9 @@ private:
 	VkSampler m_nearestSampler       = VK_NULL_HANDLE;
 	VkSampler m_linearMipmapSampler  = VK_NULL_HANDLE;
 	VkSampler m_nearestMipmapSampler = VK_NULL_HANDLE;
+
+	// PBR Material system (shared pipeline for all glTF materials)
+	GltfPbrMaterial m_metalRoughMaterial;
 
 	ResourceManager* m_resourceManager = nullptr;
 	VkDevice         m_device          = VK_NULL_HANDLE;

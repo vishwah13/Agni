@@ -157,6 +157,14 @@ void AssetLoader::cleanup()
 		vkDestroySampler(m_device, m_nearestMipmapSampler, nullptr);
 		m_nearestMipmapSampler = VK_NULL_HANDLE;
 	}
+
+	// Clear material system resources
+	m_metalRoughMaterial.clearResources(m_device);
+}
+
+void AssetLoader::buildPipelines(AgniEngine* engine)
+{
+	m_metalRoughMaterial.buildPipelines(engine);
 }
 
 // ============================================================================
@@ -654,7 +662,7 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 			materialResources.m_aoTexture.sampler = samplerMapping[sampler];
 		}
 		// build material
-		newMat->m_data = engine->m_metalRoughMaterial.writeMaterial(
+		newMat->m_data = engine->m_assetLoader.getMaterialSystem().writeMaterial(
 		engine->m_device, passType, materialResources, file.m_descriptorPool);
 
 		dataIndex++;
