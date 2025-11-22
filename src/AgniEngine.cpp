@@ -577,7 +577,7 @@ void AgniEngine::initDescriptors()
 	for (int i = 0; i < FRAME_OVERLAP; i++)
 	{
 		// create a descriptor pool
-		std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> frame_sizes = {
+		std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> frameSizes = {
 		{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3},
 		{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3},
 		{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3},
@@ -585,7 +585,7 @@ void AgniEngine::initDescriptors()
 		};
 
 		m_frames[i].m_frameDescriptors = DescriptorAllocatorGrowable {};
-		m_frames[i].m_frameDescriptors.init(m_device, 1000, frame_sizes);
+		m_frames[i].m_frameDescriptors.init(m_device, 1000, frameSizes);
 
 		m_resourceManager.getMainDeletionQueue().push_function(
 		[&, i]() { m_frames[i].m_frameDescriptors.destroyPools(m_device); });
@@ -611,7 +611,7 @@ void AgniEngine::initImgui()
 	// 1: create descriptor pool for IMGUI
 	//  the size of the pool is very oversize, but it's copied from imgui demo
 	//  itself.
-	VkDescriptorPoolSize pool_sizes[] = {
+	VkDescriptorPoolSize poolSizes[] = {
 	{VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
 	{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
 	{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
@@ -624,15 +624,15 @@ void AgniEngine::initImgui()
 	{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000},
 	{VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000}};
 
-	VkDescriptorPoolCreateInfo pool_info = {};
-	pool_info.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	pool_info.flags         = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-	pool_info.maxSets       = 1000;
-	pool_info.poolSizeCount = (uint32_t) std::size(pool_sizes);
-	pool_info.pPoolSizes    = pool_sizes;
+	VkDescriptorPoolCreateInfo poolInfo = {};
+	poolInfo.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	poolInfo.flags         = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+	poolInfo.maxSets       = 1000;
+	poolInfo.poolSizeCount = (uint32_t) std::size(poolSizes);
+	poolInfo.pPoolSizes    = poolSizes;
 
 	VkDescriptorPool imguiPool;
-	VK_CHECK(vkCreateDescriptorPool(m_device, &pool_info, nullptr, &imguiPool));
+	VK_CHECK(vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &imguiPool));
 
 	// 2: initialize imgui library
 
@@ -647,30 +647,30 @@ void AgniEngine::initImgui()
 	ImGui_ImplSDL3_InitForVulkan(m_window);
 
 	// this initializes imgui for Vulkan
-	ImGui_ImplVulkan_InitInfo init_info = {};
-	init_info.ApiVersion                = VK_API_VERSION_1_4;
-	init_info.Instance                  = m_instance;
-	init_info.PhysicalDevice            = m_chosenGPU;
-	init_info.Device                    = m_device;
-	init_info.QueueFamily               = m_graphicsQueueFamily;
-	init_info.Queue                     = m_graphicsQueue;
-	init_info.DescriptorPool            = imguiPool;
-	init_info.MinImageCount             = 3;
-	init_info.ImageCount                = 3;
-	init_info.UseDynamicRendering       = true;
+	ImGui_ImplVulkan_InitInfo initInfo = {};
+	initInfo.ApiVersion                = VK_API_VERSION_1_4;
+	initInfo.Instance                  = m_instance;
+	initInfo.PhysicalDevice            = m_chosenGPU;
+	initInfo.Device                    = m_device;
+	initInfo.QueueFamily               = m_graphicsQueueFamily;
+	initInfo.Queue                     = m_graphicsQueue;
+	initInfo.DescriptorPool            = imguiPool;
+	initInfo.MinImageCount             = 3;
+	initInfo.ImageCount                = 3;
+	initInfo.UseDynamicRendering       = true;
 
 	// dynamic rendering parameters for imgui to use
-	init_info.PipelineInfoMain.PipelineRenderingCreateInfo = {
+	initInfo.PipelineInfoMain.PipelineRenderingCreateInfo = {
 	.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
-	init_info.PipelineInfoMain.PipelineRenderingCreateInfo
+	initInfo.PipelineInfoMain.PipelineRenderingCreateInfo
 	.colorAttachmentCount = 1;
 	VkFormat swapchainFormat = m_swapchainManager.getSwapchainImageFormat();
-	init_info.PipelineInfoMain.PipelineRenderingCreateInfo
+	initInfo.PipelineInfoMain.PipelineRenderingCreateInfo
 	.pColorAttachmentFormats = &swapchainFormat;
 
-	init_info.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+	initInfo.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
 
-	ImGui_ImplVulkan_Init(&init_info);
+	ImGui_ImplVulkan_Init(&initInfo);
 
 	// add the destroy the imgui created structures
 	m_resourceManager.getMainDeletionQueue().push_function(
