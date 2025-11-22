@@ -6,21 +6,20 @@
 #include <Skybox.hpp>
 #include <VulkanTools.hpp>
 
+#include <cmath>
 #include <fmt/core.h>
 #include <stb_image.h>
-#include <cmath>
 
 void Skybox::init(AgniEngine*                       engine,
                   const std::array<std::string, 6>& cubemapFaces)
 {
 	// Create cubemap image
-	m_cubemapImage = createCubemap(
-	    engine->m_resourceManager,
-	    engine->m_device,
-	    cubemapFaces,
-	    VK_FORMAT_R8G8B8A8_UNORM,
-	    VK_IMAGE_USAGE_SAMPLED_BIT,
-	    false);
+	m_cubemapImage = createCubemap(engine->m_resourceManager,
+	                               engine->m_device,
+	                               cubemapFaces,
+	                               VK_FORMAT_R8G8B8A8_UNORM,
+	                               VK_IMAGE_USAGE_SAMPLED_BIT,
+	                               false);
 
 	// Create sampler for cubemap
 	VkSamplerCreateInfo cubemapSamplerInfo = {
@@ -48,6 +47,7 @@ void Skybox::buildPipelines(AgniEngine* engine)
 	    "../../shaders/glsl/skybox.frag.spv", engine->m_device, &skyFragShader))
 	{
 		fmt::println("Error when building the skybox fragment shader module");
+		// TODO: Default fallback shader
 	}
 
 	VkShaderModule skyVertexShader;
@@ -56,6 +56,7 @@ void Skybox::buildPipelines(AgniEngine* engine)
 	                              &skyVertexShader))
 	{
 		fmt::println("Error when building the skybox vertex shader module");
+		// TODO: Default fallback shader
 	}
 
 	VkPushConstantRange matrixRange {};
@@ -70,8 +71,9 @@ void Skybox::buildPipelines(AgniEngine* engine)
 	                                             VK_SHADER_STAGE_VERTEX_BIT |
 	                                             VK_SHADER_STAGE_FRAGMENT_BIT);
 
-	VkDescriptorSetLayout layouts[] = {engine->m_renderer.getGpuSceneDataDescriptorLayout(),
-	                                   m_skyboxMaterialLayout};
+	VkDescriptorSetLayout layouts[] = {
+	engine->m_renderer.getGpuSceneDataDescriptorLayout(),
+	m_skyboxMaterialLayout};
 
 	VkPipelineLayoutCreateInfo mesh_layout_info =
 	vkinit::pipelineLayoutCreateInfo();
@@ -95,14 +97,15 @@ void Skybox::buildPipelines(AgniEngine* engine)
 	pipelineBuilder.setCullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE);
 	pipelineBuilder.enableMultisampling(engine->m_renderer.getMsaaSamples());
 	pipelineBuilder.disableBlending();
-	// turning off depth buffer writes for skybox, but enable depth test with
-	// reversed-Z
+	// turning off depth buffer writes for skybox, but enable depth test
+	// with reversed-Z
 	pipelineBuilder.enableDepthtest(false, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
 	// render format
 	pipelineBuilder.setColorAttachmentFormat(
 	engine->m_renderer.getMsaaColorImage().m_imageFormat);
-	pipelineBuilder.setDepthFormat(engine->m_renderer.getDepthImage().m_imageFormat);
+	pipelineBuilder.setDepthFormat(
+	engine->m_renderer.getDepthImage().m_imageFormat);
 
 	// use the triangle layout we created
 	pipelineBuilder.m_pipelineLayout = newLayout;
@@ -248,9 +251,10 @@ void Skybox::createCubeMesh(AgniEngine* engine)
 	20, 21, 22, 22, 23, 20  // Left
 	};
 
-	m_meshBuffers = engine->m_resourceManager.uploadMesh(cubeIndices, cubeVertices);
-	m_indexCount  = static_cast<uint32_t>(cubeIndices.size());
-	m_firstIndex  = 0;
+	m_meshBuffers =
+	engine->m_resourceManager.uploadMesh(cubeIndices, cubeVertices);
+	m_indexCount = static_cast<uint32_t>(cubeIndices.size());
+	m_firstIndex = 0;
 }
 
 void Skybox::createMaterial(AgniEngine* engine)
@@ -297,13 +301,13 @@ Skybox::writeMaterial(VkDevice                     device,
 	return matData;
 }
 
-AllocatedImage Skybox::createCubemap(
-    ResourceManager&                  resourceManager,
-    VkDevice                          device,
-    const std::array<std::string, 6>& faceFiles,
-    VkFormat                          format,
-    VkImageUsageFlags                 usage,
-    bool                              mipmapped)
+AllocatedImage
+Skybox::createCubemap(ResourceManager&                  resourceManager,
+                      VkDevice                          device,
+                      const std::array<std::string, 6>& faceFiles,
+                      VkFormat                          format,
+                      VkImageUsageFlags                 usage,
+                      bool                              mipmapped)
 {
 	// Load all 6 faces
 	std::array<stbi_uc*, 6> faceData;
@@ -311,7 +315,7 @@ AllocatedImage Skybox::createCubemap(
 
 	// Load first face to get dimensions
 	faceData[0] =
-	    stbi_load(faceFiles[0].c_str(), &width, &height, &channels, 4);
+	stbi_load(faceFiles[0].c_str(), &width, &height, &channels, 4);
 	if (!faceData[0])
 	{
 		fmt::println("Failed to load cubemap face: {}", faceFiles[0]);
@@ -326,8 +330,8 @@ AllocatedImage Skybox::createCubemap(
 		if (!faceData[i] || w != width || h != height)
 		{
 			fmt::println(
-			    "Failed to load or dimension mismatch for cubemap face: {}",
-			    faceFiles[i]);
+			"Failed to load or dimension mismatch for cubemap face: {}",
+			faceFiles[i]);
 			// Clean up loaded faces
 			for (int j = 0; j <= i; j++)
 			{
@@ -344,7 +348,7 @@ AllocatedImage Skybox::createCubemap(
 
 	// Create staging buffer
 	AllocatedBuffer uploadBuffer = resourceManager.createBuffer(
-	    totalSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+	totalSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 	// Copy all faces into staging buffer
 	uint8_t* bufferData = (uint8_t*) uploadBuffer.m_info.pMappedData;
@@ -360,9 +364,9 @@ AllocatedImage Skybox::createCubemap(
 	cubemap.m_imageExtent = {(uint32_t) width, (uint32_t) height, 1};
 
 	VkImageCreateInfo img_info = vkinit::imageCreateInfo(
-	    format,
-	    usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-	    cubemap.m_imageExtent);
+	format,
+	usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+	cubemap.m_imageExtent);
 
 	// Set cubemap-specific flags
 	img_info.arrayLayers = 6;
@@ -371,15 +375,15 @@ AllocatedImage Skybox::createCubemap(
 	if (mipmapped)
 	{
 		img_info.mipLevels =
-		    static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) +
-		    1;
+		static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) +
+		1;
 	}
 
 	// Allocate image on GPU
 	VmaAllocationCreateInfo allocInfo = {};
 	allocInfo.usage                   = VMA_MEMORY_USAGE_GPU_ONLY;
 	allocInfo.requiredFlags =
-	    VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
 	VK_CHECK(vmaCreateImage(resourceManager.getAllocator(),
 	                        &img_info,
@@ -390,70 +394,70 @@ AllocatedImage Skybox::createCubemap(
 
 	// Create image view for cubemap
 	VkImageViewCreateInfo view_info = vkinit::imageViewCreateInfo(
-	    format, cubemap.m_image, VK_IMAGE_ASPECT_COLOR_BIT);
+	format, cubemap.m_image, VK_IMAGE_ASPECT_COLOR_BIT);
 	view_info.viewType                    = VK_IMAGE_VIEW_TYPE_CUBE;
 	view_info.subresourceRange.layerCount = 6;
 	view_info.subresourceRange.levelCount = img_info.mipLevels;
 
 	VK_CHECK(
-	    vkCreateImageView(device, &view_info, nullptr, &cubemap.m_imageView));
+	vkCreateImageView(device, &view_info, nullptr, &cubemap.m_imageView));
 
 	// Upload data to GPU
 	resourceManager.immediateSubmit(
-	    [&](VkCommandBuffer cmd)
-	    {
-		    // Transition to transfer dst
-		    VkImageMemoryBarrier2 barrier {
-		        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
-		    barrier.srcStageMask  = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-		    barrier.srcAccessMask = 0;
-		    barrier.dstStageMask  = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-		    barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-		    barrier.oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
-		    barrier.newLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		    barrier.image         = cubemap.m_image;
-		    barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-		    barrier.subresourceRange.baseMipLevel   = 0;
-		    barrier.subresourceRange.levelCount     = img_info.mipLevels;
-		    barrier.subresourceRange.baseArrayLayer = 0;
-		    barrier.subresourceRange.layerCount     = 6;
+	[&](VkCommandBuffer cmd)
+	{
+		// Transition to transfer dst
+		VkImageMemoryBarrier2 barrier {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
+		barrier.srcStageMask  = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+		barrier.srcAccessMask = 0;
+		barrier.dstStageMask  = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+		barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+		barrier.oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
+		barrier.newLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		barrier.image         = cubemap.m_image;
+		barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+		barrier.subresourceRange.baseMipLevel   = 0;
+		barrier.subresourceRange.levelCount     = img_info.mipLevels;
+		barrier.subresourceRange.baseArrayLayer = 0;
+		barrier.subresourceRange.layerCount     = 6;
 
-		    VkDependencyInfo depInfo {.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
-		    depInfo.imageMemoryBarrierCount = 1;
-		    depInfo.pImageMemoryBarriers    = &barrier;
-		    vkCmdPipelineBarrier2(cmd, &depInfo);
+		VkDependencyInfo depInfo {.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
+		depInfo.imageMemoryBarrierCount = 1;
+		depInfo.pImageMemoryBarriers    = &barrier;
+		vkCmdPipelineBarrier2(cmd, &depInfo);
 
-		    // Copy each face from buffer to image
-		    for (uint32_t face = 0; face < 6; face++)
-		    {
-			    VkBufferImageCopy copyRegion           = {};
-			    copyRegion.bufferOffset                = face * faceSize;
-			    copyRegion.bufferRowLength             = 0;
-			    copyRegion.bufferImageHeight           = 0;
-			    copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			    copyRegion.imageSubresource.mipLevel   = 0;
-			    copyRegion.imageSubresource.baseArrayLayer = face;
-			    copyRegion.imageSubresource.layerCount     = 1;
-			    copyRegion.imageExtent = {(uint32_t) width, (uint32_t) height, 1};
+		// Copy each face from buffer to image
+		for (uint32_t face = 0; face < 6; face++)
+		{
+			VkBufferImageCopy copyRegion           = {};
+			copyRegion.bufferOffset                = face * faceSize;
+			copyRegion.bufferRowLength             = 0;
+			copyRegion.bufferImageHeight           = 0;
+			copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			copyRegion.imageSubresource.mipLevel   = 0;
+			copyRegion.imageSubresource.baseArrayLayer = face;
+			copyRegion.imageSubresource.layerCount     = 1;
+			copyRegion.imageExtent = {(uint32_t) width, (uint32_t) height, 1};
 
-			    vkCmdCopyBufferToImage(cmd,
-			                           uploadBuffer.m_buffer,
-			                           cubemap.m_image,
-			                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			                           1,
-			                           &copyRegion);
-		    }
+			vkCmdCopyBufferToImage(cmd,
+			                       uploadBuffer.m_buffer,
+			                       cubemap.m_image,
+			                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			                       1,
+			                       &copyRegion);
+		}
 
-		    // Transition to shader read
-		    barrier.srcStageMask  = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-		    barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-		    barrier.dstStageMask  = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-		    barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
-		    barrier.oldLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		    barrier.newLayout     = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		// Transition to shader read
+		barrier.srcStageMask  = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+		barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+		barrier.dstStageMask  = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+		barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
+		barrier.oldLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		barrier.newLayout     = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-		    vkCmdPipelineBarrier2(cmd, &depInfo);
-	    });
+		vkCmdPipelineBarrier2(cmd, &depInfo);
+	});
 
 	resourceManager.destroyBuffer(uploadBuffer);
 

@@ -19,7 +19,7 @@
 #include <functional>
 #include <vector>
 
-constexpr unsigned int FRAME_OVERLAP = 2;
+constexpr uint32_t FRAME_OVERLAP = 2;
 
 struct FrameData
 {
