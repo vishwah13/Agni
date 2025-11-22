@@ -574,13 +574,6 @@ void AgniEngine::initDescriptors()
 
 	m_globalDescriptorAllocator.init(m_device, 10, sizes);
 
-	{
-		DescriptorLayoutBuilder builder;
-		builder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-		m_singleImageDescriptorLayout =
-		builder.build(m_device, VK_SHADER_STAGE_FRAGMENT_BIT);
-	}
-
 	for (int i = 0; i < FRAME_OVERLAP; i++)
 	{
 		// create a descriptor pool
@@ -603,8 +596,6 @@ void AgniEngine::initDescriptors()
 	[&]()
 	{
 		m_globalDescriptorAllocator.destroyPools(m_device);
-		vkDestroyDescriptorSetLayout(
-		m_device, m_singleImageDescriptorLayout, nullptr);
 	});
 }
 
