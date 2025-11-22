@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include <Components.hpp>
 #include <Descriptors.hpp>
 #include <Material.hpp>
 #include <Scene.hpp>
@@ -14,13 +15,6 @@
 struct GLTFMaterial
 {
 	MaterialInstance m_data;
-};
-
-struct Bounds
-{
-	glm::vec3 m_origin;
-	float     m_sphereRadius;
-	glm::vec3 m_extents;
 };
 
 struct GeoSurface

@@ -1,8 +1,10 @@
 #pragma once
 #include <SDL3/SDL_events.h>
 
+#include <Components.hpp>
 #include <Types.hpp>
-// camera should have a constructor
+
+// Camera class wraps CameraComponent for ECS-ready architecture
 class Camera
 {
 public:
@@ -13,17 +15,18 @@ public:
 	Camera&  operator=(const Camera& other) = delete;
 	Camera&& operator=(Camera&& other)      = delete;
 
-	glm::vec3 m_velocity;
-	glm::vec3 m_position;
-	// vertical rotation
-	float m_pitch {0.f};
-	// horizontal rotation
-	float m_yaw {0.f};
-	// camera speed (units per second)
-	float m_speed {5.0f};
-	// camera sensitivity
-	float m_mouseSensitivity {0.5f};
+	// Component data (ECS-ready)
+	CameraComponent m_component;
 
+	// Public accessors for backwards compatibility
+	glm::vec3& m_velocity        = m_component.velocity;
+	glm::vec3& m_position        = m_component.position;
+	float&     m_pitch           = m_component.pitch;
+	float&     m_yaw             = m_component.yaw;
+	float&     m_speed           = m_component.speed;
+	float&     m_mouseSensitivity = m_component.mouseSensitivity;
+
+	// Input state (not part of component data)
 	bool m_rightMousePressed = false;
 
 	glm::mat4 getViewMatrix() const;
@@ -32,4 +35,8 @@ public:
 	void processSDLEvent(const SDL_Event& e);
 
 	void update(float deltaTime);
+
+	// Direct component access for future ECS
+	CameraComponent& getComponent() { return m_component; }
+	const CameraComponent& getComponent() const { return m_component; }
 };
