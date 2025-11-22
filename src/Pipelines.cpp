@@ -1,6 +1,6 @@
-﻿#include <fstream>
-#include <Initializers.hpp>
+﻿#include <Initializers.hpp>
 #include <Pipelines.hpp>
+#include <fstream>
 
 bool vkutil::loadShaderModule(const char*     filePath,
                               VkDevice        device,
@@ -50,6 +50,9 @@ bool vkutil::loadShaderModule(const char*     filePath,
 	{
 		return false;
 	}
+
+	fmt::print("Loaded shader file from: {}\n", filePath);
+
 	*outShaderModule = shaderModule;
 	return true;
 }
@@ -62,12 +65,12 @@ void PipelineBuilder::clear()
 	.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
 
 	m_rasterizer = {.sType =
-	               VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
+	                VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
 
 	m_colorBlendAttachment = {};
 
-	m_multisampling = {.sType =
-	                  VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
+	m_multisampling = {
+	.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
 
 	m_pipelineLayout = {};
 

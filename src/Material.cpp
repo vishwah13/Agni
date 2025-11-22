@@ -14,6 +14,7 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 	    "../../shaders/glsl/mesh.frag.spv", engine->m_device, &meshFragShader))
 	{
 		fmt::println("Error when building the triangle fragment shader module");
+		// TODO: Default fallback shader
 	}
 
 	VkShaderModule meshVertexShader;
@@ -22,6 +23,7 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 	                              &meshVertexShader))
 	{
 		fmt::println("Error when building the triangle vertex shader module");
+		// TODO: Default fallback shader
 	}
 
 	VkPushConstantRange matrixRange {};
@@ -40,8 +42,8 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 	                                       VK_SHADER_STAGE_VERTEX_BIT |
 	                                       VK_SHADER_STAGE_FRAGMENT_BIT);
 
-	VkDescriptorSetLayout layouts[] = {engine->m_renderer.getGpuSceneDataDescriptorLayout(),
-	                                   m_materialLayout};
+	VkDescriptorSetLayout layouts[] = {
+	engine->m_renderer.getGpuSceneDataDescriptorLayout(), m_materialLayout};
 
 	VkPipelineLayoutCreateInfo mesh_layout_info =
 	vkinit::pipelineLayoutCreateInfo();
@@ -72,7 +74,8 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 	// render format
 	pipelineBuilder.setColorAttachmentFormat(
 	engine->m_renderer.getMsaaColorImage().m_imageFormat);
-	pipelineBuilder.setDepthFormat(engine->m_renderer.getDepthImage().m_imageFormat);
+	pipelineBuilder.setDepthFormat(
+	engine->m_renderer.getDepthImage().m_imageFormat);
 
 	// use the triangle layout we created
 	pipelineBuilder.m_pipelineLayout = newLayout;

@@ -55,11 +55,11 @@ void AgniEngine::init()
 	// We initialize SDL and create a window with it.
 	SDL_Init(SDL_INIT_VIDEO);
 
-	SDL_WindowFlags window_flags =
+	SDL_WindowFlags windowFlags =
 	(SDL_WindowFlags) (SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
 
 	m_window = SDL_CreateWindow(
-	"Agni", m_windowExtent.width, m_windowExtent.height, window_flags);
+	"Agni", m_windowExtent.width, m_windowExtent.height, windowFlags);
 
 	initVulkan();
 
