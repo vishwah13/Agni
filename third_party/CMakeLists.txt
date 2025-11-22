@@ -9,11 +9,10 @@ add_subdirectory(volk)
 if(AGNI_COMPILE_SHADERS)
 	set(SHADERC_SKIP_TESTS ON CACHE BOOL "" FORCE)
 	set(SHADERC_SKIP_EXAMPLES ON CACHE BOOL "" FORCE)
-	#set(SHADERC_SKIP_INSTALL ON CACHE BOOL "" FORCE)
+	set(SHADERC_SKIP_COPYRIGHT_CHECK ON CACHE BOOL "" FORCE)
 
-	# Disable install commands to avoid export errors
-	#macro(install)
-	#endmacro()
+	# Build only what we need
+	set(SPIRV_SKIP_TESTS ON CACHE BOOL "" FORCE)
 
 	add_subdirectory(shaderc)
 endif()
@@ -28,6 +27,46 @@ add_library(mikktspace STATIC)
 
 add_subdirectory(fastgltf)
 add_subdirectory(fmt EXCLUDE_FROM_ALL)
+
+# Configure SDL3 - Disable everything except Video (for windowing) and Events (for input)
+set(SDL_SHARED ON CACHE BOOL "Build SDL3 as shared library" FORCE)
+set(SDL_STATIC OFF CACHE BOOL "Build SDL3 as static library" FORCE)
+
+# Disable subsystems we don't need
+set(SDL_AUDIO OFF CACHE BOOL "Disable SDL Audio" FORCE)
+set(SDL_RENDER OFF CACHE BOOL "Disable SDL Render" FORCE)
+set(SDL_GPU OFF CACHE BOOL "Disable SDL GPU" FORCE)
+set(SDL_CAMERA OFF CACHE BOOL "Disable SDL Camera" FORCE)
+set(SDL_JOYSTICK OFF CACHE BOOL "Disable SDL Joystick" FORCE)
+set(SDL_HAPTIC OFF CACHE BOOL "Disable SDL Haptic" FORCE)
+set(SDL_HIDAPI OFF CACHE BOOL "Disable SDL HIDAPI" FORCE)
+set(SDL_POWER OFF CACHE BOOL "Disable SDL Power" FORCE)
+set(SDL_SENSOR OFF CACHE BOOL "Disable SDL Sensor" FORCE)
+set(SDL_DIALOG OFF CACHE BOOL "Disable SDL Dialog" FORCE)
+set(SDL_TRAY OFF CACHE BOOL "Disable SDL Tray" FORCE)
+
+# Disable specific audio backends
+set(SDL_WASAPI OFF CACHE BOOL "Disable WASAPI audio" FORCE)
+set(SDL_DSOUND OFF CACHE BOOL "Disable DirectSound audio" FORCE)
+set(SDL_DISKAUDIO OFF CACHE BOOL "Disable disk audio" FORCE)
+set(SDL_DUMMYAUDIO OFF CACHE BOOL "Disable dummy audio" FORCE)
+
+# Disable specific render backends
+set(SDL_RENDER_D3D OFF CACHE BOOL "Disable D3D renderer" FORCE)
+set(SDL_RENDER_D3D11 OFF CACHE BOOL "Disable D3D11 renderer" FORCE)
+set(SDL_RENDER_D3D12 OFF CACHE BOOL "Disable D3D12 renderer" FORCE)
+set(SDL_RENDER_GPU OFF CACHE BOOL "Disable GPU renderer" FORCE)
+set(SDL_RENDER_METAL OFF CACHE BOOL "Disable Metal renderer" FORCE)
+set(SDL_RENDER_VULKAN OFF CACHE BOOL "Disable Vulkan renderer" FORCE)
+
+# Disable examples and tests
+set(SDL_EXAMPLES OFF CACHE BOOL "Disable SDL examples" FORCE)
+set(SDL_TESTS OFF CACHE BOOL "Disable SDL tests" FORCE)
+
+# Keep Video (for windowing) and Vulkan surface support
+set(SDL_VIDEO ON CACHE BOOL "Enable SDL Video" FORCE)
+set(SDL_VULKAN ON CACHE BOOL "Enable Vulkan surface support" FORCE)
+
 add_subdirectory(SDL EXCLUDE_FROM_ALL)
 
 target_sources(vkbootstrap PRIVATE

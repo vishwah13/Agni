@@ -1,4 +1,5 @@
 #pragma once
+#include <Components.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
 
@@ -43,10 +44,19 @@ public:
 
 
 protected:
+	// Transform component (ECS-ready)
+	TransformComponent m_transformComponent;
+
 	// m_parent pointer must be a weak pointer to avoid circular dependencies
 	std::weak_ptr<Node>                m_parent;
 	std::vector<std::shared_ptr<Node>> m_children;
 
-	glm::mat4 m_localTransform;
-	glm::mat4 m_worldTransform;
+	// Backwards compatibility accessors
+	glm::mat4& m_localTransform = m_transformComponent.localTransform;
+	glm::mat4& m_worldTransform = m_transformComponent.worldTransform;
+
+public:
+	// Direct component access for future ECS
+	TransformComponent& getTransformComponent() { return m_transformComponent; }
+	const TransformComponent& getTransformComponent() const { return m_transformComponent; }
 };

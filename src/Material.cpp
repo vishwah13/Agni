@@ -1,6 +1,7 @@
 #include <Material.hpp>
 
 #include <AgniEngine.hpp>
+#include <FallbackShaders.hpp>
 #include <Initializers.hpp>
 #include <Pipelines.hpp>
 #include <VulkanTools.hpp>
@@ -10,18 +11,25 @@
 void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 {
 	VkShaderModule meshFragShader;
-	if (!vkutil::loadShaderModule(
-	    "../../shaders/glsl/mesh.frag.spv", engine->m_device, &meshFragShader))
+	if (!vkutil::loadShaderModuleWithFallback(
+	    "../../shaders/glsl/Mesh.frag.spv",
+	    engine->m_device,
+	    &meshFragShader,
+	    FallbackShaders::meshFragSpv,
+	    FallbackShaders::meshFragSpv_len))
 	{
-		fmt::println("Error when building the triangle fragment shader module");
+		fmt::println("Error when building the mesh fragment shader module");
 	}
 
 	VkShaderModule meshVertexShader;
-	if (!vkutil::loadShaderModule("../../shaders/glsl/mesh.vert.spv",
-	                              engine->m_device,
-	                              &meshVertexShader))
+	if (!vkutil::loadShaderModuleWithFallback(
+	    "../../shaders/glsl/Mesh.vert.spv",
+	    engine->m_device,
+	    &meshVertexShader,
+	    FallbackShaders::meshVertSpv,
+	    FallbackShaders::meshVertSpv_len))
 	{
-		fmt::println("Error when building the triangle vertex shader module");
+		fmt::println("Error when building the mesh vertex shader module");
 	}
 
 	VkPushConstantRange matrixRange {};
@@ -40,8 +48,8 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 	                                       VK_SHADER_STAGE_VERTEX_BIT |
 	                                       VK_SHADER_STAGE_FRAGMENT_BIT);
 
-	VkDescriptorSetLayout layouts[] = {engine->m_renderer.getGpuSceneDataDescriptorLayout(),
-	                                   m_materialLayout};
+	VkDescriptorSetLayout layouts[] = {
+	engine->m_renderer.getGpuSceneDataDescriptorLayout(), m_materialLayout};
 
 	VkPipelineLayoutCreateInfo mesh_layout_info =
 	vkinit::pipelineLayoutCreateInfo();
@@ -72,7 +80,8 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 	// render format
 	pipelineBuilder.setColorAttachmentFormat(
 	engine->m_renderer.getMsaaColorImage().m_imageFormat);
-	pipelineBuilder.setDepthFormat(engine->m_renderer.getDepthImage().m_imageFormat);
+	pipelineBuilder.setDepthFormat(
+	engine->m_renderer.getDepthImage().m_imageFormat);
 
 	// use the triangle layout we created
 	pipelineBuilder.m_pipelineLayout = newLayout;

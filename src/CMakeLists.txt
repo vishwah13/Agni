@@ -3,6 +3,7 @@
 add_executable (engine
   main.cpp
   Types.hpp
+  Components.hpp
   Initializers.cpp
   Initializers.hpp
   Images.hpp
@@ -23,6 +24,8 @@ add_executable (engine
   Loader.cpp
   Material.hpp
   Material.cpp
+  FallbackShaders.hpp
+  FallbackShaders.cpp
   Texture.hpp
   Texture.cpp
   Camera.cpp

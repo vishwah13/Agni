@@ -1,6 +1,6 @@
-﻿#include <fstream>
-#include <Initializers.hpp>
+﻿#include <Initializers.hpp>
 #include <Pipelines.hpp>
+#include <fstream>
 
 bool vkutil::loadShaderModule(const char*     filePath,
                               VkDevice        device,
@@ -50,6 +50,42 @@ bool vkutil::loadShaderModule(const char*     filePath,
 	{
 		return false;
 	}
+
+	fmt::print("Loaded shader file from: {}\n", filePath);
+
+	*outShaderModule = shaderModule;
+	return true;
+}
+
+bool vkutil::loadShaderModuleWithFallback(const char*          filePath,
+                                           VkDevice             device,
+                                           VkShaderModule*      outShaderModule,
+                                           const unsigned char* fallbackSpv,
+                                           unsigned int         fallbackSize)
+{
+	// Try loading from file first
+	if (loadShaderModule(filePath, device, outShaderModule))
+	{
+		return true;
+	}
+
+	// Log warning that fallback is being used
+	fmt::print("WARNING: Failed to load shader from {}, using embedded fallback shader\n", filePath);
+
+	// Load from embedded fallback SPIR-V
+	VkShaderModuleCreateInfo createInfo = {};
+	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	createInfo.pNext = nullptr;
+	createInfo.codeSize = fallbackSize;
+	createInfo.pCode = reinterpret_cast<const uint32_t*>(fallbackSpv);
+
+	VkShaderModule shaderModule;
+	if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS)
+	{
+		fmt::print("ERROR: Failed to create shader module even with fallback!\n");
+		return false;
+	}
+
 	*outShaderModule = shaderModule;
 	return true;
 }
@@ -62,12 +98,12 @@ void PipelineBuilder::clear()
 	.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
 
 	m_rasterizer = {.sType =
-	               VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
+	                VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
 
 	m_colorBlendAttachment = {};
 
-	m_multisampling = {.sType =
-	                  VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
+	m_multisampling = {
+	.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
 
 	m_pipelineLayout = {};
 

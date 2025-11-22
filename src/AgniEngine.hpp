@@ -19,7 +19,7 @@
 #include <functional>
 #include <vector>
 
-constexpr unsigned int FRAME_OVERLAP = 2;
+constexpr uint32_t FRAME_OVERLAP = 2;
 
 struct FrameData
 {
@@ -103,8 +103,6 @@ public:
 	uint32_t m_graphicsQueueFamily;
 
 	DescriptorAllocatorGrowable m_globalDescriptorAllocator;
-
-	VkDescriptorSetLayout m_singleImageDescriptorLayout;
 
 	Camera m_mainCamera;
 

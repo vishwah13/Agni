@@ -5,6 +5,30 @@ cmake_minimum_required (VERSION 3.8)
 
 project ("Agni")
 
+# Use ccache/sccache if available for faster rebuilds
+find_program(CCACHE_PROGRAM ccache)
+find_program(SCCACHE_PROGRAM sccache)
+
+if(SCCACHE_PROGRAM)
+    set(CMAKE_C_COMPILER_LAUNCHER "${SCCACHE_PROGRAM}")
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${SCCACHE_PROGRAM}")
+    message(STATUS "Using sccache for compilation caching")
+elseif(CCACHE_PROGRAM)
+    set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    message(STATUS "Using ccache for compilation caching")
+endif()
+
+# Enable multi-processor compilation for MSVC
+if(MSVC)
+    add_compile_options(/MP)
+    message(STATUS "Enabled multi-processor compilation (/MP)")
+
+    # Faster debug builds (reduce debug info)
+    string(REPLACE "/Zi" "/Z7" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+    string(REPLACE "/Zi" "/Z7" CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
+endif()
+
 # Option to compile shaders (default ON for development, set to OFF in CI/CD)
 option(AGNI_COMPILE_SHADERS "Compile GLSL shaders to SPIR-V" ON)
 
