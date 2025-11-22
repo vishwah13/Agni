@@ -29,10 +29,10 @@ def main():
     script_dir = Path(__file__).parent
 
     shaders = [
-        ('mesh_fallback.vert.spv', 'mesh_vert_spv'),
-        ('mesh_fallback.frag.spv', 'mesh_frag_spv'),
-        ('skybox_fallback.vert.spv', 'skybox_vert_spv'),
-        ('skybox_fallback.frag.spv', 'skybox_frag_spv'),
+        ('MeshFallback.vert.spv', 'meshVertSpv'),
+        ('MeshFallback.frag.spv', 'meshFragSpv'),
+        ('SkyboxFallback.vert.spv', 'skyboxVertSpv'),
+        ('SkyboxFallback.frag.spv', 'skyboxFragSpv'),
     ]
 
     # Generate header file

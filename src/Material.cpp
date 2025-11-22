@@ -12,22 +12,22 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 {
 	VkShaderModule meshFragShader;
 	if (!vkutil::loadShaderModuleWithFallback(
-	    "../../shaders/glsl/mesh.frag.spv",
+	    "../../shaders/glsl/Mesh.frag.spv",
 	    engine->m_device,
 	    &meshFragShader,
-	    FallbackShaders::mesh_frag_spv,
-	    FallbackShaders::mesh_frag_spv_len))
+	    FallbackShaders::meshFragSpv,
+	    FallbackShaders::meshFragSpv_len))
 	{
 		fmt::println("Error when building the mesh fragment shader module");
 	}
 
 	VkShaderModule meshVertexShader;
 	if (!vkutil::loadShaderModuleWithFallback(
-	    "../../shaders/glsl/mesh.vert.spv",
+	    "../../shaders/glsl/Mesh.vert.spv",
 	    engine->m_device,
 	    &meshVertexShader,
-	    FallbackShaders::mesh_vert_spv,
-	    FallbackShaders::mesh_vert_spv_len))
+	    FallbackShaders::meshVertSpv,
+	    FallbackShaders::meshVertSpv_len))
 	{
 		fmt::println("Error when building the mesh vertex shader module");
 	}
