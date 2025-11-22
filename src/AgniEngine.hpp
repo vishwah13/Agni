@@ -104,8 +104,6 @@ public:
 
 	DescriptorAllocatorGrowable m_globalDescriptorAllocator;
 
-	VkDescriptorSetLayout m_singleImageDescriptorLayout;
-
 	Camera m_mainCamera;
 
 
