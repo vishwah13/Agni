@@ -1,6 +1,7 @@
 #include <Material.hpp>
 
 #include <AgniEngine.hpp>
+#include <FallbackShaders.hpp>
 #include <Initializers.hpp>
 #include <Pipelines.hpp>
 #include <VulkanTools.hpp>
@@ -10,20 +11,25 @@
 void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 {
 	VkShaderModule meshFragShader;
-	if (!vkutil::loadShaderModule(
-	    "../../shaders/glsl/mesh.frag.spv", engine->m_device, &meshFragShader))
+	if (!vkutil::loadShaderModuleWithFallback(
+	    "../../shaders/glsl/mesh.frag.spv",
+	    engine->m_device,
+	    &meshFragShader,
+	    FallbackShaders::mesh_frag_spv,
+	    FallbackShaders::mesh_frag_spv_len))
 	{
-		fmt::println("Error when building the triangle fragment shader module");
-		// TODO: Default fallback shader
+		fmt::println("Error when building the mesh fragment shader module");
 	}
 
 	VkShaderModule meshVertexShader;
-	if (!vkutil::loadShaderModule("../../shaders/glsl/mesh.vert.spv",
-	                              engine->m_device,
-	                              &meshVertexShader))
+	if (!vkutil::loadShaderModuleWithFallback(
+	    "../../shaders/glsl/mesh.vert.spv",
+	    engine->m_device,
+	    &meshVertexShader,
+	    FallbackShaders::mesh_vert_spv,
+	    FallbackShaders::mesh_vert_spv_len))
 	{
-		fmt::println("Error when building the triangle vertex shader module");
-		// TODO: Default fallback shader
+		fmt::println("Error when building the mesh vertex shader module");
 	}
 
 	VkPushConstantRange matrixRange {};

@@ -1,4 +1,5 @@
 #include <AgniEngine.hpp>
+#include <FallbackShaders.hpp>
 #include <Images.hpp>
 #include <Initializers.hpp>
 #include <Pipelines.hpp>
@@ -43,20 +44,25 @@ void Skybox::init(AgniEngine*                       engine,
 void Skybox::buildPipelines(AgniEngine* engine)
 {
 	VkShaderModule skyFragShader;
-	if (!vkutil::loadShaderModule(
-	    "../../shaders/glsl/skybox.frag.spv", engine->m_device, &skyFragShader))
+	if (!vkutil::loadShaderModuleWithFallback(
+	    "../../shaders/glsl/skybox.frag.spv",
+	    engine->m_device,
+	    &skyFragShader,
+	    FallbackShaders::skybox_frag_spv,
+	    FallbackShaders::skybox_frag_spv_len))
 	{
 		fmt::println("Error when building the skybox fragment shader module");
-		// TODO: Default fallback shader
 	}
 
 	VkShaderModule skyVertexShader;
-	if (!vkutil::loadShaderModule("../../shaders/glsl/skybox.vert.spv",
-	                              engine->m_device,
-	                              &skyVertexShader))
+	if (!vkutil::loadShaderModuleWithFallback(
+	    "../../shaders/glsl/skybox.vert.spv",
+	    engine->m_device,
+	    &skyVertexShader,
+	    FallbackShaders::skybox_vert_spv,
+	    FallbackShaders::skybox_vert_spv_len))
 	{
 		fmt::println("Error when building the skybox vertex shader module");
-		// TODO: Default fallback shader
 	}
 
 	VkPushConstantRange matrixRange {};
