@@ -57,6 +57,39 @@ bool vkutil::loadShaderModule(const char*     filePath,
 	return true;
 }
 
+bool vkutil::loadShaderModuleWithFallback(const char*          filePath,
+                                           VkDevice             device,
+                                           VkShaderModule*      outShaderModule,
+                                           const unsigned char* fallbackSpv,
+                                           unsigned int         fallbackSize)
+{
+	// Try loading from file first
+	if (loadShaderModule(filePath, device, outShaderModule))
+	{
+		return true;
+	}
+
+	// Log warning that fallback is being used
+	fmt::print("WARNING: Failed to load shader from {}, using embedded fallback shader\n", filePath);
+
+	// Load from embedded fallback SPIR-V
+	VkShaderModuleCreateInfo createInfo = {};
+	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	createInfo.pNext = nullptr;
+	createInfo.codeSize = fallbackSize;
+	createInfo.pCode = reinterpret_cast<const uint32_t*>(fallbackSpv);
+
+	VkShaderModule shaderModule;
+	if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS)
+	{
+		fmt::print("ERROR: Failed to create shader module even with fallback!\n");
+		return false;
+	}
+
+	*outShaderModule = shaderModule;
+	return true;
+}
+
 void PipelineBuilder::clear()
 {
 	// clear all of the structs we need back to 0 with their correct stype

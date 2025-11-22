@@ -24,6 +24,8 @@ add_executable (engine
   Loader.cpp
   Material.hpp
   Material.cpp
+  FallbackShaders.hpp
+  FallbackShaders.cpp
   Texture.hpp
   Texture.cpp
   Camera.cpp

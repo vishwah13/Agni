@@ -7,6 +7,12 @@ namespace vkutil
 	bool loadShaderModule(const char*     filePath,
 	                      VkDevice        device,
 	                      VkShaderModule* outShaderModule);
+
+	bool loadShaderModuleWithFallback(const char*          filePath,
+	                                   VkDevice             device,
+	                                   VkShaderModule*      outShaderModule,
+	                                   const unsigned char* fallbackSpv,
+	                                   unsigned int         fallbackSize);
 };
 
 class PipelineBuilder
