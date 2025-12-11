@@ -1,5 +1,5 @@
 # Agni
-My personal game engine
+My personal Vulkan renderer
 
 ## Progress
 
