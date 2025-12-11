@@ -1,6 +1,12 @@
 # Agni
 My personal game engine
 
+## Progress
+
+![Progress](docs/Progress1.png)
+
+![Progress](docs/Progress.png)
+
 ## Building
 
 ### Prerequisites
