@@ -21,11 +21,6 @@
 #include <chrono>
 #include <thread>
 
-#define GLM_ENABLE_EXPERIMENTAL
-#include <glm/gtx/transform.hpp>
-
-#include <stb_image.h>
-
 #include <Debug.hpp>
 
 #define NOMINMAX
@@ -182,7 +177,8 @@ void AgniEngine::draw()
 	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
 	// Render the frame
-	m_renderer.renderFrame(cmd, swapchainImageIndex, getCurrentFrame(), m_windowExtent);
+	m_renderer.renderFrame(
+	cmd, swapchainImageIndex, getCurrentFrame(), m_windowExtent);
 
 	// finalize the command buffer (we can no longer add commands, but it can
 	// now be executed)
@@ -213,7 +209,7 @@ void AgniEngine::draw()
 	//  we want to wait on the _renderSemaphore for that,
 	//  as its necessary that drawing commands have finished before the image is
 	//  displayed to the user
-	VkSwapchainKHR swapchain = m_swapchainManager.getSwapchain();
+	VkSwapchainKHR   swapchain   = m_swapchainManager.getSwapchain();
 	VkPresentInfoKHR presentInfo = {};
 	presentInfo.sType            = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	presentInfo.pNext            = nullptr;
@@ -311,8 +307,10 @@ void AgniEngine::run()
 		if (ImGui::Begin("Stats"))
 		{
 			ImGui::Text("frametime %f ms", m_renderer.getStats().m_frametime);
-			ImGui::Text("draw time %f ms", m_renderer.getStats().m_meshDrawTime);
-			ImGui::Text("update time %f ms", m_renderer.getStats().m_sceneUpdateTime);
+			ImGui::Text("draw time %f ms",
+			            m_renderer.getStats().m_meshDrawTime);
+			ImGui::Text("update time %f ms",
+			            m_renderer.getStats().m_sceneUpdateTime);
 			ImGui::Text("triangles %i", m_renderer.getStats().m_triangleCount);
 			ImGui::Text("draws %i", m_renderer.getStats().m_drawcallCount);
 		}
@@ -320,7 +318,8 @@ void AgniEngine::run()
 
 		if (ImGui::Begin("background"))
 		{
-			ImGui::SliderFloat("Render Scale", &m_renderer.getRenderScale(), 0.3f, 1.f);
+			ImGui::SliderFloat(
+			"Render Scale", &m_renderer.getRenderScale(), 0.3f, 1.f);
 
 			// MSAA sample count selector
 			const char* msaaSampleNames[] = {
@@ -385,7 +384,8 @@ void AgniEngine::run()
 		// convert to microseconds (integer), and then come back to miliseconds
 		auto frameElapsed =
 		std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-		m_renderer.getStats().m_frametime = frameElapsed.count() / 1000.f; // in milliseconds
+		m_renderer.getStats().m_frametime =
+		frameElapsed.count() / 1000.f; // in milliseconds
 	}
 }
 
@@ -453,7 +453,8 @@ void AgniEngine::initVulkan()
 	vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
 
 	// initializing ResourceManager
-	m_resourceManager.init(m_instance, m_chosenGPU, m_device, m_graphicsQueue, m_graphicsQueueFamily);
+	m_resourceManager.init(
+	m_instance, m_chosenGPU, m_device, m_graphicsQueue, m_graphicsQueueFamily);
 }
 
 void AgniEngine::initSwapchain()
@@ -556,7 +557,8 @@ void AgniEngine::resizeSwapchain()
 
 	m_swapchainManager.resize(m_chosenGPU, m_device, m_surface, m_windowExtent);
 
-	// Resize renderer (recreates render targets with new extent and MSAA settings)
+	// Resize renderer (recreates render targets with new extent and MSAA
+	// settings)
 	m_renderer.resize(m_windowExtent, m_renderer.getMsaaSamples());
 
 	// Rebuild pipelines with new MSAA settings
@@ -593,10 +595,7 @@ void AgniEngine::initDescriptors()
 
 	// adding vkDestroyDescriptorPool to the deletion queue
 	m_resourceManager.getMainDeletionQueue().push_function(
-	[&]()
-	{
-		m_globalDescriptorAllocator.destroyPools(m_device);
-	});
+	[&]() { m_globalDescriptorAllocator.destroyPools(m_device); });
 }
 
 void AgniEngine::initPipelines()
@@ -662,8 +661,8 @@ void AgniEngine::initImgui()
 	// dynamic rendering parameters for imgui to use
 	initInfo.PipelineInfoMain.PipelineRenderingCreateInfo = {
 	.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
-	initInfo.PipelineInfoMain.PipelineRenderingCreateInfo
-	.colorAttachmentCount = 1;
+	initInfo.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount =
+	1;
 	VkFormat swapchainFormat = m_swapchainManager.getSwapchainImageFormat();
 	initInfo.PipelineInfoMain.PipelineRenderingCreateInfo
 	.pColorAttachmentFormats = &swapchainFormat;

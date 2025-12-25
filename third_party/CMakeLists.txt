@@ -5,17 +5,30 @@ add_subdirectory(Vulkan-Headers)
 set(VULKAN_HEADERS_INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Vulkan-Headers")
 add_subdirectory(volk)
 
-# Add shaderc for shader compilation (only if shader compilation is enabled)
-if(AGNI_COMPILE_SHADERS)
-	set(SHADERC_SKIP_TESTS ON CACHE BOOL "" FORCE)
-	set(SHADERC_SKIP_EXAMPLES ON CACHE BOOL "" FORCE)
-	set(SHADERC_SKIP_COPYRIGHT_CHECK ON CACHE BOOL "" FORCE)
+# Configure Slang shader compiler
+# Disable features we don't need to reduce build time
+set(SLANG_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+set(SLANG_ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(SLANG_ENABLE_GFX OFF CACHE BOOL "" FORCE)           # We have our own Vulkan renderer
+set(SLANG_ENABLE_SLANGD OFF CACHE BOOL "" FORCE)        # Language server not needed
+set(SLANG_ENABLE_SLANGI OFF CACHE BOOL "" FORCE)        # Interpreter not needed
+set(SLANG_ENABLE_SLANG_RHI OFF CACHE BOOL "" FORCE)     # RHI not needed
+set(SLANG_ENABLE_CUDA OFF CACHE BOOL "" FORCE)          # CUDA not needed
+set(SLANG_ENABLE_OPTIX OFF CACHE BOOL "" FORCE)         # OptiX not needed
 
-	# Build only what we need
-	set(SPIRV_SKIP_TESTS ON CACHE BOOL "" FORCE)
+# Keep these enabled for shader compilation
+set(SLANG_ENABLE_SLANGC ON CACHE BOOL "" FORCE)         # Standalone compiler
+set(SLANG_ENABLE_SLANGRT ON CACHE BOOL "" FORCE)        # Runtime target
+set(SLANG_ENABLE_SLANG_GLSLANG ON CACHE BOOL "" FORCE)  # glslang for GLSL/SPIR-V
 
-	add_subdirectory(shaderc)
-endif()
+# Enable glslang standalone tools (glslangValidator) for GLSL shader compilation
+set(ENABLE_GLSLANG_BINARIES ON CACHE BOOL "" FORCE)
+
+# Use Slang's bundled dependencies
+set(SLANG_USE_SYSTEM_VULKAN_HEADERS OFF CACHE BOOL "" FORCE)
+set(SLANG_USE_SYSTEM_SPIRV_HEADERS OFF CACHE BOOL "" FORCE)
+
+add_subdirectory(slang EXCLUDE_FROM_ALL)
 
 add_library(vkbootstrap STATIC)
 add_library(glm INTERFACE)
