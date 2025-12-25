@@ -7,9 +7,7 @@
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_vulkan.h>
 
-#include <Images.hpp>
 #include <Initializers.hpp>
-#include <Pipelines.hpp>
 #include <Types.hpp>
 #include <VulkanTools.hpp>
 
