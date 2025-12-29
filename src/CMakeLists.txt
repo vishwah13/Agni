@@ -40,17 +40,22 @@ add_executable (engine
 )
 
 # Add shader files to the project so they appear in Visual Studio
-file(GLOB_RECURSE SHADER_FILES
+file(GLOB_RECURSE GLSL_SHADER_FILES
   "${PROJECT_SOURCE_DIR}/shaders/glsl/*.comp"
   "${PROJECT_SOURCE_DIR}/shaders/glsl/*.vert"
   "${PROJECT_SOURCE_DIR}/shaders/glsl/*.frag"
   "${PROJECT_SOURCE_DIR}/shaders/glsl/*.glsl"
 )
 
-target_sources(engine PRIVATE ${SHADER_FILES})
+file(GLOB_RECURSE SLANG_SHADER_FILES
+  "${PROJECT_SOURCE_DIR}/shaders/slang/*.slang"
+)
+
+target_sources(engine PRIVATE ${GLSL_SHADER_FILES} ${SLANG_SHADER_FILES})
 
 # Set the folder for shaders in Visual Studio
-source_group("Shaders" FILES ${SHADER_FILES})
+source_group("Shaders/GLSL" FILES ${GLSL_SHADER_FILES})
+source_group("Shaders/Slang" FILES ${SLANG_SHADER_FILES})
 
 set_property(TARGET engine PROPERTY CXX_STANDARD 20)
 target_compile_definitions(engine PUBLIC GLM_FORCE_DEPTH_ZERO_TO_ONE)
