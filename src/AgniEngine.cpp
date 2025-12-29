@@ -73,6 +73,10 @@ void AgniEngine::init()
 	                &m_globalDescriptorAllocator,
 	                m_windowExtent);
 
+	// Initialize asset loader (creates default textures and samplers)
+	// Must be called before initPipelines() which builds material pipelines
+	m_assetLoader.init(&m_resourceManager, m_device);
+
 	initPipelines();
 
 	initImgui();
@@ -701,17 +705,30 @@ void AgniEngine::initDefaultData()
 	m_mainCamera.m_speed            = .1f;
 	m_mainCamera.m_mouseSensitivity = 0.3f;
 
-	// Initialize asset loader (creates default textures and shared samplers)
-	m_assetLoader.init(&m_resourceManager, m_device);
-
+	std::string meshPrimitivesPath = {"../../assets/MeshPrimitives.glb"};
 	// std::string structurePath = {"../../assets/structure.glb"};
 	std::string helmetPath = {"../../assets/flighthelmet/helmet.glb"};
 	// auto        structureFile = m_assetLoader.loadGltf(this, structurePath);
+	auto meshPrimitivesFile = m_assetLoader.loadGltf(this, meshPrimitivesPath);
 	auto helmetPathFile = m_assetLoader.loadGltf(this, helmetPath);
 
+	assert(meshPrimitivesFile.has_value());
 	assert(helmetPathFile.has_value());
 
+	// Debug: print available mesh names
+	fmt::print("Available meshes in MeshPrimitives.glb:\n");
+	for (auto& [name, mesh] : meshPrimitivesFile->get()->meshes)
+	{
+		fmt::print("  - '{}'\n", name);
+	}
+
+	auto sphereMesh = meshPrimitivesFile->get()->meshes["Icosphere"];
+	
+
+	
+
 	// m_renderer.getLoadedScenes()["structure"] = *structureFile;
+	m_assetLoader.getMeshResources() = *meshPrimitivesFile;
 	m_renderer.getLoadedScenes()["helmet"] = *helmetPathFile;
 
 	// Add test point lights
@@ -719,14 +736,21 @@ void AgniEngine::initDefaultData()
 	testLight1->setColor(glm::vec3(1.0f, 0.f, 0.f)); // red light
 	testLight1->setIntensity(5.0f);
 	testLight1->setRadius(10.0f);
-	testLight1->getLocalTransform() = glm::translate(glm::mat4(1.0f), glm::vec3(2.0f, 2.0f, 2.0f));
+	testLight1->setMesh(m_assetLoader.getMeshResources().get()->meshes["Sphere"]);
+	testLight1->getLocalTransform() =
+	glm::translate(glm::mat4(1.0f), glm::vec3(2.0f, 2.0f, 2.0f));
+	testLight1->setMeshScale(0.1f);
 	helmetPathFile->get()->m_topNodes.push_back(testLight1);
 
 	auto testLight2 = std::make_shared<LightNode>();
-	testLight2->setColor(glm::vec3(0.3f, 0.5f, 1.0f)); // Cool blue
-	testLight2->setIntensity(3.0f);
-	testLight2->setRadius(8.0f);
-	testLight2->getLocalTransform() = glm::translate(glm::mat4(1.0f), glm::vec3(-2.0f, 1.5f, -1.0f));
+	testLight2->setColor(glm::vec3(0.0f, 1.f, 0.0f)); // Green blue
+	testLight2->setIntensity(10.0f);
+	testLight2->setRadius(18.0f);
+	testLight2->getLocalTransform() =
+	glm::translate(glm::mat4(1.0f), glm::vec3(-2.0f, 1.5f, -1.0f));
+	testLight2->setMesh(
+	m_assetLoader.getMeshResources().get()->meshes["Cube"]);
+	testLight2->setMeshScale(0.1f);
 	helmetPathFile->get()->m_topNodes.push_back(testLight2);
 
 	// Initialize m_skybox
@@ -792,6 +816,44 @@ void LightNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
 		ctx.m_PointLights.push_back(gpuLight);
 	}
 
+	// Draw optional visual mesh if present (delegate to MeshNode)
+	if (m_meshNode)
+	{
+		m_meshNode->Draw(nodeMatrix, ctx);
+	}
+
 	// Recurse to children (lights can have child lights or other nodes)
 	Node::Draw(topMatrix, ctx);
+}
+
+void LightNode::setMesh(std::shared_ptr<MeshAsset> mesh)
+{
+	if (mesh)
+	{
+		m_meshNode = std::make_shared<MeshNode>();
+		m_meshNode->getMesh() = mesh;
+		// MeshNode uses identity local transform - position comes from LightNode
+	}
+	else
+	{
+		m_meshNode = nullptr;
+	}
+}
+
+void LightNode::setMeshScale(float scale)
+{
+	setMeshScale(glm::vec3(scale));
+}
+
+void LightNode::setMeshScale(const glm::vec3& scale)
+{
+	if (m_meshNode)
+	{
+		m_meshNode->getWorldTransform() = glm::scale(glm::mat4(1.0f), scale);
+	}
+}
+
+std::shared_ptr<MeshAsset> LightNode::getMesh() const
+{
+	return m_meshNode ? m_meshNode->getMesh() : nullptr;
 }

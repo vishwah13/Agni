@@ -96,6 +96,14 @@ void AssetLoader::init(ResourceManager* resourceManager, VkDevice device)
 	                                              0.0f,
 	                                              0.0f,
 	                                              VK_FILTER_NEAREST);
+	// Default normal texture (flat normal pointing up in tangent space: 0.5, 0.5, 1.0)
+	m_defaultNormalTexture.createSolidColor(*m_resourceManager,
+	                                        m_device,
+	                                        0.5f,
+	                                        0.5f,
+	                                        1.0f,
+	                                        1.0f,
+	                                        VK_FILTER_LINEAR);
 
 	// Create shared samplers
 	VkSamplerCreateInfo samplerInfo = {
@@ -135,6 +143,12 @@ void AssetLoader::cleanup()
 	m_greyTexture.destroy(*m_resourceManager, m_device);
 	m_blackTexture.destroy(*m_resourceManager, m_device);
 	m_errorCheckerboardTexture.destroy(*m_resourceManager, m_device);
+	m_defaultNormalTexture.destroy(*m_resourceManager, m_device);
+
+	// Destroy default material resources
+	m_defaultMaterial.reset();
+	m_defaultMaterialDescriptorPool.destroyPools(m_device);
+	m_resourceManager->destroyBuffer(m_defaultMaterialBuffer);
 
 	// Destroy shared samplers
 	if (m_linearSampler != VK_NULL_HANDLE)
@@ -158,6 +172,11 @@ void AssetLoader::cleanup()
 		m_nearestMipmapSampler = VK_NULL_HANDLE;
 	}
 
+	if (m_meshResources != VK_NULL_HANDLE)
+	{
+		m_meshResources.reset();
+	}
+
 	// Clear material system resources
 	m_metalRoughMaterial.clearResources(m_device);
 }
@@ -165,6 +184,40 @@ void AssetLoader::cleanup()
 void AssetLoader::buildPipelines(AgniEngine* engine)
 {
 	m_metalRoughMaterial.buildPipelines(engine);
+
+	// Create default material for glTF files without materials
+	// Setup descriptor pool for default material
+	std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> sizes = {
+		{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4},
+		{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}
+	};
+	m_defaultMaterialDescriptorPool.init(m_device, 1, sizes);
+
+	// Create buffer for default material constants
+	m_defaultMaterialBuffer = m_resourceManager->createBuffer(
+		sizeof(GltfPbrMaterial::MaterialConstants),
+		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+		VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+	// Set default material constants (white, non-metallic, medium roughness)
+	GltfPbrMaterial::MaterialConstants* constants =
+		(GltfPbrMaterial::MaterialConstants*)m_defaultMaterialBuffer.m_info.pMappedData;
+	constants->m_colorFactors        = glm::vec4(1.0f);
+	constants->m_metal_rough_factors = glm::vec4(0.0f, 0.5f, 0.0f, 0.0f);
+
+	// Setup material resources with default textures
+	GltfPbrMaterial::MaterialResources materialResources;
+	materialResources.m_colorTexture      = m_whiteTexture;
+	materialResources.m_metalRoughTexture = m_whiteTexture;
+	materialResources.m_normalTexture     = m_defaultNormalTexture;
+	materialResources.m_aoTexture         = m_whiteTexture;
+	materialResources.m_dataBuffer        = m_defaultMaterialBuffer.m_buffer;
+	materialResources.m_dataBufferOffset  = 0;
+
+	// Create the default material
+	m_defaultMaterial       = std::make_shared<GLTFMaterial>();
+	m_defaultMaterial->m_data = m_metalRoughMaterial.writeMaterial(
+		m_device, MaterialPass::MainColor, materialResources, m_defaultMaterialDescriptorPool);
 }
 
 // ============================================================================
@@ -489,12 +542,16 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 	}
 
 	// we can stimate the descriptors we will need accurately
-	std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> sizes = {
-	{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3},
-	{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3},
-	{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1}};
+	// Only create descriptor pool if there are materials
+	if (!gltf.materials.empty())
+	{
+		std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> sizes = {
+		{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3},
+		{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3},
+		{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1}};
 
-	file.m_descriptorPool.init(engine->m_device, gltf.materials.size(), sizes);
+		file.m_descriptorPool.init(engine->m_device, gltf.materials.size(), sizes);
+	}
 
 	// Map glTF samplers to shared samplers
 	// Instead of creating new samplers, we map to our shared samplers
@@ -567,15 +624,19 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		imageIndex++;
 	}
 
-	// create buffer to hold the material data
-	file.m_materialDataBuffer = engine->m_resourceManager.createBuffer(
-	sizeof(GltfPbrMaterial::MaterialConstants) * gltf.materials.size(),
-	VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-	VMA_MEMORY_USAGE_CPU_TO_GPU);
-	int                                 dataIndex = 0;
-	GltfPbrMaterial::MaterialConstants* sceneMaterialConstants =
-	(GltfPbrMaterial::MaterialConstants*)
-	file.m_materialDataBuffer.m_info.pMappedData;
+	// create buffer to hold the material data (only if there are materials)
+	int                                 dataIndex              = 0;
+	GltfPbrMaterial::MaterialConstants* sceneMaterialConstants = nullptr;
+
+	if (!gltf.materials.empty())
+	{
+		file.m_materialDataBuffer = engine->m_resourceManager.createBuffer(
+		sizeof(GltfPbrMaterial::MaterialConstants) * gltf.materials.size(),
+		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+		VMA_MEMORY_USAGE_CPU_TO_GPU);
+		sceneMaterialConstants = (GltfPbrMaterial::MaterialConstants*)
+		file.m_materialDataBuffer.m_info.pMappedData;
+	}
 
 	for (fastgltf::Material& mat : gltf.materials)
 	{
@@ -604,7 +665,7 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		// default the material textures
 		materialResources.m_colorTexture      = m_whiteTexture;
 		materialResources.m_metalRoughTexture = m_whiteTexture;
-		materialResources.m_normalTexture     = m_whiteTexture;
+		materialResources.m_normalTexture     = m_defaultNormalTexture;
 		materialResources.m_aoTexture         = m_whiteTexture;
 
 		// set the uniform buffer for the material data
@@ -825,9 +886,14 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 			{
 				newSurface.m_material = materials[p.materialIndex.value()];
 			}
-			else
+			else if (!materials.empty())
 			{
 				newSurface.m_material = materials[0];
+			}
+			else
+			{
+				// No materials in glTF file, use engine's default material
+				newSurface.m_material = m_defaultMaterial;
 			}
 
 			// loop the vertices of this surface, find min/max bounds
@@ -870,7 +936,7 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		}
 
 		nodes.push_back(newNode);
-		file.nodes[node.name.c_str()];
+		file.nodes[node.name.c_str()] = newNode;
 
 		std::visit(
 		fastgltf::visitor {[&](fastgltf::math::fmat4x4 matrix)
@@ -929,6 +995,12 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 
 void LoadedGLTF::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
 {
+	// update transforms before drawing
+	for (auto& n : m_topNodes)
+	{
+		n->refreshTransform(topMatrix);
+	}
+
 	// create renderables from the scenenodes
 	for (auto& n : m_topNodes)
 	{
@@ -945,9 +1017,11 @@ void LoadedGLTF::clearAll()
 
 	for (auto& [k, v] : meshes)
 	{
-
-		m_creator->m_resourceManager.destroyBuffer(v->m_meshBuffers.m_indexBuffer);
-		m_creator->m_resourceManager.destroyBuffer(v->m_meshBuffers.m_vertexBuffer);
+		if (v)
+		{
+			m_creator->m_resourceManager.destroyBuffer(v->m_meshBuffers.m_indexBuffer);
+			m_creator->m_resourceManager.destroyBuffer(v->m_meshBuffers.m_vertexBuffer);
+		}
 	}
 
 	for (auto& [k, v] : m_images)

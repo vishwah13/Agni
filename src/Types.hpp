@@ -30,9 +30,9 @@ struct AllocatedImage
 
 struct AllocatedBuffer
 {
-	VkBuffer          m_buffer;
-	VmaAllocation     m_allocation;
-	VmaAllocationInfo m_info;
+	VkBuffer          m_buffer     = VK_NULL_HANDLE;
+	VmaAllocation     m_allocation = VK_NULL_HANDLE;
+	VmaAllocationInfo m_info       = {};
 };
 
 struct Vertex

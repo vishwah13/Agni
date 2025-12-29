@@ -99,7 +99,10 @@ AllocatedBuffer ResourceManager::createBuffer(size_t             allocSize,
 
 void ResourceManager::destroyBuffer(const AllocatedBuffer& buffer)
 {
-	vmaDestroyBuffer(m_allocator, buffer.m_buffer, buffer.m_allocation);
+	if (buffer.m_buffer != VK_NULL_HANDLE)
+	{
+		vmaDestroyBuffer(m_allocator, buffer.m_buffer, buffer.m_allocation);
+	}
 }
 
 AllocatedImage ResourceManager::createImage(VkExtent3D            size,

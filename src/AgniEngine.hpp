@@ -74,8 +74,16 @@ public:
 	float     getIntensity() const { return m_light.intensity; }
 	float     getRadius() const { return m_light.radius; }
 
+	// Optional visual mesh for the light (uses MeshNode internally)
+	void setMesh(std::shared_ptr<MeshAsset> mesh);
+	void setMeshScale(float scale);
+	void setMeshScale(const glm::vec3& scale);
+	std::shared_ptr<MeshAsset> getMesh() const;
+	bool hasMesh() const { return m_meshNode != nullptr; }
+
 protected:
-	LightComponent m_light;
+	LightComponent          m_light;
+	std::shared_ptr<MeshNode> m_meshNode; // Optional visual representation
 };
 
 class AgniEngine

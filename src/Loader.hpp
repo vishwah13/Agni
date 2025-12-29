@@ -90,6 +90,22 @@ public:
 	{
 		return m_errorCheckerboardTexture;
 	}
+	const Texture& getDefaultNormalTexture() const
+	{
+		return m_defaultNormalTexture;
+	}
+
+	// Default material getter (for glTF files without materials)
+	std::shared_ptr<GLTFMaterial> getDefaultMaterial() const
+	{
+		return m_defaultMaterial;
+	}
+
+	// Mesh resources (kept alive but not rendered, e.g., primitives for lights)
+	std::shared_ptr<LoadedGLTF>& getMeshResources()
+	{
+		return m_meshResources;
+	}
 
 	// Shared sampler getters
 	VkSampler getLinearSampler() const
@@ -130,6 +146,7 @@ private:
 	Texture m_blackTexture;
 	Texture m_greyTexture;
 	Texture m_errorCheckerboardTexture;
+	Texture m_defaultNormalTexture; // Flat normal (0.5, 0.5, 1.0)
 
 	// Shared samplers
 	VkSampler m_linearSampler        = VK_NULL_HANDLE;
@@ -139,6 +156,14 @@ private:
 
 	// PBR Material system (shared pipeline for all glTF materials)
 	GltfPbrMaterial m_metalRoughMaterial;
+
+	// Default material (for glTF files without materials)
+	std::shared_ptr<GLTFMaterial> m_defaultMaterial;
+	DescriptorAllocatorGrowable   m_defaultMaterialDescriptorPool;
+	AllocatedBuffer               m_defaultMaterialBuffer;
+
+	// Mesh resources (kept alive but not rendered)
+	std::shared_ptr<LoadedGLTF> m_meshResources;
 
 	ResourceManager* m_resourceManager = nullptr;
 	VkDevice         m_device          = VK_NULL_HANDLE;
