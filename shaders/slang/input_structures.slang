@@ -29,3 +29,22 @@ struct Vertex
     float4 color;       // 16 bytes
     float4 tangent;     // 16 bytes
 };
+
+// Point light structure (matches C++ GPUPointLight)
+struct PointLight
+{
+    float3 position;
+    float  radius;
+    float3 color;
+    float  intensity;
+};
+
+// Light data buffer structure (matches C++ GPULightData)
+struct LightData
+{
+    uint numPointLights;
+    uint padding0;
+    uint padding1;
+    uint padding2;
+    PointLight pointLights[256];  // MAX_POINT_LIGHTS
+};

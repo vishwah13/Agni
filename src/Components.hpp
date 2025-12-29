@@ -83,6 +83,24 @@ struct SkyboxComponent
 };
 
 // ============================================================================
+// Light Component
+// ============================================================================
+
+enum class LightType : uint8_t
+{
+	Point,
+	// Future: Spot, Directional, Area
+};
+
+struct LightComponent
+{
+	LightType type {LightType::Point};
+	glm::vec3 color {1.0f, 1.0f, 1.0f};
+	float     intensity {1.0f};
+	float     radius {10.0f};  // Attenuation radius for point lights
+};
+
+// ============================================================================
 // Renderable Tag (for ECS queries)
 // ============================================================================
 

@@ -57,8 +57,9 @@ struct RenderObject
 
 struct DrawContext
 {
-	std::vector<RenderObject> m_OpaqueSurfaces;
-	std::vector<RenderObject> m_TransparentSurfaces;
+	std::vector<RenderObject>  m_OpaqueSurfaces;
+	std::vector<RenderObject>  m_TransparentSurfaces;
+	std::vector<GPUPointLight> m_PointLights;
 };
 
 class Renderer

@@ -9,6 +9,23 @@ layout(set = 0, binding = 0) uniform  SceneData{
 	vec3 camPos; // camera position for view vector
 } sceneData;
 
+// Point light structure (matches C++ GPUPointLight)
+struct PointLight {
+	vec3  position;
+	float radius;
+	vec3  color;
+	float intensity;
+};
+
+// Light data SSBO (set 0, binding 1)
+layout(std430, set = 0, binding = 1) readonly buffer LightData {
+	uint       numPointLights;
+	uint       padding0;
+	uint       padding1;
+	uint       padding2;
+	PointLight pointLights[256]; // MAX_POINT_LIGHTS
+} lightData;
+
 layout(set = 1, binding = 0) uniform GLTFMaterialData{   
 
 	vec4 colorFactors;

@@ -191,10 +191,11 @@ void Renderer::initDescriptors()
 	m_drawImageDescriptors =
 	m_globalDescriptorAllocator->allocate(m_device, m_drawImageDescriptorLayout);
 
-	// Create descriptor set layout for GPU scene data
+	// Create descriptor set layout for GPU scene data + lights
 	{
 		DescriptorLayoutBuilder builder;
-		builder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+		builder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);   // Scene data
+		builder.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);   // Light data
 		m_gpuSceneDataDescriptorLayout = builder.build(
 		m_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 	}
@@ -500,18 +501,35 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	                               VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 	                               VMA_MEMORY_USAGE_CPU_TO_GPU);
 
-	// add it to the deletion queue of this frame so it gets deleted once its
-	// been used
+	// allocate storage buffer for light data
+	AllocatedBuffer gpuLightDataBuffer =
+	m_resourceManager->createBuffer(sizeof(GPULightData),
+	                               VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+	                               VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+	// add buffers to the deletion queue of this frame so they get deleted once used
 	ResourceManager* rm = m_resourceManager;
 	currentFrame.m_deletionQueue.push_function(
-	[rm, gpuSceneDataBuffer]() { rm->destroyBuffer(gpuSceneDataBuffer); });
+	[rm, gpuSceneDataBuffer, gpuLightDataBuffer]() {
+		rm->destroyBuffer(gpuSceneDataBuffer);
+		rm->destroyBuffer(gpuLightDataBuffer);
+	});
 
-	// write the buffer
+	// write the scene data buffer
 	GPUSceneData* sceneUniformData =
 	(GPUSceneData*) gpuSceneDataBuffer.m_info.pMappedData;
 	*sceneUniformData = m_sceneData;
 
-	// create a descriptor set that binds that buffer and update it
+	// write the light data buffer
+	GPULightData* lightData = (GPULightData*) gpuLightDataBuffer.m_info.pMappedData;
+	lightData->m_numPointLights = static_cast<uint32_t>(
+		std::min(m_mainDrawContext.m_PointLights.size(), static_cast<size_t>(MAX_POINT_LIGHTS)));
+	for (uint32_t i = 0; i < lightData->m_numPointLights; ++i)
+	{
+		lightData->m_pointLights[i] = m_mainDrawContext.m_PointLights[i];
+	}
+
+	// create a descriptor set that binds both buffers and update it
 	VkDescriptorSet globalDescriptor =
 	currentFrame.m_frameDescriptors.allocate(
 	m_device, m_gpuSceneDataDescriptorLayout);
@@ -522,6 +540,11 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	                   sizeof(GPUSceneData),
 	                   0,
 	                   VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+	writer.writeBuffer(1,
+	                   gpuLightDataBuffer.m_buffer,
+	                   sizeof(GPULightData),
+	                   0,
+	                   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
 	writer.updateSet(m_device, globalDescriptor);
 
 	// keep track of what state we are binding
@@ -637,6 +660,7 @@ void Renderer::updateScene(float deltaTime, VkExtent2D windowExtent)
 
 	m_mainDrawContext.m_OpaqueSurfaces.clear();
 	m_mainDrawContext.m_TransparentSurfaces.clear();
+	m_mainDrawContext.m_PointLights.clear();
 
 	m_camera->update(deltaTime);
 	// camera view

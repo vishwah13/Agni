@@ -4,6 +4,7 @@
 #include <vk_mem_alloc.h>
 
 #include <Camera.hpp>
+#include <Components.hpp>
 #include <Descriptors.hpp>
 #include <Loader.hpp>
 #include <Material.hpp>
@@ -52,6 +53,29 @@ public:
 
 protected:
 	std::shared_ptr<MeshAsset> m_mesh;
+};
+
+class LightNode : public Node
+{
+public:
+	virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx) override;
+
+	// Light property accessors
+	LightComponent&       getLightComponent() { return m_light; }
+	const LightComponent& getLightComponent() const { return m_light; }
+
+	// Convenience setters
+	void setColor(const glm::vec3& color) { m_light.color = color; }
+	void setIntensity(float intensity) { m_light.intensity = intensity; }
+	void setRadius(float radius) { m_light.radius = radius; }
+
+	// Convenience getters
+	glm::vec3 getColor() const { return m_light.color; }
+	float     getIntensity() const { return m_light.intensity; }
+	float     getRadius() const { return m_light.radius; }
+
+protected:
+	LightComponent m_light;
 };
 
 class AgniEngine

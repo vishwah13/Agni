@@ -80,3 +80,23 @@ struct GPUSceneData
 	glm::vec4 m_sunlightColor;
 	glm::vec3 m_cameraPosition;
 };
+
+// Maximum number of point lights supported
+constexpr uint32_t MAX_POINT_LIGHTS = 256;
+
+// GPU-side point light structure (std430 layout compatible)
+struct GPUPointLight
+{
+	glm::vec3 m_position;
+	float     m_radius;      // Attenuation radius
+	glm::vec3 m_color;
+	float     m_intensity;
+};
+
+// Light buffer structure for SSBO
+struct GPULightData
+{
+	uint32_t      m_numPointLights;
+	uint32_t      m_padding[3];  // Align to 16 bytes for std430
+	GPUPointLight m_pointLights[MAX_POINT_LIGHTS];
+};

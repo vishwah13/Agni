@@ -58,6 +58,15 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
 	return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
+// Point light attenuation (smooth falloff within radius)
+float calculateAttenuation(float distance, float radius)
+{
+	// Smooth quadratic falloff with radius cutoff
+	float ratio = distance / radius;
+	float attenuation = clamp(1.0 - ratio * ratio, 0.0, 1.0);
+	return attenuation * attenuation;
+}
+
 void main()
 {
 	// Sample textures
@@ -114,6 +123,39 @@ void main()
 
 	float NdotL = max(dot(N, L), 0.0);
 	Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+
+	// Point lights
+	uint numLights = lightData.numPointLights;
+	for (uint i = 0; i < numLights; ++i)
+	{
+		PointLight light = lightData.pointLights[i];
+
+		// Calculate light direction and distance
+		vec3 lightVec = light.position - inWorldPos;
+		float distance = length(lightVec);
+		vec3 pL = normalize(lightVec);
+		vec3 pH = normalize(V + pL);
+
+		// Attenuation based on distance and radius
+		float attenuation = calculateAttenuation(distance, light.radius);
+		vec3 pRadiance = light.color * light.intensity * attenuation;
+
+		// Cook-Torrance BRDF (same as directional)
+		float pNDF = DistributionGGX(N, pH, roughness);
+		float pG = GeometrySmith(N, V, pL, roughness);
+		vec3 pF = fresnelSchlick(max(dot(pH, V), 0.0), F0);
+
+		vec3 pNumerator = pNDF * pG * pF;
+		float pDenominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, pL), 0.0) + 0.0001;
+		vec3 pSpecular = pNumerator / pDenominator;
+
+		vec3 pKs = pF;
+		vec3 pKd = vec3(1.0) - pKs;
+		pKd *= 1.0 - metallic;
+
+		float pNdotL = max(dot(N, pL), 0.0);
+		Lo += (pKd * albedo / PI + pSpecular) * pRadiance * pNdotL;
+	}
 
 	// Ambient lighting (IBL approximation)
 	vec3 ambient = sceneData.ambientColor.rgb * albedo * ao;

@@ -714,6 +714,21 @@ void AgniEngine::initDefaultData()
 	// m_renderer.getLoadedScenes()["structure"] = *structureFile;
 	m_renderer.getLoadedScenes()["helmet"] = *helmetPathFile;
 
+	// Add test point lights
+	auto testLight1 = std::make_shared<LightNode>();
+	testLight1->setColor(glm::vec3(1.0f, 0.f, 0.f)); // red light
+	testLight1->setIntensity(5.0f);
+	testLight1->setRadius(10.0f);
+	testLight1->getLocalTransform() = glm::translate(glm::mat4(1.0f), glm::vec3(2.0f, 2.0f, 2.0f));
+	helmetPathFile->get()->m_topNodes.push_back(testLight1);
+
+	auto testLight2 = std::make_shared<LightNode>();
+	testLight2->setColor(glm::vec3(0.3f, 0.5f, 1.0f)); // Cool blue
+	testLight2->setIntensity(3.0f);
+	testLight2->setRadius(8.0f);
+	testLight2->getLocalTransform() = glm::translate(glm::mat4(1.0f), glm::vec3(-2.0f, 1.5f, -1.0f));
+	helmetPathFile->get()->m_topNodes.push_back(testLight2);
+
 	// Initialize m_skybox
 	// Load cubemap faces (order: right, left, top, bottom, front, back for
 	// Vulkan)
@@ -755,5 +770,28 @@ void MeshNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
 	}
 
 	// recurse down
+	Node::Draw(topMatrix, ctx);
+}
+
+void LightNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
+{
+	// Calculate world position from transform hierarchy
+	glm::mat4 nodeMatrix    = topMatrix * m_worldTransform;
+	glm::vec3 worldPosition = glm::vec3(nodeMatrix[3]); // Extract translation
+
+	// Add point light to context if within limit
+	if (m_light.type == LightType::Point &&
+	    ctx.m_PointLights.size() < MAX_POINT_LIGHTS)
+	{
+		GPUPointLight gpuLight;
+		gpuLight.m_position  = worldPosition;
+		gpuLight.m_color     = m_light.color;
+		gpuLight.m_intensity = m_light.intensity;
+		gpuLight.m_radius    = m_light.radius;
+
+		ctx.m_PointLights.push_back(gpuLight);
+	}
+
+	// Recurse to children (lights can have child lights or other nodes)
 	Node::Draw(topMatrix, ctx);
 }

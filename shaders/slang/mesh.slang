@@ -5,6 +5,10 @@ import input_structures;
 [[vk::binding(0, 0)]]
 ConstantBuffer<SceneData> sceneData;
 
+// Light data SSBO (set 0, binding 1)
+[[vk::binding(1, 0)]]
+StructuredBuffer<LightData> lightData;
+
 // Material data (set 1, binding 0)
 [[vk::binding(0, 1)]]
 ConstantBuffer<GLTFMaterialData> materialData;
@@ -127,6 +131,15 @@ float3 fresnelSchlick(float cosTheta, float3 F0)
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
+// Point light attenuation (smooth falloff within radius)
+float calculateAttenuation(float distance, float radius)
+{
+    // Smooth quadratic falloff with radius cutoff
+    float ratio = distance / radius;
+    float attenuation = saturate(1.0 - ratio * ratio);
+    return attenuation * attenuation;
+}
+
 [shader("fragment")]
 float4 fragmentMain(VertexOutput input) : SV_Target
 {
@@ -184,6 +197,39 @@ float4 fragmentMain(VertexOutput input) : SV_Target
 
     float NdotL = max(dot(N, L), 0.0);
     Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+
+    // Point lights
+    uint numLights = lightData[0].numPointLights;
+    for (uint i = 0; i < numLights; ++i)
+    {
+        PointLight light = lightData[0].pointLights[i];
+
+        // Calculate light direction and distance
+        float3 lightVec = light.position - input.worldPos;
+        float distance = length(lightVec);
+        float3 pL = normalize(lightVec);
+        float3 pH = normalize(V + pL);
+
+        // Attenuation based on distance and radius
+        float attenuation = calculateAttenuation(distance, light.radius);
+        float3 pRadiance = light.color * light.intensity * attenuation;
+
+        // Cook-Torrance BRDF (same as directional)
+        float pNDF = DistributionGGX(N, pH, roughness);
+        float pG = GeometrySmith(N, V, pL, roughness);
+        float3 pF = fresnelSchlick(max(dot(pH, V), 0.0), F0);
+
+        float3 pNumerator = pNDF * pG * pF;
+        float pDenominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, pL), 0.0) + 0.0001;
+        float3 pSpecular = pNumerator / pDenominator;
+
+        float3 pKs = pF;
+        float3 pKd = float3(1.0) - pKs;
+        pKd *= 1.0 - metallic;
+
+        float pNdotL = max(dot(N, pL), 0.0);
+        Lo += (pKd * albedo / PI + pSpecular) * pRadiance * pNdotL;
+    }
 
     // Ambient lighting (IBL approximation)
     float3 ambient = sceneData.ambientColor.rgb * albedo * ao;
