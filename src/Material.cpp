@@ -12,7 +12,7 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 {
 	VkShaderModule meshFragShader;
 	if (!vkutil::loadShaderModuleWithFallback(
-	    "../../shaders/glsl/Mesh.frag.spv",
+	    "../../shaders/slang/Mesh.frag.spv",
 	    engine->m_device,
 	    &meshFragShader,
 	    FallbackShaders::meshFragSpv,
@@ -23,7 +23,7 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 
 	VkShaderModule meshVertexShader;
 	if (!vkutil::loadShaderModuleWithFallback(
-	    "../../shaders/glsl/Mesh.vert.spv",
+	    "../../shaders/slang/Mesh.vert.spv",
 	    engine->m_device,
 	    &meshVertexShader,
 	    FallbackShaders::meshVertSpv,

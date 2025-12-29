@@ -409,27 +409,36 @@ void AgniEngine::initVulkan()
 
 	SDL_Vulkan_CreateSurface(m_window, m_instance, nullptr, &m_surface);
 
-	VkPhysicalDeviceFeatures deviceFeatures {.sampleRateShading = VK_TRUE};
-
+	VkPhysicalDeviceFeatures deviceFeatures {
+		.sampleRateShading = VK_TRUE,
+		.shaderInt64 = VK_TRUE  // Required for uint64_t buffer device addresses in shaders
+	};
 
 	// vulkan 1.3 features
-	VkPhysicalDeviceVulkan13Features features {
+	VkPhysicalDeviceVulkan13Features features13 {
 	.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
-	features.dynamicRendering = true;
-	features.synchronization2 = true;
+	features13.dynamicRendering = true;
+	features13.synchronization2 = true;
 
 	// vulkan 1.2 features
 	VkPhysicalDeviceVulkan12Features features12 {
 	.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
 	features12.bufferDeviceAddress = true;
 	features12.descriptorIndexing  = true;
+	features12.shaderInt8          = true;  // Often useful alongside int64
+
+	// vulkan 1.1 features
+	VkPhysicalDeviceVulkan11Features features11 {
+	.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES};
+	features11.shaderDrawParameters = true;  // Required for SV_VertexID in Slang shaders
 
 	// use vkbootstrap to select a gpu.
 	vkb::PhysicalDeviceSelector selector {vkbInstance};
 	vkb::PhysicalDevice physicalDevice = selector.set_minimum_version(1, 3)
 	                                     .set_required_features(deviceFeatures)
-	                                     .set_required_features_13(features)
+	                                     .set_required_features_13(features13)
 	                                     .set_required_features_12(features12)
+	                                     .set_required_features_11(features11)
 	                                     .set_surface(m_surface)
 	                                     .select()
 	                                     .value();
