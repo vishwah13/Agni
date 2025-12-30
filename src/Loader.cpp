@@ -4,6 +4,7 @@
 #include <stb_image.h>
 
 #include <AgniEngine.hpp>
+#include <Debug.hpp>
 #include <Initializers.hpp>
 #include <Loader.hpp>
 #include <Types.hpp>
@@ -358,9 +359,9 @@ std::optional<AllocatedImage> AssetLoader::loadImage(fastgltf::Asset& asset,
 		}
 		else
 		{
-			fmt::print("Failed to load image: {} - Reason: {}\n",
-			           path,
-			           stbi_failure_reason());
+			DBG_PRINT("Failed to load image: {} - Reason: {}\n",
+			          path,
+			          stbi_failure_reason());
 		}
 	},
 	[&](fastgltf::sources::Vector& vector)
@@ -389,8 +390,8 @@ std::optional<AllocatedImage> AssetLoader::loadImage(fastgltf::Asset& asset,
 		}
 		else
 		{
-			fmt::print("Failed to load image from memory: {}\n",
-			           stbi_failure_reason());
+			DBG_PRINT("Failed to load image from memory: {}\n",
+			          stbi_failure_reason());
 		}
 	},
 	[&](fastgltf::sources::BufferView& view)
@@ -433,8 +434,8 @@ std::optional<AllocatedImage> AssetLoader::loadImage(fastgltf::Asset& asset,
 			}
 			else
 			{
-				fmt::print("Failed to load image from buffer: {}\n",
-				           stbi_failure_reason());
+				DBG_PRINT("Failed to load image from buffer: {}\n",
+				          stbi_failure_reason());
 			}
 		},
 		[&](fastgltf::sources::Vector& vector)
@@ -464,8 +465,8 @@ std::optional<AllocatedImage> AssetLoader::loadImage(fastgltf::Asset& asset,
 			}
 			else
 			{
-				fmt::print("Failed to load image from buffer: {}\n",
-				           stbi_failure_reason());
+				DBG_PRINT("Failed to load image from buffer: {}\n",
+				          stbi_failure_reason());
 			}
 		}},
 		buffer.data);
@@ -488,7 +489,7 @@ std::optional<AllocatedImage> AssetLoader::loadImage(fastgltf::Asset& asset,
 std::optional<std::shared_ptr<LoadedGLTF>>
 AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 {
-	fmt::print("Loading GLTF: {}\n", filePath.string());
+	DBG_PRINT("Loading GLTF: {}\n", filePath.string());
 
 	std::shared_ptr<LoadedGLTF> scene = std::make_shared<LoadedGLTF>();
 	scene->m_creator                  = engine;
@@ -506,8 +507,8 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 
 	if (data.error() != fastgltf::Error::None)
 	{
-		fmt::print("Failed to load glTF file: {} \n",
-		           fastgltf::to_underlying(data.error()));
+		DBG_PRINT("Failed to load glTF file: {} \n",
+		          fastgltf::to_underlying(data.error()));
 		return {};
 	}
 
@@ -526,8 +527,8 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		}
 		else
 		{
-			fmt::print("Failed to parse glTF: {} \n",
-			           fastgltf::to_underlying(load.error()));
+			DBG_PRINT("Failed to parse glTF: {} \n",
+			          fastgltf::to_underlying(load.error()));
 			return {};
 		}
 	}
@@ -541,14 +542,14 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		}
 		else
 		{
-			fmt::print("Failed to parse glTF: {} \n",
-			           fastgltf::to_underlying(load.error()));
+			DBG_PRINT("Failed to parse glTF: {} \n",
+			          fastgltf::to_underlying(load.error()));
 			return {};
 		}
 	}
 	else
 	{
-		fmt::print("Failed to determine glTF container \n");
+		DBG_PRINT("Failed to determine glTF container \n");
 		return {};
 	}
 
@@ -887,7 +888,7 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 				// Generate tangents
 				if (!genTangSpaceDefault(&mikkContext))
 				{
-					fmt::print(
+					DBG_PRINT(
 					"Warning: Failed to generate tangents for mesh: {}\n",
 					mesh.name);
 				}

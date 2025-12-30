@@ -1,6 +1,7 @@
 #include <Renderer.hpp>
 
 #include <AgniEngine.hpp>
+#include <Debug.hpp>
 #include <Images.hpp>
 #include <Initializers.hpp>
 #include <Pipelines.hpp>
@@ -244,14 +245,14 @@ void Renderer::initBackgroundPipelines()
 	                              m_device,
 	                              &gradientShader))
 	{
-		fmt::print("Error when building the compute shader \n");
+		DBG_PRINT("Error when building the compute shader \n");
 	}
 
 	VkShaderModule skyShader;
 	if (!vkutil::loadShaderModule(
 	    "../../shaders//glsl/sky.comp.spv", m_device, &skyShader))
 	{
-		fmt::print("Error when building the compute shader \n");
+		DBG_PRINT("Error when building the compute shader \n");
 	}
 
 	VkPipelineShaderStageCreateInfo stageinfo {};

@@ -12,7 +12,7 @@ bool vkutil::loadShaderModule(const char*     filePath,
 
 	if (!file.is_open())
 	{
-		fmt::print("Failed to open file for shader: {}\n", filePath);
+		DBG_PRINT("Failed to open file for shader: {}\n", filePath);
 		return false;
 	}
 
@@ -52,7 +52,7 @@ bool vkutil::loadShaderModule(const char*     filePath,
 		return false;
 	}
 
-	fmt::print("Loaded shader file from: {}\n", filePath);
+	DBG_PRINT("Loaded shader file from: {}\n", filePath);
 
 	*outShaderModule = shaderModule;
 	return true;
@@ -71,7 +71,7 @@ bool vkutil::loadShaderModuleWithFallback(const char*          filePath,
 	}
 
 	// Log warning that fallback is being used
-	fmt::print("WARNING: Failed to load shader from {}, using embedded fallback shader\n", filePath);
+	DBG_PRINT("WARNING: Failed to load shader from {}, using embedded fallback shader\n", filePath);
 
 	// Load from embedded fallback SPIR-V
 	VkShaderModuleCreateInfo createInfo = {};
@@ -83,7 +83,7 @@ bool vkutil::loadShaderModuleWithFallback(const char*          filePath,
 	VkShaderModule shaderModule;
 	if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS)
 	{
-		fmt::print("ERROR: Failed to create shader module even with fallback!\n");
+		DBG_PRINT("ERROR: Failed to create shader module even with fallback!\n");
 		return false;
 	}
 
