@@ -51,7 +51,7 @@ void Skybox::buildPipelines(AgniEngine* engine)
 	    FallbackShaders::skyboxFragSpv,
 	    FallbackShaders::skyboxFragSpv_len))
 	{
-		fmt::println("Error when building the skybox fragment shader module");
+		DBG_PRINT("Error when building the skybox fragment shader module\n");
 	}
 
 	VkShaderModule skyVertexShader;
@@ -62,7 +62,7 @@ void Skybox::buildPipelines(AgniEngine* engine)
 	    FallbackShaders::skyboxVertSpv,
 	    FallbackShaders::skyboxVertSpv_len))
 	{
-		fmt::println("Error when building the skybox vertex shader module");
+		DBG_PRINT("Error when building the skybox vertex shader module\n");
 	}
 
 	VkPushConstantRange matrixRange {};
@@ -351,7 +351,7 @@ Skybox::createCubemap(ResourceManager&                  resourceManager,
 	stbi_load(faceFiles[0].c_str(), &width, &height, &channels, 4);
 	if (!faceData[0])
 	{
-		fmt::println("Failed to load cubemap face: {}", faceFiles[0]);
+		DBG_PRINT("Failed to load cubemap face: {}\n", faceFiles[0]);
 		throw std::runtime_error("Failed to load cubemap face");
 	}
 
@@ -362,8 +362,8 @@ Skybox::createCubemap(ResourceManager&                  resourceManager,
 		faceData[i] = stbi_load(faceFiles[i].c_str(), &w, &h, &c, 4);
 		if (!faceData[i] || w != width || h != height)
 		{
-			fmt::println(
-			"Failed to load or dimension mismatch for cubemap face: {}",
+			DBG_PRINT(
+			"Failed to load or dimension mismatch for cubemap face: {}\n",
 			faceFiles[i]);
 			// Clean up loaded faces
 			for (int j = 0; j <= i; j++)

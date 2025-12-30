@@ -5,6 +5,13 @@
 #include <volk.h>
 #include <vk_mem_alloc.h>
 
+// Debug print macro - only prints in Debug builds, zero overhead in Release
+#ifndef NDEBUG
+#define DBG_PRINT(...) fmt::print(__VA_ARGS__)
+#else
+#define DBG_PRINT(...) ((void)0)
+#endif
+
 // CPU allocation tracking
 struct AllocationMetrics
 {

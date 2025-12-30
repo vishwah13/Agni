@@ -1,4 +1,5 @@
-﻿#include <Initializers.hpp>
+﻿#include <Debug.hpp>
+#include <Initializers.hpp>
 #include <Pipelines.hpp>
 #include <fstream>
 
@@ -176,7 +177,7 @@ VkPipeline PipelineBuilder::buildPipeline(VkDevice device)
 	    device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &newPipeline) !=
 	    VK_SUCCESS)
 	{
-		fmt::println("failed to create pipeline");
+		DBG_PRINT("failed to create pipeline\n");
 		return VK_NULL_HANDLE; // failed to create graphics pipeline
 	}
 	else

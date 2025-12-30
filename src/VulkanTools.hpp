@@ -1,5 +1,5 @@
 #pragma once
-#include <fmt/core.h>
+#include <Debug.hpp>
 
 #include <string>
 
@@ -11,8 +11,8 @@
 		VkResult err = x;                               \
 		if (err != VK_SUCCESS)                          \
 		{                                               \
-			fmt::println("Fatal Vulkan error: {}",      \
-			             vks::tools::errorString(err)); \
+			DBG_PRINT("Fatal Vulkan error: {}\n",       \
+			          vks::tools::errorString(err));    \
 			assert(err == VK_SUCCESS);                  \
 		}                                               \
 	} while (0)

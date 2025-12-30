@@ -21,10 +21,10 @@ void operator delete(void* memory, size_t size)
 // Print CPU allocation metrics
 void PrintAllocationMetrics()
 {
-	fmt::print("Total allocated: {} bytes\n",
-	           g_allocationMetrics.m_totalAllocated);
-	fmt::print("Total freed: {} bytes\n", g_allocationMetrics.m_totalFreed);
-	fmt::print("Current usage: {} bytes\n", g_allocationMetrics.CurrentUsage());
+	DBG_PRINT("Total allocated: {} bytes\n",
+	          g_allocationMetrics.m_totalAllocated);
+	DBG_PRINT("Total freed: {} bytes\n", g_allocationMetrics.m_totalFreed);
+	DBG_PRINT("Current usage: {} bytes\n", g_allocationMetrics.CurrentUsage());
 }
 
 // Global VMA allocation stats
@@ -48,10 +48,10 @@ void VKAPI_CALL vmaAllocateDeviceMemoryCallback(
 	g_vmaStats.totalBytesAllocated += size;
 	g_vmaStats.currentBytesAllocated += size;
 
-	fmt::print("[VMA] Allocate: {} bytes (type: {}) | Current: {} allocs, {} bytes\n",
-	           size, memoryType,
-	           g_vmaStats.currentAllocations.load(),
-	           g_vmaStats.currentBytesAllocated.load());
+	DBG_PRINT("[VMA] Allocate: {} bytes (type: {}) | Current: {} allocs, {} bytes\n",
+	          size, memoryType,
+	          g_vmaStats.currentAllocations.load(),
+	          g_vmaStats.currentBytesAllocated.load());
 }
 
 // VMA device memory free callback
@@ -72,10 +72,10 @@ void VKAPI_CALL vmaFreeDeviceMemoryCallback(
 	g_vmaStats.totalBytesFreed += size;
 	g_vmaStats.currentBytesAllocated -= size;
 
-	fmt::print("[VMA] Free: {} bytes (type: {}) | Current: {} allocs, {} bytes\n",
-	           size, memoryType,
-	           g_vmaStats.currentAllocations.load(),
-	           g_vmaStats.currentBytesAllocated.load());
+	DBG_PRINT("[VMA] Free: {} bytes (type: {}) | Current: {} allocs, {} bytes\n",
+	          size, memoryType,
+	          g_vmaStats.currentAllocations.load(),
+	          g_vmaStats.currentBytesAllocated.load());
 }
 
 // Get VMA device memory callbacks struct for allocator creation
@@ -91,34 +91,35 @@ VmaDeviceMemoryCallbacks getVmaDeviceMemoryCallbacks()
 // Print VMA device memory block statistics (from callbacks)
 void PrintVmaAllocationStats()
 {
-	fmt::print("\n========== VMA Device Memory Block Statistics ==========\n");
-	fmt::print("Total Block Allocations:     {}\n", g_vmaStats.totalAllocations.load());
-	fmt::print("Total Block Frees:           {}\n", g_vmaStats.totalFrees.load());
-	fmt::print("Current Memory Blocks:       {}\n", g_vmaStats.currentAllocations.load());
-	fmt::print("Total Bytes Allocated: {} ({:.2f} MB)\n",
-	           g_vmaStats.totalBytesAllocated.load(),
-	           g_vmaStats.totalBytesAllocated.load() / (1024.0 * 1024.0));
-	fmt::print("Total Bytes Freed:     {} ({:.2f} MB)\n",
-	           g_vmaStats.totalBytesFreed.load(),
-	           g_vmaStats.totalBytesFreed.load() / (1024.0 * 1024.0));
-	fmt::print("Current Bytes Used:    {} ({:.2f} MB)\n",
-	           g_vmaStats.currentBytesAllocated.load(),
-	           g_vmaStats.currentBytesAllocated.load() / (1024.0 * 1024.0));
-	fmt::print("=========================================================\n\n");
+	DBG_PRINT("\n========== VMA Device Memory Block Statistics ==========\n");
+	DBG_PRINT("Total Block Allocations:     {}\n", g_vmaStats.totalAllocations.load());
+	DBG_PRINT("Total Block Frees:           {}\n", g_vmaStats.totalFrees.load());
+	DBG_PRINT("Current Memory Blocks:       {}\n", g_vmaStats.currentAllocations.load());
+	DBG_PRINT("Total Bytes Allocated: {} ({:.2f} MB)\n",
+	          g_vmaStats.totalBytesAllocated.load(),
+	          g_vmaStats.totalBytesAllocated.load() / (1024.0 * 1024.0));
+	DBG_PRINT("Total Bytes Freed:     {} ({:.2f} MB)\n",
+	          g_vmaStats.totalBytesFreed.load(),
+	          g_vmaStats.totalBytesFreed.load() / (1024.0 * 1024.0));
+	DBG_PRINT("Current Bytes Used:    {} ({:.2f} MB)\n",
+	          g_vmaStats.currentBytesAllocated.load(),
+	          g_vmaStats.currentBytesAllocated.load() / (1024.0 * 1024.0));
+	DBG_PRINT("=========================================================\n\n");
 
 	if (g_vmaStats.currentAllocations.load() > 0)
 	{
-		fmt::print("[VMA WARNING] {} memory blocks still active!\n",
-		           g_vmaStats.currentAllocations.load());
+		DBG_PRINT("[VMA WARNING] {} memory blocks still active!\n",
+		          g_vmaStats.currentAllocations.load());
 	}
 }
 
 // Print detailed VMA statistics (including suballocations)
 void PrintDetailedVmaStats(VmaAllocator allocator)
 {
+#ifndef NDEBUG
 	if (allocator == VK_NULL_HANDLE)
 	{
-		fmt::print("[VMA] Allocator not initialized\n");
+		DBG_PRINT("[VMA] Allocator not initialized\n");
 		return;
 	}
 
@@ -126,16 +127,16 @@ void PrintDetailedVmaStats(VmaAllocator allocator)
 	VmaTotalStatistics stats;
 	vmaCalculateStatistics(allocator, &stats);
 
-	fmt::print("\n========== VMA Detailed Statistics ==========\n");
-	fmt::print("Total:\n");
-	fmt::print("  Allocations: {}\n", stats.total.statistics.allocationCount);
-	fmt::print("  Allocated bytes: {} ({:.2f} MB)\n",
-	           stats.total.statistics.allocationBytes,
-	           stats.total.statistics.allocationBytes / (1024.0 * 1024.0));
-	fmt::print("  Block count: {}\n", stats.total.statistics.blockCount);
-	fmt::print("  Block bytes: {} ({:.2f} MB)\n",
-	           stats.total.statistics.blockBytes,
-	           stats.total.statistics.blockBytes / (1024.0 * 1024.0));
+	DBG_PRINT("\n========== VMA Detailed Statistics ==========\n");
+	DBG_PRINT("Total:\n");
+	DBG_PRINT("  Allocations: {}\n", stats.total.statistics.allocationCount);
+	DBG_PRINT("  Allocated bytes: {} ({:.2f} MB)\n",
+	          stats.total.statistics.allocationBytes,
+	          stats.total.statistics.allocationBytes / (1024.0 * 1024.0));
+	DBG_PRINT("  Block count: {}\n", stats.total.statistics.blockCount);
+	DBG_PRINT("  Block bytes: {} ({:.2f} MB)\n",
+	          stats.total.statistics.blockBytes,
+	          stats.total.statistics.blockBytes / (1024.0 * 1024.0));
 
 	// Print per-heap stats
 	for (uint32_t i = 0; i < VK_MAX_MEMORY_HEAPS; ++i)
@@ -143,34 +144,35 @@ void PrintDetailedVmaStats(VmaAllocator allocator)
 		if (stats.memoryHeap[i].statistics.allocationCount > 0 ||
 		    stats.memoryHeap[i].statistics.blockCount > 0)
 		{
-			fmt::print("Heap {}:\n", i);
-			fmt::print("  Allocations: {}, Bytes: {} ({:.2f} MB)\n",
-			           stats.memoryHeap[i].statistics.allocationCount,
-			           stats.memoryHeap[i].statistics.allocationBytes,
-			           stats.memoryHeap[i].statistics.allocationBytes / (1024.0 * 1024.0));
-			fmt::print("  Blocks: {}, Block Bytes: {} ({:.2f} MB)\n",
-			           stats.memoryHeap[i].statistics.blockCount,
-			           stats.memoryHeap[i].statistics.blockBytes,
-			           stats.memoryHeap[i].statistics.blockBytes / (1024.0 * 1024.0));
+			DBG_PRINT("Heap {}:\n", i);
+			DBG_PRINT("  Allocations: {}, Bytes: {} ({:.2f} MB)\n",
+			          stats.memoryHeap[i].statistics.allocationCount,
+			          stats.memoryHeap[i].statistics.allocationBytes,
+			          stats.memoryHeap[i].statistics.allocationBytes / (1024.0 * 1024.0));
+			DBG_PRINT("  Blocks: {}, Block Bytes: {} ({:.2f} MB)\n",
+			          stats.memoryHeap[i].statistics.blockCount,
+			          stats.memoryHeap[i].statistics.blockBytes,
+			          stats.memoryHeap[i].statistics.blockBytes / (1024.0 * 1024.0));
 		}
 	}
-	fmt::print("=============================================\n\n");
+	DBG_PRINT("=============================================\n\n");
 
 	// If there are active allocations, print the full stats string
 	if (stats.total.statistics.allocationCount > 0)
 	{
-		fmt::print("[VMA WARNING] {} suballocations still active ({:.2f} MB)!\n",
-		           stats.total.statistics.allocationCount,
-		           stats.total.statistics.allocationBytes / (1024.0 * 1024.0));
+		DBG_PRINT("[VMA WARNING] {} suballocations still active ({:.2f} MB)!\n",
+		          stats.total.statistics.allocationCount,
+		          stats.total.statistics.allocationBytes / (1024.0 * 1024.0));
 
 		// Build detailed stats string for debugging
 		char* statsString = nullptr;
 		vmaBuildStatsString(allocator, &statsString, VK_TRUE);
 		if (statsString)
 		{
-			fmt::print("\n[VMA] Full stats dump (first 2000 chars):\n{}\n",
-			           std::string_view(statsString, std::min(strlen(statsString), size_t(2000))));
+			DBG_PRINT("\n[VMA] Full stats dump (first 2000 chars):\n{}\n",
+			          std::string_view(statsString, std::min(strlen(statsString), size_t(2000))));
 			vmaFreeStatsString(allocator, statsString);
 		}
 	}
+#endif
 }

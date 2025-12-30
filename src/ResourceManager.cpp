@@ -44,7 +44,7 @@ void ResourceManager::init(VkInstance       instance,
 	allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_4;
 	VK_CHECK(vmaCreateAllocator(&allocatorInfo, &m_allocator));
 
-	fmt::print("[VMA] Allocator created with device memory tracking enabled\n");
+	DBG_PRINT("[VMA] Allocator created with device memory tracking enabled\n");
 
 	m_mainDeletionQueue.push_function([&]()
 	                                  { vmaDestroyAllocator(m_allocator); });
