@@ -245,14 +245,14 @@ void Renderer::initBackgroundPipelines()
 	                              m_device,
 	                              &gradientShader))
 	{
-		DBG_PRINT("Error when building the compute shader \n");
+		AGNI_PRINT("Error when building the compute shader \n");
 	}
 
 	VkShaderModule skyShader;
 	if (!vkutil::loadShaderModule(
 	    "../../shaders//glsl/sky.comp.spv", m_device, &skyShader))
 	{
-		DBG_PRINT("Error when building the compute shader \n");
+		AGNI_PRINT("Error when building the compute shader \n");
 	}
 
 	VkPipelineShaderStageCreateInfo stageinfo {};

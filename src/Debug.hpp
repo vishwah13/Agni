@@ -7,9 +7,9 @@
 
 // Debug print macro - only prints in Debug builds, zero overhead in Release
 #ifndef NDEBUG
-#define DBG_PRINT(...) fmt::print(__VA_ARGS__)
+#define AGNI_PRINT(...) fmt::print(__VA_ARGS__)
 #else
-#define DBG_PRINT(...) ((void)0)
+#define AGNI_PRINT(...) ((void)0)
 #endif
 
 // CPU allocation tracking

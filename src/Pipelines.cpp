@@ -12,7 +12,7 @@ bool vkutil::loadShaderModule(const char*     filePath,
 
 	if (!file.is_open())
 	{
-		DBG_PRINT("Failed to open file for shader: {}\n", filePath);
+		AGNI_PRINT("Failed to open file for shader: {}\n", filePath);
 		return false;
 	}
 
@@ -52,7 +52,7 @@ bool vkutil::loadShaderModule(const char*     filePath,
 		return false;
 	}
 
-	DBG_PRINT("Loaded shader file from: {}\n", filePath);
+	AGNI_PRINT("Loaded shader file from: {}\n", filePath);
 
 	*outShaderModule = shaderModule;
 	return true;
@@ -71,7 +71,7 @@ bool vkutil::loadShaderModuleWithFallback(const char*          filePath,
 	}
 
 	// Log warning that fallback is being used
-	DBG_PRINT("WARNING: Failed to load shader from {}, using embedded fallback shader\n", filePath);
+	AGNI_PRINT("WARNING: Failed to load shader from {}, using embedded fallback shader\n", filePath);
 
 	// Load from embedded fallback SPIR-V
 	VkShaderModuleCreateInfo createInfo = {};
@@ -83,7 +83,7 @@ bool vkutil::loadShaderModuleWithFallback(const char*          filePath,
 	VkShaderModule shaderModule;
 	if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS)
 	{
-		DBG_PRINT("ERROR: Failed to create shader module even with fallback!\n");
+		AGNI_PRINT("ERROR: Failed to create shader module even with fallback!\n");
 		return false;
 	}
 
@@ -177,7 +177,7 @@ VkPipeline PipelineBuilder::buildPipeline(VkDevice device)
 	    device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &newPipeline) !=
 	    VK_SUCCESS)
 	{
-		DBG_PRINT("failed to create pipeline\n");
+		AGNI_PRINT("failed to create pipeline\n");
 		return VK_NULL_HANDLE; // failed to create graphics pipeline
 	}
 	else

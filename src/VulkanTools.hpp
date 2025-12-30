@@ -11,7 +11,7 @@
 		VkResult err = x;                               \
 		if (err != VK_SUCCESS)                          \
 		{                                               \
-			DBG_PRINT("Fatal Vulkan error: {}\n",       \
+			AGNI_PRINT("Fatal Vulkan error: {}\n",       \
 			          vks::tools::errorString(err));    \
 			assert(err == VK_SUCCESS);                  \
 		}                                               \

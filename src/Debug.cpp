@@ -21,10 +21,10 @@ void operator delete(void* memory, size_t size)
 // Print CPU allocation metrics
 void PrintAllocationMetrics()
 {
-	DBG_PRINT("Total allocated: {} bytes\n",
+	AGNI_PRINT("Total allocated: {} bytes\n",
 	          g_allocationMetrics.m_totalAllocated);
-	DBG_PRINT("Total freed: {} bytes\n", g_allocationMetrics.m_totalFreed);
-	DBG_PRINT("Current usage: {} bytes\n", g_allocationMetrics.CurrentUsage());
+	AGNI_PRINT("Total freed: {} bytes\n", g_allocationMetrics.m_totalFreed);
+	AGNI_PRINT("Current usage: {} bytes\n", g_allocationMetrics.CurrentUsage());
 }
 
 // Global VMA allocation stats
@@ -48,7 +48,7 @@ void VKAPI_CALL vmaAllocateDeviceMemoryCallback(
 	g_vmaStats.totalBytesAllocated += size;
 	g_vmaStats.currentBytesAllocated += size;
 
-	DBG_PRINT("[VMA] Allocate: {} bytes (type: {}) | Current: {} allocs, {} bytes\n",
+	AGNI_PRINT("[VMA] Allocate: {} bytes (type: {}) | Current: {} allocs, {} bytes\n",
 	          size, memoryType,
 	          g_vmaStats.currentAllocations.load(),
 	          g_vmaStats.currentBytesAllocated.load());
@@ -72,7 +72,7 @@ void VKAPI_CALL vmaFreeDeviceMemoryCallback(
 	g_vmaStats.totalBytesFreed += size;
 	g_vmaStats.currentBytesAllocated -= size;
 
-	DBG_PRINT("[VMA] Free: {} bytes (type: {}) | Current: {} allocs, {} bytes\n",
+	AGNI_PRINT("[VMA] Free: {} bytes (type: {}) | Current: {} allocs, {} bytes\n",
 	          size, memoryType,
 	          g_vmaStats.currentAllocations.load(),
 	          g_vmaStats.currentBytesAllocated.load());
@@ -91,24 +91,24 @@ VmaDeviceMemoryCallbacks getVmaDeviceMemoryCallbacks()
 // Print VMA device memory block statistics (from callbacks)
 void PrintVmaAllocationStats()
 {
-	DBG_PRINT("\n========== VMA Device Memory Block Statistics ==========\n");
-	DBG_PRINT("Total Block Allocations:     {}\n", g_vmaStats.totalAllocations.load());
-	DBG_PRINT("Total Block Frees:           {}\n", g_vmaStats.totalFrees.load());
-	DBG_PRINT("Current Memory Blocks:       {}\n", g_vmaStats.currentAllocations.load());
-	DBG_PRINT("Total Bytes Allocated: {} ({:.2f} MB)\n",
+	AGNI_PRINT("\n========== VMA Device Memory Block Statistics ==========\n");
+	AGNI_PRINT("Total Block Allocations:     {}\n", g_vmaStats.totalAllocations.load());
+	AGNI_PRINT("Total Block Frees:           {}\n", g_vmaStats.totalFrees.load());
+	AGNI_PRINT("Current Memory Blocks:       {}\n", g_vmaStats.currentAllocations.load());
+	AGNI_PRINT("Total Bytes Allocated: {} ({:.2f} MB)\n",
 	          g_vmaStats.totalBytesAllocated.load(),
 	          g_vmaStats.totalBytesAllocated.load() / (1024.0 * 1024.0));
-	DBG_PRINT("Total Bytes Freed:     {} ({:.2f} MB)\n",
+	AGNI_PRINT("Total Bytes Freed:     {} ({:.2f} MB)\n",
 	          g_vmaStats.totalBytesFreed.load(),
 	          g_vmaStats.totalBytesFreed.load() / (1024.0 * 1024.0));
-	DBG_PRINT("Current Bytes Used:    {} ({:.2f} MB)\n",
+	AGNI_PRINT("Current Bytes Used:    {} ({:.2f} MB)\n",
 	          g_vmaStats.currentBytesAllocated.load(),
 	          g_vmaStats.currentBytesAllocated.load() / (1024.0 * 1024.0));
-	DBG_PRINT("=========================================================\n\n");
+	AGNI_PRINT("=========================================================\n\n");
 
 	if (g_vmaStats.currentAllocations.load() > 0)
 	{
-		DBG_PRINT("[VMA WARNING] {} memory blocks still active!\n",
+		AGNI_PRINT("[VMA WARNING] {} memory blocks still active!\n",
 		          g_vmaStats.currentAllocations.load());
 	}
 }
@@ -119,7 +119,7 @@ void PrintDetailedVmaStats(VmaAllocator allocator)
 #ifndef NDEBUG
 	if (allocator == VK_NULL_HANDLE)
 	{
-		DBG_PRINT("[VMA] Allocator not initialized\n");
+		AGNI_PRINT("[VMA] Allocator not initialized\n");
 		return;
 	}
 
@@ -127,14 +127,14 @@ void PrintDetailedVmaStats(VmaAllocator allocator)
 	VmaTotalStatistics stats;
 	vmaCalculateStatistics(allocator, &stats);
 
-	DBG_PRINT("\n========== VMA Detailed Statistics ==========\n");
-	DBG_PRINT("Total:\n");
-	DBG_PRINT("  Allocations: {}\n", stats.total.statistics.allocationCount);
-	DBG_PRINT("  Allocated bytes: {} ({:.2f} MB)\n",
+	AGNI_PRINT("\n========== VMA Detailed Statistics ==========\n");
+	AGNI_PRINT("Total:\n");
+	AGNI_PRINT("  Allocations: {}\n", stats.total.statistics.allocationCount);
+	AGNI_PRINT("  Allocated bytes: {} ({:.2f} MB)\n",
 	          stats.total.statistics.allocationBytes,
 	          stats.total.statistics.allocationBytes / (1024.0 * 1024.0));
-	DBG_PRINT("  Block count: {}\n", stats.total.statistics.blockCount);
-	DBG_PRINT("  Block bytes: {} ({:.2f} MB)\n",
+	AGNI_PRINT("  Block count: {}\n", stats.total.statistics.blockCount);
+	AGNI_PRINT("  Block bytes: {} ({:.2f} MB)\n",
 	          stats.total.statistics.blockBytes,
 	          stats.total.statistics.blockBytes / (1024.0 * 1024.0));
 
@@ -144,23 +144,23 @@ void PrintDetailedVmaStats(VmaAllocator allocator)
 		if (stats.memoryHeap[i].statistics.allocationCount > 0 ||
 		    stats.memoryHeap[i].statistics.blockCount > 0)
 		{
-			DBG_PRINT("Heap {}:\n", i);
-			DBG_PRINT("  Allocations: {}, Bytes: {} ({:.2f} MB)\n",
+			AGNI_PRINT("Heap {}:\n", i);
+			AGNI_PRINT("  Allocations: {}, Bytes: {} ({:.2f} MB)\n",
 			          stats.memoryHeap[i].statistics.allocationCount,
 			          stats.memoryHeap[i].statistics.allocationBytes,
 			          stats.memoryHeap[i].statistics.allocationBytes / (1024.0 * 1024.0));
-			DBG_PRINT("  Blocks: {}, Block Bytes: {} ({:.2f} MB)\n",
+			AGNI_PRINT("  Blocks: {}, Block Bytes: {} ({:.2f} MB)\n",
 			          stats.memoryHeap[i].statistics.blockCount,
 			          stats.memoryHeap[i].statistics.blockBytes,
 			          stats.memoryHeap[i].statistics.blockBytes / (1024.0 * 1024.0));
 		}
 	}
-	DBG_PRINT("=============================================\n\n");
+	AGNI_PRINT("=============================================\n\n");
 
 	// If there are active allocations, print the full stats string
 	if (stats.total.statistics.allocationCount > 0)
 	{
-		DBG_PRINT("[VMA WARNING] {} suballocations still active ({:.2f} MB)!\n",
+		AGNI_PRINT("[VMA WARNING] {} suballocations still active ({:.2f} MB)!\n",
 		          stats.total.statistics.allocationCount,
 		          stats.total.statistics.allocationBytes / (1024.0 * 1024.0));
 
@@ -169,7 +169,7 @@ void PrintDetailedVmaStats(VmaAllocator allocator)
 		vmaBuildStatsString(allocator, &statsString, VK_TRUE);
 		if (statsString)
 		{
-			DBG_PRINT("\n[VMA] Full stats dump (first 2000 chars):\n{}\n",
+			AGNI_PRINT("\n[VMA] Full stats dump (first 2000 chars):\n{}\n",
 			          std::string_view(statsString, std::min(strlen(statsString), size_t(2000))));
 			vmaFreeStatsString(allocator, statsString);
 		}

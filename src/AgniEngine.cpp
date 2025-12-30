@@ -746,10 +746,10 @@ void AgniEngine::initDefaultData()
 	assert(helmetPathFile.has_value());
 
 	// Debug: print available mesh names
-	DBG_PRINT("Available meshes in MeshPrimitives.glb:\n");
+	AGNI_PRINT("Available meshes in MeshPrimitives.glb:\n");
 	for (auto& [name, mesh] : meshPrimitivesFile->get()->meshes)
 	{
-		DBG_PRINT("  - '{}'\n", name);
+		AGNI_PRINT("  - '{}'\n", name);
 	}
 
 	auto sphereMesh = meshPrimitivesFile->get()->meshes["Icosphere"];

@@ -18,7 +18,7 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 	    FallbackShaders::meshFragSpv,
 	    FallbackShaders::meshFragSpv_len))
 	{
-		DBG_PRINT("Error when building the mesh fragment shader module\n");
+		AGNI_PRINT("Error when building the mesh fragment shader module\n");
 	}
 
 	VkShaderModule meshVertexShader;
@@ -29,7 +29,7 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 	    FallbackShaders::meshVertSpv,
 	    FallbackShaders::meshVertSpv_len))
 	{
-		DBG_PRINT("Error when building the mesh vertex shader module\n");
+		AGNI_PRINT("Error when building the mesh vertex shader module\n");
 	}
 
 	VkPushConstantRange matrixRange {};
