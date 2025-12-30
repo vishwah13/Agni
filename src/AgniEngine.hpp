@@ -64,15 +64,21 @@ public:
 	LightComponent&       getLightComponent() { return m_light; }
 	const LightComponent& getLightComponent() const { return m_light; }
 
+	// Light type
+	void setType(LightType type) { m_light.type = type; }
+	LightType getType() const { return m_light.type; }
+
 	// Convenience setters
 	void setColor(const glm::vec3& color) { m_light.color = color; }
 	void setIntensity(float intensity) { m_light.intensity = intensity; }
 	void setRadius(float radius) { m_light.radius = radius; }
+	void setDirection(const glm::vec3& direction) { m_light.direction = direction; }
 
 	// Convenience getters
 	glm::vec3 getColor() const { return m_light.color; }
 	float     getIntensity() const { return m_light.intensity; }
 	float     getRadius() const { return m_light.radius; }
+	glm::vec3 getDirection() const { return m_light.direction; }
 
 	// Optional visual mesh for the light (uses MeshNode internally)
 	void setMesh(std::shared_ptr<MeshAsset> mesh);

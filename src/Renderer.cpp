@@ -661,6 +661,7 @@ void Renderer::updateScene(float deltaTime, VkExtent2D windowExtent)
 	m_mainDrawContext.m_OpaqueSurfaces.clear();
 	m_mainDrawContext.m_TransparentSurfaces.clear();
 	m_mainDrawContext.m_PointLights.clear();
+	m_mainDrawContext.m_DirectionalLight = DirectionalLightData{}; // Reset directional light
 
 	m_camera->update(deltaTime);
 	// camera view
@@ -687,11 +688,27 @@ void Renderer::updateScene(float deltaTime, VkExtent2D windowExtent)
 
 	m_sceneData.m_viewproj = projection * view;
 
-	// some default lighting parameters
-	m_sceneData.m_ambientColor      = glm::vec4(.1f);
-	m_sceneData.m_sunlightColor     = glm::vec4(1.f);
-	m_sceneData.m_sunlightDirection = glm::vec4(0, 1, 0.5, 1.f);
-	m_sceneData.m_cameraPosition    = m_camera->m_position;
+	// Ambient lighting
+	m_sceneData.m_ambientColor = glm::vec4(.1f);
+
+	// Use directional light from DrawContext if active, otherwise use defaults
+	if (m_mainDrawContext.m_DirectionalLight.active)
+	{
+		m_sceneData.m_sunlightDirection = glm::vec4(
+			m_mainDrawContext.m_DirectionalLight.direction,
+			m_mainDrawContext.m_DirectionalLight.intensity);
+		m_sceneData.m_sunlightColor = glm::vec4(
+			m_mainDrawContext.m_DirectionalLight.color,
+			m_mainDrawContext.m_DirectionalLight.intensity);
+	}
+	else
+	{
+		// Default lighting when no directional light is in scene
+		m_sceneData.m_sunlightDirection = glm::vec4(0, 1, 0.5, 1.f);
+		m_sceneData.m_sunlightColor     = glm::vec4(1.f);
+	}
+
+	m_sceneData.m_cameraPosition = m_camera->m_position;
 
 	auto end = std::chrono::system_clock::now();
 

@@ -89,7 +89,8 @@ struct SkyboxComponent
 enum class LightType : uint8_t
 {
 	Point,
-	// Future: Spot, Directional, Area
+	Directional,
+	// Future: Spot, Area
 };
 
 struct LightComponent
@@ -97,7 +98,8 @@ struct LightComponent
 	LightType type {LightType::Point};
 	glm::vec3 color {1.0f, 1.0f, 1.0f};
 	float     intensity {1.0f};
-	float     radius {10.0f};  // Attenuation radius for point lights
+	float     radius {10.0f};      // Attenuation radius for point lights
+	glm::vec3 direction {0.0f, 1.0f, 0.5f};  // Direction for directional lights
 };
 
 // ============================================================================

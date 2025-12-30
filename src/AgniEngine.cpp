@@ -743,7 +743,7 @@ void AgniEngine::initDefaultData()
 	helmetPathFile->get()->m_topNodes.push_back(testLight1);
 
 	auto testLight2 = std::make_shared<LightNode>();
-	testLight2->setColor(glm::vec3(0.0f, 1.f, 0.0f)); // Green blue
+	testLight2->setColor(glm::vec3(0.0f, 1.f, 0.0f)); // Green light
 	testLight2->setIntensity(10.0f);
 	testLight2->setRadius(18.0f);
 	testLight2->getLocalTransform() =
@@ -752,6 +752,14 @@ void AgniEngine::initDefaultData()
 	m_assetLoader.getMeshResources().get()->meshes["Cube"]);
 	testLight2->setMeshScale(0.1f);
 	helmetPathFile->get()->m_topNodes.push_back(testLight2);
+
+	// Add directional light (sun)
+	auto sunLight = std::make_shared<LightNode>();
+	sunLight->setType(LightType::Directional);
+	sunLight->setColor(glm::vec3(1.0f, 0.95f, 0.9f)); // Warm white sunlight
+	sunLight->setIntensity(1.0f);
+	sunLight->setDirection(glm::vec3(0.0f, 1.0f, 0.5f)); // Direction towards light
+	helmetPathFile->get()->m_topNodes.push_back(sunLight);
 
 	// Initialize m_skybox
 	// Load cubemap faces (order: right, left, top, bottom, front, back for
@@ -803,17 +811,27 @@ void LightNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
 	glm::mat4 nodeMatrix    = topMatrix * m_worldTransform;
 	glm::vec3 worldPosition = glm::vec3(nodeMatrix[3]); // Extract translation
 
-	// Add point light to context if within limit
-	if (m_light.type == LightType::Point &&
-	    ctx.m_PointLights.size() < MAX_POINT_LIGHTS)
+	if (m_light.type == LightType::Point)
 	{
-		GPUPointLight gpuLight;
-		gpuLight.m_position  = worldPosition;
-		gpuLight.m_color     = m_light.color;
-		gpuLight.m_intensity = m_light.intensity;
-		gpuLight.m_radius    = m_light.radius;
+		// Add point light to context if within limit
+		if (ctx.m_PointLights.size() < MAX_POINT_LIGHTS)
+		{
+			GPUPointLight gpuLight;
+			gpuLight.m_position  = worldPosition;
+			gpuLight.m_color     = m_light.color;
+			gpuLight.m_intensity = m_light.intensity;
+			gpuLight.m_radius    = m_light.radius;
 
-		ctx.m_PointLights.push_back(gpuLight);
+			ctx.m_PointLights.push_back(gpuLight);
+		}
+	}
+	else if (m_light.type == LightType::Directional)
+	{
+		// Set directional light (only one supported, last one wins)
+		ctx.m_DirectionalLight.direction = m_light.direction;
+		ctx.m_DirectionalLight.color     = m_light.color;
+		ctx.m_DirectionalLight.intensity = m_light.intensity;
+		ctx.m_DirectionalLight.active    = true;
 	}
 
 	// Draw optional visual mesh if present (delegate to MeshNode)

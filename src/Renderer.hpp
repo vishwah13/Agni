@@ -55,11 +55,21 @@ struct RenderObject
 	VkDeviceAddress   m_vertexBufferAddress;
 };
 
+// Directional light data for DrawContext
+struct DirectionalLightData
+{
+	glm::vec3 direction {0.0f, 1.0f, 0.5f};
+	glm::vec3 color {1.0f, 1.0f, 1.0f};
+	float     intensity {1.0f};
+	bool      active {false};
+};
+
 struct DrawContext
 {
 	std::vector<RenderObject>  m_OpaqueSurfaces;
 	std::vector<RenderObject>  m_TransparentSurfaces;
 	std::vector<GPUPointLight> m_PointLights;
+	DirectionalLightData       m_DirectionalLight;
 };
 
 class Renderer
