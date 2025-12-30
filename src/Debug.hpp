@@ -1,7 +1,11 @@
 #pragma once
 #include <fmt/core.h>
 #include <cstdlib>
+#include <atomic>
+#include <volk.h>
+#include <vk_mem_alloc.h>
 
+// CPU allocation tracking
 struct AllocationMetrics
 {
 	uint32_t m_totalAllocated;
@@ -11,21 +15,51 @@ struct AllocationMetrics
 		return m_totalAllocated - m_totalFreed;
 	}
 };
-static AllocationMetrics _allocationMetrics = {0, 0};
-void*                    operator new(size_t size)
+
+// Global CPU allocation metrics (defined in Debug.cpp)
+extern AllocationMetrics g_allocationMetrics;
+
+// Print CPU allocation metrics
+void PrintAllocationMetrics();
+
+// VMA (GPU) allocation tracking statistics
+struct VmaAllocationStats
 {
-	_allocationMetrics.m_totalAllocated += size;
-	return malloc(size);
-}
-void operator delete(void* memory, size_t size)
-{
-	_allocationMetrics.m_totalFreed += size;
-	free(memory);
-}
-static void PrintAllocationMetrics()
-{
-	fmt::print("Total allocated: {} bytes\n",
-	           _allocationMetrics.m_totalAllocated);
-	fmt::print("Total freed: {} bytes\n", _allocationMetrics.m_totalFreed);
-	fmt::print("Current usage: {} bytes\n", _allocationMetrics.CurrentUsage());
-}
+	std::atomic<uint64_t> totalAllocations {0};
+	std::atomic<uint64_t> totalFrees {0};
+	std::atomic<uint64_t> currentAllocations {0};
+	std::atomic<uint64_t> totalBytesAllocated {0};
+	std::atomic<uint64_t> totalBytesFreed {0};
+	std::atomic<uint64_t> currentBytesAllocated {0};
+
+	void reset()
+	{
+		totalAllocations      = 0;
+		totalFrees            = 0;
+		currentAllocations    = 0;
+		totalBytesAllocated   = 0;
+		totalBytesFreed       = 0;
+		currentBytesAllocated = 0;
+	}
+};
+
+// Global VMA allocation stats (accessible for debugging)
+extern VmaAllocationStats g_vmaStats;
+
+// VMA device memory callbacks for tracking allocations
+void VKAPI_CALL vmaAllocateDeviceMemoryCallback(
+    VmaAllocator   allocator,
+    uint32_t       memoryType,
+    VkDeviceMemory memory,
+    VkDeviceSize   size,
+    void*          pUserData);
+
+void VKAPI_CALL vmaFreeDeviceMemoryCallback(
+    VmaAllocator   allocator,
+    uint32_t       memoryType,
+    VkDeviceMemory memory,
+    VkDeviceSize   size,
+    void*          pUserData);
+
+// Get VMA device memory callbacks struct for allocator creation
+VmaDeviceMemoryCallbacks getVmaDeviceMemoryCallbacks();

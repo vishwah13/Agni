@@ -11,57 +11,6 @@
 #include <vk_mem_alloc.h>
 #include <fmt/core.h>
 
-// Global VMA allocation stats
-VmaAllocationStats g_vmaStats;
-
-// VMA device memory allocation callback
-static void VKAPI_CALL vmaAllocateDeviceMemoryCallback(
-    VmaAllocator                    allocator,
-    uint32_t                        memoryType,
-    VkDeviceMemory                  memory,
-    VkDeviceSize                    size,
-    void*                           pUserData)
-{
-	(void)allocator;
-	(void)memoryType;
-	(void)memory;
-	(void)pUserData;
-
-	g_vmaStats.totalAllocations++;
-	g_vmaStats.currentAllocations++;
-	g_vmaStats.totalBytesAllocated += size;
-	g_vmaStats.currentBytesAllocated += size;
-
-	fmt::print("[VMA] Allocate: {} bytes (type: {}) | Current: {} allocs, {} bytes\n",
-	           size, memoryType,
-	           g_vmaStats.currentAllocations.load(),
-	           g_vmaStats.currentBytesAllocated.load());
-}
-
-// VMA device memory free callback
-static void VKAPI_CALL vmaFreeDeviceMemoryCallback(
-    VmaAllocator                    allocator,
-    uint32_t                        memoryType,
-    VkDeviceMemory                  memory,
-    VkDeviceSize                    size,
-    void*                           pUserData)
-{
-	(void)allocator;
-	(void)memoryType;
-	(void)memory;
-	(void)pUserData;
-
-	g_vmaStats.totalFrees++;
-	g_vmaStats.currentAllocations--;
-	g_vmaStats.totalBytesFreed += size;
-	g_vmaStats.currentBytesAllocated -= size;
-
-	fmt::print("[VMA] Free: {} bytes (type: {}) | Current: {} allocs, {} bytes\n",
-	           size, memoryType,
-	           g_vmaStats.currentAllocations.load(),
-	           g_vmaStats.currentBytesAllocated.load());
-}
-
 void ResourceManager::init(VkInstance       instance,
                            VkPhysicalDevice physicalDevice,
                            VkDevice         device,
@@ -78,10 +27,7 @@ void ResourceManager::init(VkInstance       instance,
 	g_vmaStats.reset();
 
 	// Setup device memory allocation callbacks for tracking
-	static VmaDeviceMemoryCallbacks deviceMemoryCallbacks = {};
-	deviceMemoryCallbacks.pfnAllocate = vmaAllocateDeviceMemoryCallback;
-	deviceMemoryCallbacks.pfnFree     = vmaFreeDeviceMemoryCallback;
-	deviceMemoryCallbacks.pUserData   = nullptr;
+	static VmaDeviceMemoryCallbacks deviceMemoryCallbacks = getVmaDeviceMemoryCallbacks();
 
 	// initialize the memory allocator
 	VmaAllocatorCreateInfo allocatorInfo = {};

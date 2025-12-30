@@ -33,6 +33,7 @@ add_executable (engine
   Skybox.hpp
   Skybox.cpp
   Debug.hpp
+  Debug.cpp
   VulkanTools.hpp
   VulkanTools.cpp
   Scene.hpp
