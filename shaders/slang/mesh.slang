@@ -199,8 +199,8 @@ float4 fragmentMain(VertexOutput input) : SV_Target
     Lo += (kD * albedo / PI + specular) * radiance * NdotL;
 
     // Point lights
-    uint numLights = lightData[0].numPointLights;
-    for (uint i = 0; i < numLights; ++i)
+    uint numPointLights = lightData[0].numPointLights;
+    for (uint i = 0; i < numPointLights; ++i)
     {
         PointLight light = lightData[0].pointLights[i];
 
@@ -229,6 +229,44 @@ float4 fragmentMain(VertexOutput input) : SV_Target
 
         float pNdotL = max(dot(N, pL), 0.0);
         Lo += (pKd * albedo / PI + pSpecular) * pRadiance * pNdotL;
+    }
+
+    // Spot lights
+    uint numSpotLights = lightData[0].numSpotLights;
+    for (uint i = 0; i < numSpotLights; ++i)
+    {
+        SpotLight light = lightData[0].spotLights[i];
+
+        // Calculate light direction and distance
+        float3 lightVec = light.position - input.worldPos;
+        float distance = length(lightVec);
+        float3 sL = normalize(lightVec);
+        float3 sH = normalize(V + sL);
+
+        // Spotlight cone attenuation
+        float theta = dot(sL, normalize(-light.direction));
+        float epsilon = light.innerCutoff - light.outerCutoff;
+        float spotIntensity = saturate((theta - light.outerCutoff) / epsilon);
+
+        // Distance attenuation based on radius
+        float attenuation = calculateAttenuation(distance, light.radius);
+        float3 sRadiance = light.color * light.intensity * attenuation * spotIntensity;
+
+        // Cook-Torrance BRDF
+        float sNDF = DistributionGGX(N, sH, roughness);
+        float sG = GeometrySmith(N, V, sL, roughness);
+        float3 sF = fresnelSchlick(max(dot(sH, V), 0.0), F0);
+
+        float3 sNumerator = sNDF * sG * sF;
+        float sDenominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, sL), 0.0) + 0.0001;
+        float3 sSpecular = sNumerator / sDenominator;
+
+        float3 sKs = sF;
+        float3 sKd = float3(1.0) - sKs;
+        sKd *= 1.0 - metallic;
+
+        float sNdotL = max(dot(N, sL), 0.0);
+        Lo += (sKd * albedo / PI + sSpecular) * sRadiance * sNdotL;
     }
 
     // Ambient lighting (IBL approximation)

@@ -761,6 +761,20 @@ void AgniEngine::initDefaultData()
 	sunLight->setDirection(glm::vec3(0.0f, 1.0f, 0.5f)); // Direction towards light
 	helmetPathFile->get()->m_topNodes.push_back(sunLight);
 
+	// Add spot light
+	auto spotLight = std::make_shared<LightNode>();
+	spotLight->setType(LightType::Spot);
+	spotLight->setColor(glm::vec3(1.0f, 1.0f, 0.8f)); // Warm white
+	spotLight->setIntensity(15.0f);
+	spotLight->setRadius(20.0f);
+	spotLight->setDirection(glm::vec3(0.0f, -1.0f, 0.0f)); // Pointing down
+	spotLight->setConeAngles(15.0f, 25.0f); // Inner 15°, Outer 25°
+	spotLight->getLocalTransform() =
+		glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 4.0f, 0.0f));
+	spotLight->setMesh(m_assetLoader.getMeshResources().get()->meshes["Cone"]);
+	spotLight->setMeshScale(0.15f);
+	helmetPathFile->get()->m_topNodes.push_back(spotLight);
+
 	// Initialize m_skybox
 	// Load cubemap faces (order: right, left, top, bottom, front, back for
 	// Vulkan)
@@ -832,6 +846,23 @@ void LightNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
 		ctx.m_DirectionalLight.color     = m_light.color;
 		ctx.m_DirectionalLight.intensity = m_light.intensity;
 		ctx.m_DirectionalLight.active    = true;
+	}
+	else if (m_light.type == LightType::Spot)
+	{
+		// Add spot light to context if within limit
+		if (ctx.m_SpotLights.size() < MAX_SPOT_LIGHTS)
+		{
+			GPUSpotLight gpuLight;
+			gpuLight.m_position    = worldPosition;
+			gpuLight.m_direction   = glm::normalize(m_light.direction);
+			gpuLight.m_color       = m_light.color;
+			gpuLight.m_intensity   = m_light.intensity;
+			gpuLight.m_radius      = m_light.radius;
+			gpuLight.m_innerCutoff = glm::cos(glm::radians(m_light.innerConeAngle));
+			gpuLight.m_outerCutoff = glm::cos(glm::radians(m_light.outerConeAngle));
+
+			ctx.m_SpotLights.push_back(gpuLight);
+		}
 	}
 
 	// Draw optional visual mesh if present (delegate to MeshNode)

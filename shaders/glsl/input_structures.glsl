@@ -17,13 +17,28 @@ struct PointLight {
 	float intensity;
 };
 
+// Spot light structure (matches C++ GPUSpotLight)
+struct SpotLight {
+	vec3  position;
+	float radius;
+	vec3  direction;
+	float innerCutoff;    // cos(innerConeAngle)
+	vec3  color;
+	float outerCutoff;    // cos(outerConeAngle)
+	float intensity;
+	float padding0;
+	float padding1;
+	float padding2;
+};
+
 // Light data SSBO (set 0, binding 1)
 layout(std430, set = 0, binding = 1) readonly buffer LightData {
 	uint       numPointLights;
+	uint       numSpotLights;
 	uint       padding0;
 	uint       padding1;
-	uint       padding2;
 	PointLight pointLights[256]; // MAX_POINT_LIGHTS
+	SpotLight  spotLights[64];   // MAX_SPOT_LIGHTS
 } lightData;
 
 layout(set = 1, binding = 0) uniform GLTFMaterialData{   

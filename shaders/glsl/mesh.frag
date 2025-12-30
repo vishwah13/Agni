@@ -125,8 +125,8 @@ void main()
 	Lo += (kD * albedo / PI + specular) * radiance * NdotL;
 
 	// Point lights
-	uint numLights = lightData.numPointLights;
-	for (uint i = 0; i < numLights; ++i)
+	uint numPointLights = lightData.numPointLights;
+	for (uint i = 0; i < numPointLights; ++i)
 	{
 		PointLight light = lightData.pointLights[i];
 
@@ -155,6 +155,44 @@ void main()
 
 		float pNdotL = max(dot(N, pL), 0.0);
 		Lo += (pKd * albedo / PI + pSpecular) * pRadiance * pNdotL;
+	}
+
+	// Spot lights
+	uint numSpotLights = lightData.numSpotLights;
+	for (uint i = 0; i < numSpotLights; ++i)
+	{
+		SpotLight light = lightData.spotLights[i];
+
+		// Calculate light direction and distance
+		vec3 lightVec = light.position - inWorldPos;
+		float distance = length(lightVec);
+		vec3 sL = normalize(lightVec);
+		vec3 sH = normalize(V + sL);
+
+		// Spotlight cone attenuation
+		float theta = dot(sL, normalize(-light.direction));
+		float epsilon = light.innerCutoff - light.outerCutoff;
+		float spotIntensity = clamp((theta - light.outerCutoff) / epsilon, 0.0, 1.0);
+
+		// Distance attenuation based on radius
+		float attenuation = calculateAttenuation(distance, light.radius);
+		vec3 sRadiance = light.color * light.intensity * attenuation * spotIntensity;
+
+		// Cook-Torrance BRDF
+		float sNDF = DistributionGGX(N, sH, roughness);
+		float sG = GeometrySmith(N, V, sL, roughness);
+		vec3 sF = fresnelSchlick(max(dot(sH, V), 0.0), F0);
+
+		vec3 sNumerator = sNDF * sG * sF;
+		float sDenominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, sL), 0.0) + 0.0001;
+		vec3 sSpecular = sNumerator / sDenominator;
+
+		vec3 sKs = sF;
+		vec3 sKd = vec3(1.0) - sKs;
+		sKd *= 1.0 - metallic;
+
+		float sNdotL = max(dot(N, sL), 0.0);
+		Lo += (sKd * albedo / PI + sSpecular) * sRadiance * sNdotL;
 	}
 
 	// Ambient lighting (IBL approximation)

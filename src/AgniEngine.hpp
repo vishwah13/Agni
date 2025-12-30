@@ -73,12 +73,21 @@ public:
 	void setIntensity(float intensity) { m_light.intensity = intensity; }
 	void setRadius(float radius) { m_light.radius = radius; }
 	void setDirection(const glm::vec3& direction) { m_light.direction = direction; }
+	void setInnerConeAngle(float degrees) { m_light.innerConeAngle = degrees; }
+	void setOuterConeAngle(float degrees) { m_light.outerConeAngle = degrees; }
+	void setConeAngles(float innerDegrees, float outerDegrees)
+	{
+		m_light.innerConeAngle = innerDegrees;
+		m_light.outerConeAngle = outerDegrees;
+	}
 
 	// Convenience getters
 	glm::vec3 getColor() const { return m_light.color; }
 	float     getIntensity() const { return m_light.intensity; }
 	float     getRadius() const { return m_light.radius; }
 	glm::vec3 getDirection() const { return m_light.direction; }
+	float     getInnerConeAngle() const { return m_light.innerConeAngle; }
+	float     getOuterConeAngle() const { return m_light.outerConeAngle; }
 
 	// Optional visual mesh for the light (uses MeshNode internally)
 	void setMesh(std::shared_ptr<MeshAsset> mesh);

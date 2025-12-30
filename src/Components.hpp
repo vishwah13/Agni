@@ -90,7 +90,8 @@ enum class LightType : uint8_t
 {
 	Point,
 	Directional,
-	// Future: Spot, Area
+	Spot,
+	// Future: Area
 };
 
 struct LightComponent
@@ -98,8 +99,10 @@ struct LightComponent
 	LightType type {LightType::Point};
 	glm::vec3 color {1.0f, 1.0f, 1.0f};
 	float     intensity {1.0f};
-	float     radius {10.0f};      // Attenuation radius for point lights
-	glm::vec3 direction {0.0f, 1.0f, 0.5f};  // Direction for directional lights
+	float     radius {10.0f};                // Attenuation radius for point/spot lights
+	glm::vec3 direction {0.0f, -1.0f, 0.0f}; // Direction for directional/spot lights
+	float     innerConeAngle {12.5f};        // Inner cone angle in degrees (spot lights)
+	float     outerConeAngle {17.5f};        // Outer cone angle in degrees (spot lights)
 };
 
 // ============================================================================

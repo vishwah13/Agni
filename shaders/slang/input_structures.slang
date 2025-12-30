@@ -39,12 +39,28 @@ struct PointLight
     float  intensity;
 };
 
+// Spot light structure (matches C++ GPUSpotLight)
+struct SpotLight
+{
+    float3 position;
+    float  radius;
+    float3 direction;
+    float  innerCutoff;    // cos(innerConeAngle)
+    float3 color;
+    float  outerCutoff;    // cos(outerConeAngle)
+    float  intensity;
+    float  padding0;
+    float  padding1;
+    float  padding2;
+};
+
 // Light data buffer structure (matches C++ GPULightData)
 struct LightData
 {
     uint numPointLights;
+    uint numSpotLights;
     uint padding0;
     uint padding1;
-    uint padding2;
     PointLight pointLights[256];  // MAX_POINT_LIGHTS
+    SpotLight  spotLights[64];    // MAX_SPOT_LIGHTS
 };

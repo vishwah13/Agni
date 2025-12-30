@@ -524,9 +524,15 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	GPULightData* lightData = (GPULightData*) gpuLightDataBuffer.m_info.pMappedData;
 	lightData->m_numPointLights = static_cast<uint32_t>(
 		std::min(m_mainDrawContext.m_PointLights.size(), static_cast<size_t>(MAX_POINT_LIGHTS)));
+	lightData->m_numSpotLights = static_cast<uint32_t>(
+		std::min(m_mainDrawContext.m_SpotLights.size(), static_cast<size_t>(MAX_SPOT_LIGHTS)));
 	for (uint32_t i = 0; i < lightData->m_numPointLights; ++i)
 	{
 		lightData->m_pointLights[i] = m_mainDrawContext.m_PointLights[i];
+	}
+	for (uint32_t i = 0; i < lightData->m_numSpotLights; ++i)
+	{
+		lightData->m_spotLights[i] = m_mainDrawContext.m_SpotLights[i];
 	}
 
 	// create a descriptor set that binds both buffers and update it
@@ -661,6 +667,7 @@ void Renderer::updateScene(float deltaTime, VkExtent2D windowExtent)
 	m_mainDrawContext.m_OpaqueSurfaces.clear();
 	m_mainDrawContext.m_TransparentSurfaces.clear();
 	m_mainDrawContext.m_PointLights.clear();
+	m_mainDrawContext.m_SpotLights.clear();
 	m_mainDrawContext.m_DirectionalLight = DirectionalLightData{}; // Reset directional light
 
 	m_camera->update(deltaTime);

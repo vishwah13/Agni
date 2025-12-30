@@ -69,6 +69,7 @@ struct DrawContext
 	std::vector<RenderObject>  m_OpaqueSurfaces;
 	std::vector<RenderObject>  m_TransparentSurfaces;
 	std::vector<GPUPointLight> m_PointLights;
+	std::vector<GPUSpotLight>  m_SpotLights;
 	DirectionalLightData       m_DirectionalLight;
 };
 
