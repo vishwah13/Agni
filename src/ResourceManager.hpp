@@ -83,12 +83,6 @@ public:
 		return m_mainDeletionQueue;
 	}
 
-	// Print VMA allocation statistics
-	static void printAllocationStats();
-
-	// Print detailed VMA statistics (including suballocations)
-	void printDetailedVmaStats();
-
 private:
 	VmaAllocator     m_allocator {VK_NULL_HANDLE};
 	VkDevice         m_device {VK_NULL_HANDLE};

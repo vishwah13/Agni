@@ -124,8 +124,8 @@ void AgniEngine::cleanup()
 		m_assetLoader.cleanup();
 
 		// Print VMA stats before destroying allocator (helps detect leaks)
-		ResourceManager::printAllocationStats();
-		m_resourceManager.printDetailedVmaStats();
+		PrintVmaAllocationStats();
+		PrintDetailedVmaStats(m_resourceManager.getAllocator());
 
 		// flush the global deletion queue
 		m_resourceManager.getMainDeletionQueue().flush();

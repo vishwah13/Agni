@@ -63,3 +63,9 @@ void VKAPI_CALL vmaFreeDeviceMemoryCallback(
 
 // Get VMA device memory callbacks struct for allocator creation
 VmaDeviceMemoryCallbacks getVmaDeviceMemoryCallbacks();
+
+// Print VMA device memory block statistics (from callbacks)
+void PrintVmaAllocationStats();
+
+// Print detailed VMA statistics (including suballocations)
+void PrintDetailedVmaStats(VmaAllocator allocator);
