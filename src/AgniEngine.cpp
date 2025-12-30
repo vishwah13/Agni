@@ -574,7 +574,9 @@ void AgniEngine::resizeSwapchain()
 	}
 
 	// Destroy and rebuild pipelines with new MSAA settings
-	m_assetLoader.getMaterialSystem().clearResources(m_device);
+	// Use clearPipelines (not clearResources) to preserve descriptor set layout
+	// so that existing material descriptor sets remain valid
+	m_assetLoader.getMaterialSystem().clearPipelines(m_device);
 	m_skybox.clearPipelineResources(m_device);
 
 	int w, h;
@@ -591,6 +593,23 @@ void AgniEngine::resizeSwapchain()
 	// Rebuild pipelines with new MSAA settings
 	m_assetLoader.buildPipelines(this);
 	m_skybox.buildPipelines(this);
+
+	// Update all loaded scene materials to point to the new pipelines
+	// (descriptor sets remain valid, but pipeline pointers need updating)
+	for (auto& [name, scene] : m_renderer.getLoadedScenes())
+	{
+		for (auto& [matName, material] : scene->materials)
+		{
+			if (material->m_data.m_passType == MaterialPass::Transparent)
+			{
+				material->m_data.m_pipeline = &m_assetLoader.getMaterialSystem().m_transparentPipeline;
+			}
+			else
+			{
+				material->m_data.m_pipeline = &m_assetLoader.getMaterialSystem().m_opaquePipeline;
+			}
+		}
+	}
 }
 
 void AgniEngine::initDescriptors()

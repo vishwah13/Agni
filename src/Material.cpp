@@ -37,16 +37,21 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 	matrixRange.size       = sizeof(GPUDrawPushConstants);
 	matrixRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
-	DescriptorLayoutBuilder layoutBuilder;
-	layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-	layoutBuilder.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-	layoutBuilder.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-	layoutBuilder.addBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-	layoutBuilder.addBinding(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	// Only create descriptor set layout if it doesn't exist
+	// This allows material descriptor sets to survive resize
+	if (m_materialLayout == VK_NULL_HANDLE)
+	{
+		DescriptorLayoutBuilder layoutBuilder;
+		layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+		layoutBuilder.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		layoutBuilder.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		layoutBuilder.addBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		layoutBuilder.addBinding(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-	m_materialLayout = layoutBuilder.build(engine->m_device,
-	                                       VK_SHADER_STAGE_VERTEX_BIT |
-	                                       VK_SHADER_STAGE_FRAGMENT_BIT);
+		m_materialLayout = layoutBuilder.build(engine->m_device,
+		                                       VK_SHADER_STAGE_VERTEX_BIT |
+		                                       VK_SHADER_STAGE_FRAGMENT_BIT);
+	}
 
 	VkDescriptorSetLayout layouts[] = {
 	engine->m_renderer.getGpuSceneDataDescriptorLayout(), m_materialLayout};
@@ -102,13 +107,40 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 	vkDestroyShaderModule(engine->m_device, meshVertexShader, nullptr);
 }
 
+void GltfPbrMaterial::clearPipelines(VkDevice device)
+{
+	// Only destroy pipelines and layout, NOT the descriptor set layout
+	// This preserves material descriptor sets during resize
+	if (m_transparentPipeline.m_layout != VK_NULL_HANDLE)
+	{
+		vkDestroyPipelineLayout(device, m_transparentPipeline.m_layout, nullptr);
+		m_transparentPipeline.m_layout = VK_NULL_HANDLE;
+		m_opaquePipeline.m_layout      = VK_NULL_HANDLE; // Same layout, shared
+	}
+
+	if (m_transparentPipeline.m_pipeline != VK_NULL_HANDLE)
+	{
+		vkDestroyPipeline(device, m_transparentPipeline.m_pipeline, nullptr);
+		m_transparentPipeline.m_pipeline = VK_NULL_HANDLE;
+	}
+
+	if (m_opaquePipeline.m_pipeline != VK_NULL_HANDLE)
+	{
+		vkDestroyPipeline(device, m_opaquePipeline.m_pipeline, nullptr);
+		m_opaquePipeline.m_pipeline = VK_NULL_HANDLE;
+	}
+}
+
 void GltfPbrMaterial::clearResources(VkDevice device)
 {
-	vkDestroyDescriptorSetLayout(device, m_materialLayout, nullptr);
-	vkDestroyPipelineLayout(device, m_transparentPipeline.m_layout, nullptr);
+	clearPipelines(device);
 
-	vkDestroyPipeline(device, m_transparentPipeline.m_pipeline, nullptr);
-	vkDestroyPipeline(device, m_opaquePipeline.m_pipeline, nullptr);
+	// Also destroy the descriptor set layout (only on full cleanup/shutdown)
+	if (m_materialLayout != VK_NULL_HANDLE)
+	{
+		vkDestroyDescriptorSetLayout(device, m_materialLayout, nullptr);
+		m_materialLayout = VK_NULL_HANDLE;
+	}
 }
 
 MaterialInstance

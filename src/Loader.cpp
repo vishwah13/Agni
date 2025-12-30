@@ -185,48 +185,50 @@ void AssetLoader::buildPipelines(AgniEngine* engine)
 {
 	m_metalRoughMaterial.buildPipelines(engine);
 
-	// Clean up old default material resources if they exist (for resize case)
-	if (m_defaultMaterialBuffer.m_buffer != VK_NULL_HANDLE)
+	// Check if this is initial setup or resize
+	bool isResize = (m_defaultMaterial != nullptr);
+
+	if (!isResize)
 	{
-		m_resourceManager->destroyBuffer(m_defaultMaterialBuffer);
-		m_defaultMaterialBuffer = {};
+		// Initial setup - create descriptor pool
+		std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> sizes = {
+			{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4},
+			{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}
+		};
+		m_defaultMaterialDescriptorPool.init(m_device, 1, sizes);
+
+		// Create buffer for default material constants
+		m_defaultMaterialBuffer = m_resourceManager->createBuffer(
+			sizeof(GltfPbrMaterial::MaterialConstants),
+			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+			VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+		// Set default material constants (white, non-metallic, medium roughness)
+		GltfPbrMaterial::MaterialConstants* constants =
+			(GltfPbrMaterial::MaterialConstants*)m_defaultMaterialBuffer.m_info.pMappedData;
+		constants->m_colorFactors        = glm::vec4(1.0f);
+		constants->m_metal_rough_factors = glm::vec4(0.0f, 0.5f, 0.0f, 0.0f);
+
+		// Setup material resources with default textures
+		GltfPbrMaterial::MaterialResources materialResources;
+		materialResources.m_colorTexture      = m_whiteTexture;
+		materialResources.m_metalRoughTexture = m_whiteTexture;
+		materialResources.m_normalTexture     = m_defaultNormalTexture;
+		materialResources.m_aoTexture         = m_whiteTexture;
+		materialResources.m_dataBuffer        = m_defaultMaterialBuffer.m_buffer;
+		materialResources.m_dataBufferOffset  = 0;
+
+		// Create the default material
+		m_defaultMaterial       = std::make_shared<GLTFMaterial>();
+		m_defaultMaterial->m_data = m_metalRoughMaterial.writeMaterial(
+			m_device, MaterialPass::MainColor, materialResources, m_defaultMaterialDescriptorPool);
 	}
-	m_defaultMaterial.reset();
-	m_defaultMaterialDescriptorPool.destroyPools(m_device);
-
-	// Create default material for glTF files without materials
-	// Setup descriptor pool for default material
-	std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> sizes = {
-		{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4},
-		{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}
-	};
-	m_defaultMaterialDescriptorPool.init(m_device, 1, sizes);
-
-	// Create buffer for default material constants
-	m_defaultMaterialBuffer = m_resourceManager->createBuffer(
-		sizeof(GltfPbrMaterial::MaterialConstants),
-		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-		VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-	// Set default material constants (white, non-metallic, medium roughness)
-	GltfPbrMaterial::MaterialConstants* constants =
-		(GltfPbrMaterial::MaterialConstants*)m_defaultMaterialBuffer.m_info.pMappedData;
-	constants->m_colorFactors        = glm::vec4(1.0f);
-	constants->m_metal_rough_factors = glm::vec4(0.0f, 0.5f, 0.0f, 0.0f);
-
-	// Setup material resources with default textures
-	GltfPbrMaterial::MaterialResources materialResources;
-	materialResources.m_colorTexture      = m_whiteTexture;
-	materialResources.m_metalRoughTexture = m_whiteTexture;
-	materialResources.m_normalTexture     = m_defaultNormalTexture;
-	materialResources.m_aoTexture         = m_whiteTexture;
-	materialResources.m_dataBuffer        = m_defaultMaterialBuffer.m_buffer;
-	materialResources.m_dataBufferOffset  = 0;
-
-	// Create the default material
-	m_defaultMaterial       = std::make_shared<GLTFMaterial>();
-	m_defaultMaterial->m_data = m_metalRoughMaterial.writeMaterial(
-		m_device, MaterialPass::MainColor, materialResources, m_defaultMaterialDescriptorPool);
+	else
+	{
+		// Resize case - just update the pipeline pointer in existing material
+		// The descriptor set remains valid since we preserved the descriptor layout
+		m_defaultMaterial->m_data.m_pipeline = &m_metalRoughMaterial.m_opaquePipeline;
+	}
 }
 
 // ============================================================================

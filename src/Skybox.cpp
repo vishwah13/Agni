@@ -70,12 +70,17 @@ void Skybox::buildPipelines(AgniEngine* engine)
 	matrixRange.size       = sizeof(SkyBoxPushConstants);
 	matrixRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
-	DescriptorLayoutBuilder layoutBuilder;
-	layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	// Only create descriptor set layout if it doesn't exist
+	// This allows the skybox material's descriptor set to survive resize
+	if (m_skyboxMaterialLayout == VK_NULL_HANDLE)
+	{
+		DescriptorLayoutBuilder layoutBuilder;
+		layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-	m_skyboxMaterialLayout = layoutBuilder.build(engine->m_device,
-	                                             VK_SHADER_STAGE_VERTEX_BIT |
-	                                             VK_SHADER_STAGE_FRAGMENT_BIT);
+		m_skyboxMaterialLayout = layoutBuilder.build(engine->m_device,
+		                                             VK_SHADER_STAGE_VERTEX_BIT |
+		                                             VK_SHADER_STAGE_FRAGMENT_BIT);
+	}
 
 	VkDescriptorSetLayout layouts[] = {
 	engine->m_renderer.getGpuSceneDataDescriptorLayout(),
@@ -122,12 +127,25 @@ void Skybox::buildPipelines(AgniEngine* engine)
 
 	vkDestroyShaderModule(engine->m_device, skyFragShader, nullptr);
 	vkDestroyShaderModule(engine->m_device, skyVertexShader, nullptr);
+
+	// Update skybox material's pipeline pointer if it exists (resize case)
+	if (m_skyboxMaterial != nullptr)
+	{
+		m_skyboxMaterial->m_pipeline = &m_skyboxPipeline;
+	}
 }
 
 void Skybox::cleanup(AgniEngine* engine)
 {
 	// Cleanup pipeline resources
 	clearPipelineResources(engine->m_device);
+
+	// Cleanup descriptor set layout (not destroyed in clearPipelineResources for resize support)
+	if (m_skyboxMaterialLayout != VK_NULL_HANDLE)
+	{
+		vkDestroyDescriptorSetLayout(engine->m_device, m_skyboxMaterialLayout, nullptr);
+		m_skyboxMaterialLayout = VK_NULL_HANDLE;
+	}
 
 	// Cleanup mesh buffers
 	engine->m_resourceManager.destroyBuffer(m_meshBuffers.m_indexBuffer);
@@ -277,9 +295,18 @@ void Skybox::createMaterial(AgniEngine* engine)
 
 void Skybox::clearPipelineResources(VkDevice device)
 {
-	vkDestroyDescriptorSetLayout(device, m_skyboxMaterialLayout, nullptr);
-	vkDestroyPipelineLayout(device, m_skyboxPipeline.m_layout, nullptr);
-	vkDestroyPipeline(device, m_skyboxPipeline.m_pipeline, nullptr);
+	// Only destroy pipelines, NOT the descriptor set layout
+	// This preserves the skybox material's descriptor set during resize
+	if (m_skyboxPipeline.m_layout != VK_NULL_HANDLE)
+	{
+		vkDestroyPipelineLayout(device, m_skyboxPipeline.m_layout, nullptr);
+		m_skyboxPipeline.m_layout = VK_NULL_HANDLE;
+	}
+	if (m_skyboxPipeline.m_pipeline != VK_NULL_HANDLE)
+	{
+		vkDestroyPipeline(device, m_skyboxPipeline.m_pipeline, nullptr);
+		m_skyboxPipeline.m_pipeline = VK_NULL_HANDLE;
+	}
 }
 
 MaterialInstance

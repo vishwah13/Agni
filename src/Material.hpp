@@ -18,8 +18,8 @@ enum class MaterialPass : uint8_t
 
 struct MaterialPipeline
 {
-	VkPipeline       m_pipeline;
-	VkPipelineLayout m_layout;
+	VkPipeline       m_pipeline {VK_NULL_HANDLE};
+	VkPipelineLayout m_layout {VK_NULL_HANDLE};
 };
 
 struct MaterialInstance
@@ -31,10 +31,10 @@ struct MaterialInstance
 
 struct GltfPbrMaterial
 {
-	MaterialPipeline m_opaquePipeline;
-	MaterialPipeline m_transparentPipeline;
+	MaterialPipeline m_opaquePipeline {};
+	MaterialPipeline m_transparentPipeline {};
 
-	VkDescriptorSetLayout m_materialLayout;
+	VkDescriptorSetLayout m_materialLayout {VK_NULL_HANDLE};
 
 	struct MaterialConstants
 	{
@@ -57,6 +57,11 @@ struct GltfPbrMaterial
 	DescriptorWriter m_writer;
 
 	void buildPipelines(AgniEngine* engine);
+
+	// Clear only pipelines (used during resize - preserves descriptor layout)
+	void clearPipelines(VkDevice device);
+
+	// Clear all resources including descriptor layout (used on shutdown)
 	void clearResources(VkDevice device);
 
 	MaterialInstance
