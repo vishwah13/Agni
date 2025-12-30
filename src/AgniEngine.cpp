@@ -108,6 +108,12 @@ void AgniEngine::cleanup()
 			m_frames[i].m_deletionQueue.flush();
 		}
 
+		// Cleanup ImGui (explicitly, so we can track VMA leaks properly)
+		ImGui_ImplVulkan_Shutdown();
+		ImGui_ImplSDL3_Shutdown();
+		ImGui::DestroyContext();
+		vkDestroyDescriptorPool(m_device, m_imguiPool, nullptr);
+
 		// Cleanup m_skybox resources
 		m_skybox.cleanup(this);
 
@@ -116,6 +122,10 @@ void AgniEngine::cleanup()
 
 		// Cleanup asset loader (default textures and shared samplers)
 		m_assetLoader.cleanup();
+
+		// Print VMA stats before destroying allocator (helps detect leaks)
+		ResourceManager::printAllocationStats();
+		m_resourceManager.printDetailedVmaStats();
 
 		// flush the global deletion queue
 		m_resourceManager.getMainDeletionQueue().flush();
@@ -557,6 +567,12 @@ void AgniEngine::resizeSwapchain()
 {
 	vkDeviceWaitIdle(m_device);
 
+	// Flush all frame deletion queues to clean up pending resources (e.g., light buffers)
+	for (int i = 0; i < FRAME_OVERLAP; i++)
+	{
+		m_frames[i].m_deletionQueue.flush();
+	}
+
 	// Destroy and rebuild pipelines with new MSAA settings
 	m_assetLoader.getMaterialSystem().clearResources(m_device);
 	m_skybox.clearPipelineResources(m_device);
@@ -682,13 +698,8 @@ void AgniEngine::initImgui()
 
 	ImGui_ImplVulkan_Init(&initInfo);
 
-	// add the destroy the imgui created structures
-	m_resourceManager.getMainDeletionQueue().push_function(
-	[=]()
-	{
-		ImGui_ImplVulkan_Shutdown();
-		vkDestroyDescriptorPool(m_device, imguiPool, nullptr);
-	});
+	// Store imgui pool for explicit cleanup (not in deletion queue, so we can track VMA leaks)
+	m_imguiPool = imguiPool;
 }
 
 void AgniEngine::initDefaultData()
@@ -825,43 +836,49 @@ void LightNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
 	glm::mat4 nodeMatrix    = topMatrix * m_worldTransform;
 	glm::vec3 worldPosition = glm::vec3(nodeMatrix[3]); // Extract translation
 
-	if (m_light.type == LightType::Point)
+	switch (m_light.type)
 	{
-		// Add point light to context if within limit
-		if (ctx.m_PointLights.size() < MAX_POINT_LIGHTS)
+		case LightType::Point:
 		{
-			GPUPointLight gpuLight;
-			gpuLight.m_position  = worldPosition;
-			gpuLight.m_color     = m_light.color;
-			gpuLight.m_intensity = m_light.intensity;
-			gpuLight.m_radius    = m_light.radius;
+			// Add point light to context if within limit
+			if (ctx.m_PointLights.size() < MAX_POINT_LIGHTS)
+			{
+				GPUPointLight gpuLight;
+				gpuLight.m_position  = worldPosition;
+				gpuLight.m_color     = m_light.color;
+				gpuLight.m_intensity = m_light.intensity;
+				gpuLight.m_radius    = m_light.radius;
 
-			ctx.m_PointLights.push_back(gpuLight);
+				ctx.m_PointLights.push_back(gpuLight);
+			}
+			break;
 		}
-	}
-	else if (m_light.type == LightType::Directional)
-	{
-		// Set directional light (only one supported, last one wins)
-		ctx.m_DirectionalLight.direction = m_light.direction;
-		ctx.m_DirectionalLight.color     = m_light.color;
-		ctx.m_DirectionalLight.intensity = m_light.intensity;
-		ctx.m_DirectionalLight.active    = true;
-	}
-	else if (m_light.type == LightType::Spot)
-	{
-		// Add spot light to context if within limit
-		if (ctx.m_SpotLights.size() < MAX_SPOT_LIGHTS)
+		case LightType::Directional:
 		{
-			GPUSpotLight gpuLight;
-			gpuLight.m_position    = worldPosition;
-			gpuLight.m_direction   = glm::normalize(m_light.direction);
-			gpuLight.m_color       = m_light.color;
-			gpuLight.m_intensity   = m_light.intensity;
-			gpuLight.m_radius      = m_light.radius;
-			gpuLight.m_innerCutoff = glm::cos(glm::radians(m_light.innerConeAngle));
-			gpuLight.m_outerCutoff = glm::cos(glm::radians(m_light.outerConeAngle));
+			// Set directional light (only one supported, last one wins)
+			ctx.m_DirectionalLight.direction = m_light.direction;
+			ctx.m_DirectionalLight.color     = m_light.color;
+			ctx.m_DirectionalLight.intensity = m_light.intensity;
+			ctx.m_DirectionalLight.active    = true;
+			break;
+		}
+		case LightType::Spot:
+		{
+			// Add spot light to context if within limit
+			if (ctx.m_SpotLights.size() < MAX_SPOT_LIGHTS)
+			{
+				GPUSpotLight gpuLight;
+				gpuLight.m_position    = worldPosition;
+				gpuLight.m_direction   = glm::normalize(m_light.direction);
+				gpuLight.m_color       = m_light.color;
+				gpuLight.m_intensity   = m_light.intensity;
+				gpuLight.m_radius      = m_light.radius;
+				gpuLight.m_innerCutoff = glm::cos(glm::radians(m_light.innerConeAngle));
+				gpuLight.m_outerCutoff = glm::cos(glm::radians(m_light.outerConeAngle));
 
-			ctx.m_SpotLights.push_back(gpuLight);
+				ctx.m_SpotLights.push_back(gpuLight);
+			}
+			break;
 		}
 	}
 

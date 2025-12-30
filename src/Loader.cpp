@@ -172,7 +172,7 @@ void AssetLoader::cleanup()
 		m_nearestMipmapSampler = VK_NULL_HANDLE;
 	}
 
-	if (m_meshResources != VK_NULL_HANDLE)
+	if (m_meshResources)
 	{
 		m_meshResources.reset();
 	}
@@ -184,6 +184,15 @@ void AssetLoader::cleanup()
 void AssetLoader::buildPipelines(AgniEngine* engine)
 {
 	m_metalRoughMaterial.buildPipelines(engine);
+
+	// Clean up old default material resources if they exist (for resize case)
+	if (m_defaultMaterialBuffer.m_buffer != VK_NULL_HANDLE)
+	{
+		m_resourceManager->destroyBuffer(m_defaultMaterialBuffer);
+		m_defaultMaterialBuffer = {};
+	}
+	m_defaultMaterial.reset();
+	m_defaultMaterialDescriptorPool.destroyPools(m_device);
 
 	// Create default material for glTF files without materials
 	// Setup descriptor pool for default material

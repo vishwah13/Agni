@@ -133,6 +133,7 @@ public:
 	VkPhysicalDevice         m_chosenGPU; // GPU chosen as the default device
 	VkDevice                 m_device;    // Vulkan device for commands
 	VkSurfaceKHR             m_surface;   // Vulkan window surface
+	VkDescriptorPool         m_imguiPool {VK_NULL_HANDLE}; // ImGui descriptor pool
 
 	FrameData m_frames[FRAME_OVERLAP];
 

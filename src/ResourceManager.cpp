@@ -4,10 +4,63 @@
 #include <Initializers.hpp>
 #include <VulkanTools.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
 #include <vk_mem_alloc.h>
+#include <fmt/core.h>
+
+// Global VMA allocation stats
+VmaAllocationStats g_vmaStats;
+
+// VMA device memory allocation callback
+static void VKAPI_CALL vmaAllocateDeviceMemoryCallback(
+    VmaAllocator                    allocator,
+    uint32_t                        memoryType,
+    VkDeviceMemory                  memory,
+    VkDeviceSize                    size,
+    void*                           pUserData)
+{
+	(void)allocator;
+	(void)memoryType;
+	(void)memory;
+	(void)pUserData;
+
+	g_vmaStats.totalAllocations++;
+	g_vmaStats.currentAllocations++;
+	g_vmaStats.totalBytesAllocated += size;
+	g_vmaStats.currentBytesAllocated += size;
+
+	fmt::print("[VMA] Allocate: {} bytes (type: {}) | Current: {} allocs, {} bytes\n",
+	           size, memoryType,
+	           g_vmaStats.currentAllocations.load(),
+	           g_vmaStats.currentBytesAllocated.load());
+}
+
+// VMA device memory free callback
+static void VKAPI_CALL vmaFreeDeviceMemoryCallback(
+    VmaAllocator                    allocator,
+    uint32_t                        memoryType,
+    VkDeviceMemory                  memory,
+    VkDeviceSize                    size,
+    void*                           pUserData)
+{
+	(void)allocator;
+	(void)memoryType;
+	(void)memory;
+	(void)pUserData;
+
+	g_vmaStats.totalFrees++;
+	g_vmaStats.currentAllocations--;
+	g_vmaStats.totalBytesFreed += size;
+	g_vmaStats.currentBytesAllocated -= size;
+
+	fmt::print("[VMA] Free: {} bytes (type: {}) | Current: {} allocs, {} bytes\n",
+	           size, memoryType,
+	           g_vmaStats.currentAllocations.load(),
+	           g_vmaStats.currentBytesAllocated.load());
+}
 
 void ResourceManager::init(VkInstance       instance,
                            VkPhysicalDevice physicalDevice,
@@ -21,6 +74,15 @@ void ResourceManager::init(VkInstance       instance,
 	m_graphicsQueue       = graphicsQueue;
 	m_graphicsQueueFamily = graphicsQueueFamily;
 
+	// Reset allocation stats
+	g_vmaStats.reset();
+
+	// Setup device memory allocation callbacks for tracking
+	static VmaDeviceMemoryCallbacks deviceMemoryCallbacks = {};
+	deviceMemoryCallbacks.pfnAllocate = vmaAllocateDeviceMemoryCallback;
+	deviceMemoryCallbacks.pfnFree     = vmaFreeDeviceMemoryCallback;
+	deviceMemoryCallbacks.pUserData   = nullptr;
+
 	// initialize the memory allocator
 	VmaAllocatorCreateInfo allocatorInfo = {};
 	allocatorInfo.physicalDevice         = m_physicalDevice;
@@ -28,12 +90,15 @@ void ResourceManager::init(VkInstance       instance,
 	allocatorInfo.instance               = m_instance;
 	allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT |
 	                      VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT;
+	allocatorInfo.pDeviceMemoryCallbacks = &deviceMemoryCallbacks;
 
 	VmaVulkanFunctions vulkanFunctions = {};
 	vmaImportVulkanFunctionsFromVolk(&allocatorInfo, &vulkanFunctions);
 	allocatorInfo.pVulkanFunctions = &vulkanFunctions;
 	allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_4;
 	VK_CHECK(vmaCreateAllocator(&allocatorInfo, &m_allocator));
+
+	fmt::print("[VMA] Allocator created with device memory tracking enabled\n");
 
 	m_mainDeletionQueue.push_function([&]()
 	                                  { vmaDestroyAllocator(m_allocator); });
@@ -333,4 +398,89 @@ GPUMeshBuffers ResourceManager::uploadMesh(std::span<uint32_t> indices,
 	destroyBuffer(staging);
 
 	return newSurface;
+}
+
+void ResourceManager::printAllocationStats()
+{
+	fmt::print("\n========== VMA Device Memory Block Statistics ==========\n");
+	fmt::print("Total Block Allocations:     {}\n", g_vmaStats.totalAllocations.load());
+	fmt::print("Total Block Frees:           {}\n", g_vmaStats.totalFrees.load());
+	fmt::print("Current Memory Blocks:       {}\n", g_vmaStats.currentAllocations.load());
+	fmt::print("Total Bytes Allocated: {} ({:.2f} MB)\n",
+	           g_vmaStats.totalBytesAllocated.load(),
+	           g_vmaStats.totalBytesAllocated.load() / (1024.0 * 1024.0));
+	fmt::print("Total Bytes Freed:     {} ({:.2f} MB)\n",
+	           g_vmaStats.totalBytesFreed.load(),
+	           g_vmaStats.totalBytesFreed.load() / (1024.0 * 1024.0));
+	fmt::print("Current Bytes Used:    {} ({:.2f} MB)\n",
+	           g_vmaStats.currentBytesAllocated.load(),
+	           g_vmaStats.currentBytesAllocated.load() / (1024.0 * 1024.0));
+	fmt::print("=========================================================\n\n");
+
+	if (g_vmaStats.currentAllocations.load() > 0)
+	{
+		fmt::print("[VMA WARNING] {} memory blocks still active!\n",
+		           g_vmaStats.currentAllocations.load());
+	}
+}
+
+void ResourceManager::printDetailedVmaStats()
+{
+	if (m_allocator == VK_NULL_HANDLE)
+	{
+		fmt::print("[VMA] Allocator not initialized\n");
+		return;
+	}
+
+	// Get total statistics
+	VmaTotalStatistics stats;
+	vmaCalculateStatistics(m_allocator, &stats);
+
+	fmt::print("\n========== VMA Detailed Statistics ==========\n");
+	fmt::print("Total:\n");
+	fmt::print("  Allocations: {}\n", stats.total.statistics.allocationCount);
+	fmt::print("  Allocated bytes: {} ({:.2f} MB)\n",
+	           stats.total.statistics.allocationBytes,
+	           stats.total.statistics.allocationBytes / (1024.0 * 1024.0));
+	fmt::print("  Block count: {}\n", stats.total.statistics.blockCount);
+	fmt::print("  Block bytes: {} ({:.2f} MB)\n",
+	           stats.total.statistics.blockBytes,
+	           stats.total.statistics.blockBytes / (1024.0 * 1024.0));
+
+	// Print per-heap stats
+	for (uint32_t i = 0; i < VK_MAX_MEMORY_HEAPS; ++i)
+	{
+		if (stats.memoryHeap[i].statistics.allocationCount > 0 ||
+		    stats.memoryHeap[i].statistics.blockCount > 0)
+		{
+			fmt::print("Heap {}:\n", i);
+			fmt::print("  Allocations: {}, Bytes: {} ({:.2f} MB)\n",
+			           stats.memoryHeap[i].statistics.allocationCount,
+			           stats.memoryHeap[i].statistics.allocationBytes,
+			           stats.memoryHeap[i].statistics.allocationBytes / (1024.0 * 1024.0));
+			fmt::print("  Blocks: {}, Block Bytes: {} ({:.2f} MB)\n",
+			           stats.memoryHeap[i].statistics.blockCount,
+			           stats.memoryHeap[i].statistics.blockBytes,
+			           stats.memoryHeap[i].statistics.blockBytes / (1024.0 * 1024.0));
+		}
+	}
+	fmt::print("=============================================\n\n");
+
+	// If there are active allocations, print the full stats string
+	if (stats.total.statistics.allocationCount > 0)
+	{
+		fmt::print("[VMA WARNING] {} suballocations still active ({:.2f} MB)!\n",
+		           stats.total.statistics.allocationCount,
+		           stats.total.statistics.allocationBytes / (1024.0 * 1024.0));
+
+		// Build detailed stats string for debugging
+		char* statsString = nullptr;
+		vmaBuildStatsString(m_allocator, &statsString, VK_TRUE);
+		if (statsString)
+		{
+			fmt::print("\n[VMA] Full stats dump (first 2000 chars):\n{}\n",
+			           std::string_view(statsString, std::min(strlen(statsString), size_t(2000))));
+			vmaFreeStatsString(m_allocator, statsString);
+		}
+	}
 }

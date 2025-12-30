@@ -140,6 +140,15 @@ void Renderer::resize(VkExtent2D newExtent, VkSampleCountFlagBits msaaSamples)
 	                                             depthImageUsages,
 	                                             false,
 	                                             m_msaaSamples);
+
+	// Update the draw image descriptor to point to the new image
+	DescriptorWriter writer;
+	writer.writeImage(0,
+	                  m_drawImage.m_imageView,
+	                  VK_NULL_HANDLE,
+	                  VK_IMAGE_LAYOUT_GENERAL,
+	                  VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.updateSet(m_device, m_drawImageDescriptors);
 }
 
 void Renderer::initRenderTargets(VkExtent2D windowExtent)

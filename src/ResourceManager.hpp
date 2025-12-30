@@ -3,6 +3,31 @@
 #include <Types.hpp>
 #include <deque>
 #include <functional>
+#include <atomic>
+
+// VMA allocation tracking statistics
+struct VmaAllocationStats
+{
+	std::atomic<uint64_t> totalAllocations {0};
+	std::atomic<uint64_t> totalFrees {0};
+	std::atomic<uint64_t> currentAllocations {0};
+	std::atomic<uint64_t> totalBytesAllocated {0};
+	std::atomic<uint64_t> totalBytesFreed {0};
+	std::atomic<uint64_t> currentBytesAllocated {0};
+
+	void reset()
+	{
+		totalAllocations     = 0;
+		totalFrees           = 0;
+		currentAllocations   = 0;
+		totalBytesAllocated  = 0;
+		totalBytesFreed      = 0;
+		currentBytesAllocated = 0;
+	}
+};
+
+// Global allocation stats (accessible for debugging)
+extern VmaAllocationStats g_vmaStats;
 
 struct DeletionQueue
 {
@@ -81,6 +106,12 @@ public:
 	{
 		return m_mainDeletionQueue;
 	}
+
+	// Print VMA allocation statistics
+	static void printAllocationStats();
+
+	// Print detailed VMA statistics (including suballocations)
+	void printDetailedVmaStats();
 
 private:
 	VmaAllocator     m_allocator {VK_NULL_HANDLE};
