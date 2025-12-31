@@ -17,6 +17,7 @@ My personal Vulkan renderer
 - ImGui integration with docking support
 - Frustum culling for performance optimization
 - MSAA (4x) anti-aliasing
+- Tracy Profiler integrationfor real-time performance analysis
 
 ## Building
 
@@ -63,10 +64,17 @@ My personal Vulkan renderer
 | Option | Default | Description |
 |--------|---------|-------------|
 | `AGNI_COMPILE_SHADERS` | `ON` | Compile GLSL shaders to SPIR-V. Set to `OFF` to use pre-compiled `.spv` files |
+| `AGNI_ENABLE_TRACY` | `ON` | Enable Tracy profiler integration. Set to `OFF` for production builds |
 
 **Example: CI/CD build (faster, skips shader compilation):**
 ```bash
 cmake -B build -DAGNI_COMPILE_SHADERS=OFF
+cmake --build build --config Release
+```
+
+**Example: Production build (no profiling overhead):**
+```bash
+cmake -B build -DAGNI_ENABLE_TRACY=OFF
 cmake --build build --config Release
 ```
 
@@ -97,6 +105,81 @@ All dependencies are included as git submodules in `third_party/`:
 | [fastgltf](https://github.com/spnda/fastgltf) | glTF 2.0 loader |
 | [stb_image](https://github.com/nothings/stb) | Image loading |
 | [fmt](https://github.com/fmtlib/fmt) | String formatting |
+| [Tracy](https://github.com/wolfpld/tracy) | Real-time profiler |
+
+## Performance Profiling with Tracy
+
+Agni integrates [Tracy Profiler](https://github.com/wolfpld/tracy) for real-time performance analysis. Tracy provides detailed frame timing, CPU profiling zones, and memory tracking with minimal overhead.
+
+### Build Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `AGNI_ENABLE_TRACY` | `ON` | Enable Tracy profiler integration |
+
+**Disable Tracy (for production builds):**
+```bash
+cmake -B build -DAGNI_ENABLE_TRACY=OFF
+cmake --build build --config Release
+```
+
+### Building the Tracy Profiler Viewer
+
+The Tracy profiler viewer must be built separately to visualize profiling data:
+
+```bash
+# Configure the Tracy profiler build
+cmake -B third_party/tracy/profiler/build -S third_party/tracy/profiler -DCMAKE_BUILD_TYPE=Release
+
+# Build the profiler (this may take a few minutes on first build)
+cmake --build third_party/tracy/profiler/build --config Release --parallel
+```
+
+The profiler executable will be located at:
+- **Windows:** `third_party/tracy/profiler/build/Release/tracy-profiler.exe`
+- **Linux/macOS:** `third_party/tracy/profiler/build/tracy-profiler`
+
+### Using Tracy Profiler
+
+1. **Launch the Tracy profiler viewer:**
+   ```bash
+   # Using your custom-built profiler
+   ./third_party/tracy/profiler/build/Release/tracy-profiler.exe
+
+2. **Run the Agni engine:**
+   ```bash
+   ./bin/Release/engine.exe
+   ```
+
+3. **Connect in Tracy:**
+   - The Tracy viewer will automatically detect your application
+   - Click **"Connect"** to start profiling
+   - View real-time performance data in the timeline
+
+### Available Profiling Zones
+
+Agni includes comprehensive profiling instrumentation:
+
+| Zone | Description |
+|------|-------------|
+| `FrameMark` | Frame boundaries for FPS analysis |
+| `renderFrame` | Total frame rendering time |
+| `drawGeometry` | Geometry rendering with sub-zones: |
+| ├─ `Frustum Culling` | Visibility testing performance |
+| ├─ `Sort Opaque` | Opaque surface sorting |
+| ├─ `Sort Transparent` | Transparent surface sorting (back-to-front) |
+| ├─ `Draw Opaque` | Opaque geometry rendering |
+| ├─ `Draw Transparent` | Transparent geometry rendering |
+| └─ `Draw Skybox` | Skybox rendering |
+| `drawBackground` | Compute shader background effects |
+| `drawImgui` | ImGui UI overlay rendering |
+| `updateScene` | Scene graph updates and transforms |
+| `Camera::update` | Camera movement and rotation |
+| `loadGltf` | Asset loading (with file path annotations) |
+
+### Version Compatibility
+
+**Important:** The Tracy client (integrated in the engine) and server (profiler viewer) must use the same version to communicate successfully. Agni uses Tracy v0.13.1.
 
 ## Troubleshooting
 
