@@ -27,36 +27,60 @@ My personal Vulkan renderer
 - Python 3.x
 - Git
 
-### Build Instructions
+### Quick Start (Recommended)
 
-1. **Clone the repository with submodules:**
-   ```bash
-   git clone --recursive https://github.com/yourusername/Agni.git
-   cd Agni
-   ```
+**Easy build using Python script:**
+```bash
+# Clone with submodules
+git clone --recursive https://github.com/yourusername/Agni.git
+cd Agni
 
-   If you already cloned without `--recursive`, initialize submodules:
-   ```bash
-   git submodule update --init --recursive
-   ```
+# Build the engine (one command!)
+python build.py
+```
 
-2. **Configure and build:**
+If you already cloned without `--recursive`, initialize submodules:
+```bash
+git submodule update --init --recursive
+```
 
-   **Windows (Visual Studio):**
-   ```bash
-   cmake -S . -B build
-   cmake --build build --config Release
-   ```
+**Build script options:**
+```bash
+python build.py                 # Debug build + Tracy profiler (default for development)
+python build.py --release       # Release build (optimized, no Tracy profiler)
+python build.py --clean         # Clean and rebuild
+python build.py --tracy         # Force build Tracy profiler (auto in Debug)
+python build.py --no-shaders    # Skip shader compilation (use pre-compiled)
+python build.py --no-tracy      # Disable Tracy profiling
+python build.py -j 8            # Use 8 parallel jobs
 
-   **Linux/macOS:**
+# Generator options:
+python build.py -G ninja        # Use Ninja (faster incremental builds)
+python build.py -G vs2022       # Use Visual Studio 2022
+python build.py -G vs2026       # Use Visual Studio 2026
+python build.py -G make         # Use Unix Makefiles (Linux/macOS)
+```
+
+> **Note:** Debug builds automatically build the Tracy profiler viewer for easy profiling during development. Release builds skip the profiler unless `--tracy` is specified.
+
+### Manual Build Instructions
+
+If you prefer to use CMake directly:
+
+1. **Configure:**
    ```bash
    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-   cmake --build build
+   ```
+
+2. **Build:**
+   ```bash
+   cmake --build build --config Release --parallel
    ```
 
 3. **Run the engine:**
    ```bash
-   ./bin/engine
+   ./bin/Release/engine.exe    # Windows
+   ./bin/engine                # Linux/macOS
    ```
 
 ### Build Options
@@ -66,15 +90,25 @@ My personal Vulkan renderer
 | `AGNI_COMPILE_SHADERS` | `ON` | Compile GLSL shaders to SPIR-V. Set to `OFF` to use pre-compiled `.spv` files |
 | `AGNI_ENABLE_TRACY` | `ON` | Enable Tracy profiler integration. Set to `OFF` for production builds |
 
-**Example: CI/CD build (faster, skips shader compilation):**
+**CI/CD build example (faster, uses pre-compiled shaders):**
 ```bash
+# Using build script (recommended)
+python build.py --release --no-shaders
+
+# Or with CMake directly
 cmake -B build -DAGNI_COMPILE_SHADERS=OFF
 cmake --build build --config Release
 ```
 
-**Example: Production build (no profiling overhead):**
+> **Note:** CI/CD runners don't need to build the Tracy profiler viewer - only the engine includes the Tracy client library.
+
+**Production build example (no profiling overhead):**
 ```bash
-cmake -B build -DAGNI_ENABLE_TRACY=OFF
+# Using build script (recommended)
+python build.py --release --no-tracy --no-shaders
+
+# Or with CMake directly
+cmake -B build -DAGNI_ENABLE_TRACY=OFF -DAGNI_COMPILE_SHADERS=OFF
 cmake --build build --config Release
 ```
 
@@ -125,8 +159,16 @@ cmake --build build --config Release
 
 ### Building the Tracy Profiler Viewer
 
-The Tracy profiler viewer must be built separately to visualize profiling data:
+**Automatic (with build script):**
+```bash
+# Debug builds automatically build Tracy profiler
+python build.py
 
+# Release builds can optionally build Tracy
+python build.py --release --tracy
+```
+
+**Manual build (if needed):**
 ```bash
 # Configure the Tracy profiler build
 cmake -B third_party/tracy/profiler/build -S third_party/tracy/profiler -DCMAKE_BUILD_TYPE=Release
@@ -136,19 +178,26 @@ cmake --build third_party/tracy/profiler/build --config Release --parallel
 ```
 
 The profiler executable will be located at:
-- **Windows:** `third_party/tracy/profiler/build/Release/tracy-profiler.exe`
+- **Windows:** `third_party/tracy/profiler/build/<Debug|Release>/tracy-profiler.exe`
 - **Linux/macOS:** `third_party/tracy/profiler/build/tracy-profiler`
 
 ### Using Tracy Profiler
 
+After building in Debug mode (which automatically builds the profiler):
+
 1. **Launch the Tracy profiler viewer:**
    ```bash
-   # Using your custom-built profiler
+   # Debug build
+   ./third_party/tracy/profiler/build/Debug/tracy-profiler.exe
+
+   # Or Release build (if built with --release --tracy)
    ./third_party/tracy/profiler/build/Release/tracy-profiler.exe
+   ```
 
 2. **Run the Agni engine:**
    ```bash
-   ./bin/Release/engine.exe
+   ./bin/Debug/engine.exe      # Debug build
+   ./bin/Release/engine.exe    # Release build
    ```
 
 3. **Connect in Tracy:**
