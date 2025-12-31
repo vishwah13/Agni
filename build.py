@@ -10,9 +10,9 @@ Usage:
     python build.py --tracy         # Also build Tracy profiler
     python build.py --no-shaders    # Skip shader compilation
     python build.py --no-tracy      # Disable Tracy profiling
-    python build.py -G ninja        # Use Ninja build system (faster)
     python build.py -G vs2022       # Use Visual Studio 2022
     python build.py -G vs2026       # Use Visual Studio 2026
+    python build.py -G make         # Use Unix Makefiles (Linux/macOS)
 """
 
 import argparse
@@ -116,7 +116,6 @@ def configure_cmake(build_dir, source_dir, build_type, compile_shaders, enable_t
 
     # Map generator shortcuts to CMake generator names
     generator_map = {
-        "ninja": "Ninja",
         "vs2022": "Visual Studio 17 2022",
         "vs2026": "Visual Studio 18 2026",
         "make": "Unix Makefiles"
@@ -135,9 +134,9 @@ def configure_cmake(build_dir, source_dir, build_type, compile_shaders, enable_t
         cmake_args.extend(["-G", cmake_generator])
         print_info(f"Generator: {cmake_generator}")
 
-    # Add build type for single-config generators (Unix Makefiles, Ninja)
+    # Add build type for single-config generators (Unix Makefiles)
     # Multi-config generators (Visual Studio, Xcode) use --config at build time
-    is_single_config = generator in ["ninja", "make"] or (generator is None and platform.system() != 'Windows')
+    is_single_config = generator == "make" or (generator is None and platform.system() != 'Windows')
     if is_single_config:
         cmake_args.extend(["-DCMAKE_BUILD_TYPE=" + build_type])
 
@@ -198,7 +197,6 @@ def build_tracy_profiler(tracy_dir, build_type, generator=None):
 
     # Map generator shortcuts to CMake generator names
     generator_map = {
-        "ninja": "Ninja",
         "vs2022": "Visual Studio 17 2022",
         "vs2026": "Visual Studio 18 2026",
         "make": "Unix Makefiles"
@@ -217,7 +215,7 @@ def build_tracy_profiler(tracy_dir, build_type, generator=None):
         cmake_args.extend(["-G", cmake_generator])
 
     # Add build type for single-config generators
-    is_single_config = generator in ["ninja", "make"] or (generator is None and platform.system() != 'Windows')
+    is_single_config = generator == "make" or (generator is None and platform.system() != 'Windows')
     if is_single_config:
         cmake_args.append(f"-DCMAKE_BUILD_TYPE={build_type}")
 
@@ -262,9 +260,9 @@ Examples:
   python build.py --release --tracy  # Release build + Tracy profiler
   python build.py --no-shaders       # Skip shader compilation (faster CI builds)
   python build.py --no-tracy         # Skip Tracy profiler build
-  python build.py -G ninja           # Use Ninja (faster builds)
   python build.py -G vs2022          # Use Visual Studio 2022
   python build.py -G vs2026          # Use Visual Studio 2026
+  python build.py -G make            # Use Unix Makefiles (Linux/macOS)
         """
     )
 
@@ -307,8 +305,8 @@ Examples:
     parser.add_argument(
         "-G", "--generator",
         type=str,
-        choices=["ninja", "vs2022", "vs2026", "make"],
-        help="Build system generator: ninja (Ninja), vs2022 (Visual Studio 17 2022), vs2026 (Visual Studio 18 2026), make (Unix Makefiles)"
+        choices=["vs2022", "vs2026", "make"],
+        help="Build system generator: vs2022 (Visual Studio 17 2022), vs2026 (Visual Studio 18 2026), make (Unix Makefiles)"
     )
 
     args = parser.parse_args()

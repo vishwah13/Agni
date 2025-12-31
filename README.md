@@ -55,7 +55,6 @@ python build.py --no-tracy      # Disable Tracy profiling
 python build.py -j 8            # Use 8 parallel jobs
 
 # Generator options:
-python build.py -G ninja        # Use Ninja (faster incremental builds)
 python build.py -G vs2022       # Use Visual Studio 2022
 python build.py -G vs2026       # Use Visual Studio 2026
 python build.py -G make         # Use Unix Makefiles (Linux/macOS)
