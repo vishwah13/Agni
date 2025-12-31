@@ -35,7 +35,7 @@ My personal Vulkan renderer
 git clone --recursive https://github.com/yourusername/Agni.git
 cd Agni
 
-# Build the engine (one command!)
+# Build the engine
 python build.py
 ```
 
@@ -57,7 +57,6 @@ python build.py -j 8            # Use 8 parallel jobs
 # Generator options:
 python build.py -G vs2022       # Use Visual Studio 2022
 python build.py -G vs2026       # Use Visual Studio 2026
-python build.py -G make         # Use Unix Makefiles (Linux/macOS)
 ```
 
 > **Note:** Debug builds automatically build the Tracy profiler viewer for easy profiling during development. Release builds skip the profiler unless `--tracy` is specified.
@@ -79,7 +78,6 @@ If you prefer to use CMake directly:
 3. **Run the engine:**
    ```bash
    ./bin/Release/engine.exe    # Windows
-   ./bin/engine                # Linux/macOS
    ```
 
 ### Build Options
@@ -88,28 +86,6 @@ If you prefer to use CMake directly:
 |--------|---------|-------------|
 | `AGNI_COMPILE_SHADERS` | `ON` | Compile GLSL shaders to SPIR-V. Set to `OFF` to use pre-compiled `.spv` files |
 | `AGNI_ENABLE_TRACY` | `ON` | Enable Tracy profiler integration. Set to `OFF` for production builds |
-
-**CI/CD build example (faster, uses pre-compiled shaders):**
-```bash
-# Using build script (recommended)
-python build.py --release --no-shaders
-
-# Or with CMake directly
-cmake -B build -DAGNI_COMPILE_SHADERS=OFF
-cmake --build build --config Release
-```
-
-> **Note:** CI/CD runners don't need to build the Tracy profiler viewer - only the engine includes the Tracy client library.
-
-**Production build example (no profiling overhead):**
-```bash
-# Using build script (recommended)
-python build.py --release --no-tracy --no-shaders
-
-# Or with CMake directly
-cmake -B build -DAGNI_ENABLE_TRACY=OFF -DAGNI_COMPILE_SHADERS=OFF
-cmake --build build --config Release
-```
 
 ## Shader System
 
@@ -178,7 +154,6 @@ cmake --build third_party/tracy/profiler/build --config Release --parallel
 
 The profiler executable will be located at:
 - **Windows:** `third_party/tracy/profiler/build/<Debug|Release>/tracy-profiler.exe`
-- **Linux/macOS:** `third_party/tracy/profiler/build/tracy-profiler`
 
 ### Using Tracy Profiler
 
