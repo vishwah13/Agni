@@ -136,3 +136,32 @@ target_sources(mikktspace PRIVATE
 )
 
 target_include_directories(mikktspace PUBLIC mikktspace)
+
+# Tracy Profiler
+option(AGNI_ENABLE_TRACY "Enable Tracy profiler integration" ON)
+
+if(AGNI_ENABLE_TRACY)
+    message(STATUS "Tracy profiler enabled")
+
+    # Configure Tracy
+    set(TRACY_ENABLE ON CACHE BOOL "" FORCE)
+    set(TRACY_ON_DEMAND ON CACHE BOOL "" FORCE)  # Only profile when connected to Tracy server
+
+    add_library(tracy STATIC)
+
+    target_sources(tracy PRIVATE
+        tracy/public/TracyClient.cpp
+    )
+
+    target_include_directories(tracy PUBLIC tracy/public)
+
+    # Tracy compile definitions
+    target_compile_definitions(tracy PUBLIC
+        TRACY_ENABLE
+        TRACY_ON_DEMAND
+    )
+
+    set_property(TARGET tracy PROPERTY CXX_STANDARD 20)
+else()
+    message(STATUS "Tracy profiler disabled")
+endif()

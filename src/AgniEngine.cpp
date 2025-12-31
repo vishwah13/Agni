@@ -21,6 +21,10 @@
 
 #include <Debug.hpp>
 
+#ifdef TRACY_ENABLE
+#include <tracy/Tracy.hpp>
+#endif
+
 #define NOMINMAX
 #include <windows.h>
 
@@ -241,6 +245,10 @@ void AgniEngine::draw()
 
 	// increase the number of frames drawn
 	m_frameNumber++;
+
+#ifdef TRACY_ENABLE
+	FrameMark;
+#endif
 }
 
 void AgniEngine::run()

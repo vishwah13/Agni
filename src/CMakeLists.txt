@@ -72,6 +72,11 @@ if(AGNI_COMPILE_SHADERS)
     target_compile_definitions(engine PUBLIC AGNI_HAS_SLANG=1)
 endif()
 
+# Link Tracy profiler if enabled
+if(AGNI_ENABLE_TRACY)
+    target_link_libraries(engine PUBLIC tracy)
+endif()
+
 target_precompile_headers(engine PUBLIC <optional> <vector> <memory> <string> <vector> <unordered_map> <glm/mat4x4.hpp>  <glm/vec4.hpp> <volk.h>)
 
 if(WIN32)

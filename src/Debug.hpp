@@ -5,7 +5,7 @@
 #include <volk.h>
 #include <vk_mem_alloc.h>
 
-// Debug print macro - only prints in Debug builds, zero overhead in Release
+// Debug print macro
 #ifndef NDEBUG
 #define AGNI_PRINT(...) fmt::print(__VA_ARGS__)
 #else
@@ -14,7 +14,7 @@
 
 // CPU allocation tracking
 struct AllocationMetrics
-{
+{ 
 	uint32_t m_totalAllocated;
 	uint32_t m_totalFreed;
 	uint32_t CurrentUsage()
