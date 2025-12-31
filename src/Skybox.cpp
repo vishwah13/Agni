@@ -11,6 +11,10 @@
 #include <fmt/core.h>
 #include <stb_image.h>
 
+#ifdef TRACY_ENABLE
+#include <tracy/Tracy.hpp>
+#endif
+
 void Skybox::init(AgniEngine*                       engine,
                   const std::array<std::string, 6>& cubemapFaces)
 {
@@ -167,6 +171,10 @@ void Skybox::draw(VkCommandBuffer cmd,
                   VkDescriptorSet sceneDescriptor,
                   VkExtent2D      drawExtent)
 {
+#ifdef TRACY_ENABLE
+	ZoneScoped;
+#endif
+
 	// Bind skybox pipeline
 	vkCmdBindPipeline(
 	cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_skyboxPipeline.m_pipeline);

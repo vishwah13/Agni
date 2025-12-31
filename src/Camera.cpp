@@ -2,6 +2,10 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
 
+#ifdef TRACY_ENABLE
+#include <tracy/Tracy.hpp>
+#endif
+
 glm::mat4 Camera::getViewMatrix() const
 {
 	// inverting the camera matrix to get the proper view matrix
@@ -102,6 +106,10 @@ void Camera::processSDLEvent(const SDL_Event& e)
 
 void Camera::update(float deltaTime)
 {
+#ifdef TRACY_ENABLE
+	ZoneScoped;
+#endif
+
 	glm::mat4 cameraRotation = getRotationMatrix();
 	m_position +=
 	glm::vec3(cameraRotation * glm::vec4(m_velocity, 0.f)) * m_speed * deltaTime;

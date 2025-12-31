@@ -9,6 +9,9 @@
 #include <Loader.hpp>
 #include <Types.hpp>
 
+#ifdef TRACY_ENABLE
+#include <tracy/Tracy.hpp>
+#endif
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
@@ -489,6 +492,11 @@ std::optional<AllocatedImage> AssetLoader::loadImage(fastgltf::Asset& asset,
 std::optional<std::shared_ptr<LoadedGLTF>>
 AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 {
+#ifdef TRACY_ENABLE
+	ZoneScoped;
+	ZoneText(filePath.string().c_str(), filePath.string().size());
+#endif
+
 	AGNI_PRINT("Loading GLTF: {}\n", filePath.string());
 
 	std::shared_ptr<LoadedGLTF> scene = std::make_shared<LoadedGLTF>();

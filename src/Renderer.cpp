@@ -12,8 +12,16 @@
 
 #include <chrono>
 
+#ifdef TRACY_ENABLE
+#include <tracy/Tracy.hpp>
+#endif
+
 static bool isVisible(const RenderObject& obj, const glm::mat4& viewproj)
 {
+#ifdef TRACY_ENABLE
+	ZoneScoped;
+#endif
+
 	std::array<glm::vec3, 8> corners {
 	glm::vec3 {1, 1, 1},
 	glm::vec3 {1, 1, -1},
@@ -316,6 +324,10 @@ void Renderer::renderFrame(VkCommandBuffer cmd,
                             FrameData&      currentFrame,
                             VkExtent2D      windowExtent)
 {
+#ifdef TRACY_ENABLE
+	ZoneScoped;
+#endif
+
 	m_drawExtent.width =
 	std::min(m_swapchainManager->getSwapchainExtent().width, m_drawImage.m_imageExtent.width) *
 	m_renderScale;
@@ -376,6 +388,10 @@ void Renderer::renderFrame(VkCommandBuffer cmd,
 
 void Renderer::drawBackground(VkCommandBuffer cmd)
 {
+#ifdef TRACY_ENABLE
+	ZoneScoped;
+#endif
+
 	ComputeEffect& effect = m_backgroundEffects[m_currentBackgroundEffect];
 
 	// bind the gradient drawing compute pipeline
@@ -409,6 +425,10 @@ void Renderer::drawBackground(VkCommandBuffer cmd)
 
 void Renderer::drawImgui(VkCommandBuffer cmd, VkImageView targetImageView)
 {
+#ifdef TRACY_ENABLE
+	ZoneScoped;
+#endif
+
 	VkRenderingAttachmentInfo colorAttachment = vkinit::attachmentInfo(
 	targetImageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	VkRenderingInfo renderInfo =
@@ -423,6 +443,10 @@ void Renderer::drawImgui(VkCommandBuffer cmd, VkImageView targetImageView)
 
 void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 {
+#ifdef TRACY_ENABLE
+	ZoneScoped;
+#endif
+
 	// reset counters
 	m_stats.m_drawcallCount = 0;
 	m_stats.m_triangleCount = 0;
@@ -434,63 +458,78 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	std::vector<uint32_t> transparentDraws;
 	transparentDraws.reserve(m_mainDrawContext.m_TransparentSurfaces.size());
 
-	for (uint32_t i = 0; i < m_mainDrawContext.m_OpaqueSurfaces.size(); i++)
 	{
-		if (isVisible(m_mainDrawContext.m_OpaqueSurfaces[i],
-		              m_sceneData.m_viewproj))
+#ifdef TRACY_ENABLE
+		ZoneScopedN("Frustum Culling");
+#endif
+		for (uint32_t i = 0; i < m_mainDrawContext.m_OpaqueSurfaces.size(); i++)
 		{
-			opaqueDraws.push_back(i);
+			if (isVisible(m_mainDrawContext.m_OpaqueSurfaces[i],
+			              m_sceneData.m_viewproj))
+			{
+				opaqueDraws.push_back(i);
+			}
+		}
+		for (uint32_t i = 0; i < m_mainDrawContext.m_TransparentSurfaces.size();
+		     i++)
+		{
+			if (isVisible(m_mainDrawContext.m_TransparentSurfaces[i],
+			              m_sceneData.m_viewproj))
+			{
+				transparentDraws.push_back(i);
+			}
 		}
 	}
-	for (uint32_t i = 0; i < m_mainDrawContext.m_TransparentSurfaces.size();
-	     i++)
+
 	{
-		if (isVisible(m_mainDrawContext.m_TransparentSurfaces[i],
-		              m_sceneData.m_viewproj))
-		{
-			transparentDraws.push_back(i);
-		}
+#ifdef TRACY_ENABLE
+		ZoneScopedN("Sort Opaque");
+#endif
+		//  sort the opaque surfaces by material and mesh
+		std::sort(opaqueDraws.begin(),
+		          opaqueDraws.end(),
+		          [&](const auto& iA, const auto& iB)
+		          {
+			          const RenderObject& A =
+			          m_mainDrawContext.m_OpaqueSurfaces[iA];
+			          const RenderObject& B =
+			          m_mainDrawContext.m_OpaqueSurfaces[iB];
+			          if (A.m_material == B.m_material)
+			          {
+				          return A.m_indexBuffer < B.m_indexBuffer;
+			          }
+			          else
+			          {
+				          return A.m_material < B.m_material;
+			          }
+		          });
 	}
 
-	//  sort the opaque surfaces by material and mesh
-	std::sort(opaqueDraws.begin(),
-	          opaqueDraws.end(),
-	          [&](const auto& iA, const auto& iB)
-	          {
-		          const RenderObject& A =
-		          m_mainDrawContext.m_OpaqueSurfaces[iA];
-		          const RenderObject& B =
-		          m_mainDrawContext.m_OpaqueSurfaces[iB];
-		          if (A.m_material == B.m_material)
-		          {
-			          return A.m_indexBuffer < B.m_indexBuffer;
-		          }
-		          else
-		          {
-			          return A.m_material < B.m_material;
-		          }
-	          });
-
-	//  sort the transparent surfaces by distance from bounds to the camera
-	std::sort(
-	transparentDraws.begin(),
-	transparentDraws.end(),
-	[&](const auto& iA, const auto& iB)
 	{
-		const RenderObject& A = m_mainDrawContext.m_TransparentSurfaces[iA];
-		const RenderObject& B = m_mainDrawContext.m_TransparentSurfaces[iB];
-		// Calculate distance from camera to object center
-		glm::vec3 centerA =
-		glm::vec3(A.m_transform * glm::vec4(A.m_bounds.m_origin, 1.0f));
-		glm::vec3 centerB =
-		glm::vec3(B.m_transform * glm::vec4(B.m_bounds.m_origin, 1.0f));
+#ifdef TRACY_ENABLE
+		ZoneScopedN("Sort Transparent");
+#endif
+		//  sort the transparent surfaces by distance from bounds to the camera
+		std::sort(
+		transparentDraws.begin(),
+		transparentDraws.end(),
+		[&](const auto& iA, const auto& iB)
+		{
+			const RenderObject& A = m_mainDrawContext.m_TransparentSurfaces[iA];
+			const RenderObject& B = m_mainDrawContext.m_TransparentSurfaces[iB];
+			// Calculate distance from camera to object center
+			glm::vec3 centerA =
+			glm::vec3(A.m_transform * glm::vec4(A.m_bounds.m_origin, 1.0f));
+			glm::vec3 centerB =
+			glm::vec3(B.m_transform * glm::vec4(B.m_bounds.m_origin, 1.0f));
 
-		float distA = glm::length(m_camera->m_position - centerA);
-		float distB = glm::length(m_camera->m_position - centerB);
+			float distA = glm::length(m_camera->m_position - centerA);
+			float distB = glm::length(m_camera->m_position - centerB);
 
-		// Sort back to front (larger distance first)
-		return distA > distB;
-	});
+			// Sort back to front (larger distance first)
+			return distA > distB;
+		});
+	}
 
 	// begin a render pass with MSAA images that resolve to draw image
 	VkRenderingAttachmentInfo colorAttachment =
@@ -646,18 +685,33 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 		m_stats.m_triangleCount += r.m_indexCount / 3;
 	};
 
-	for (auto& r : opaqueDraws)
 	{
-		draw(m_mainDrawContext.m_OpaqueSurfaces[r]);
+#ifdef TRACY_ENABLE
+		ZoneScopedN("Draw Opaque");
+#endif
+		for (auto& r : opaqueDraws)
+		{
+			draw(m_mainDrawContext.m_OpaqueSurfaces[r]);
+		}
 	}
 
-	for (auto& r : transparentDraws)
 	{
-		draw(m_mainDrawContext.m_TransparentSurfaces[r]);
+#ifdef TRACY_ENABLE
+		ZoneScopedN("Draw Transparent");
+#endif
+		for (auto& r : transparentDraws)
+		{
+			draw(m_mainDrawContext.m_TransparentSurfaces[r]);
+		}
 	}
 
-	// Draw skybox last (after all geometry)
-	m_skybox->draw(cmd, globalDescriptor, m_drawExtent);
+	{
+#ifdef TRACY_ENABLE
+		ZoneScopedN("Draw Skybox");
+#endif
+		// Draw skybox last (after all geometry)
+		m_skybox->draw(cmd, globalDescriptor, m_drawExtent);
+	}
 
 	vkCmdEndRendering(cmd);
 
@@ -671,6 +725,10 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 
 void Renderer::updateScene(float deltaTime, VkExtent2D windowExtent)
 {
+#ifdef TRACY_ENABLE
+	ZoneScoped;
+#endif
+
 	// begin clock
 	auto start = std::chrono::system_clock::now();
 
