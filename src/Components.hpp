@@ -44,7 +44,7 @@ struct CameraComponent
 	float pitch {0.0f};
 	float yaw {0.0f};
 
-	float speed {1.0f};
+	float speed {35.0f};
 	float mouseSensitivity {1.0f};
 };
 

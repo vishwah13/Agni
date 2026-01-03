@@ -24,9 +24,18 @@ if(MSVC)
     add_compile_options(/MP)
     message(STATUS "Enabled multi-processor compilation (/MP)")
 
-    # Faster debug builds (reduce debug info)
-    string(REPLACE "/Zi" "/Z7" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
-    string(REPLACE "/Zi" "/Z7" CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
+    # Enable Edit and Continue for Debug builds (/ZI)
+    # Note: /ZI is slower than /Z7 but enables hot reload during debugging
+    # Use generator expression to only apply in Debug config
+    add_compile_options("$<$<CONFIG:Debug>:/ZI>")
+
+    # Remove conflicting /Zi flag that CMake adds by default
+    string(REPLACE "/Zi" "" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+    string(REPLACE "/Zi" "" CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
+
+    # Ensure incremental linking for Edit and Continue
+    add_link_options("$<$<CONFIG:Debug>:/INCREMENTAL>")
+    message(STATUS "Enabled Edit and Continue (/ZI) for Debug builds")
 endif()
 
 # Option to compile shaders (default ON for development, set to OFF in CI/CD)
