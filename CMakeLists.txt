@@ -65,6 +65,8 @@ if(AGNI_COMPILE_SHADERS)
     set(SLANG_GRAPHICS_SHADERS
         "${PROJECT_SOURCE_DIR}/shaders/slang/mesh.slang"
         "${PROJECT_SOURCE_DIR}/shaders/slang/skybox.slang"
+        "${PROJECT_SOURCE_DIR}/shaders/slang/MeshFallback.slang"
+        "${PROJECT_SOURCE_DIR}/shaders/slang/SkyboxFallback.slang"
     )
 
     set(SLANG_FRAGMENT_ONLY_SHADERS

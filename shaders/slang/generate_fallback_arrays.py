@@ -29,12 +29,12 @@ def spv_to_cpp_array(spv_path, var_name):
 def main():
     script_dir = Path(__file__).parent
 
-    # Use Slang-compiled shaders as fallbacks
+    # Use dedicated fallback shaders (pink for mesh, blue for skybox)
     shaders = [
-        ('mesh.vert.spv', 'meshVertSpv'),
-        ('mesh.frag.spv', 'meshFragSpv'),
-        ('skybox.vert.spv', 'skyboxVertSpv'),
-        ('skybox.frag.spv', 'skyboxFragSpv'),
+        ('MeshFallback.vert.spv', 'meshVertSpv'),
+        ('MeshFallback.frag.spv', 'meshFragSpv'),
+        ('SkyboxFallback.vert.spv', 'skyboxVertSpv'),
+        ('SkyboxFallback.frag.spv', 'skyboxFragSpv'),
     ]
 
     # Generate header file
