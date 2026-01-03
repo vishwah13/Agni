@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Convert SPIR-V fallback shaders to C++ byte arrays.
+Uses Slang-compiled shaders as fallbacks.
 """
 
 import sys
@@ -28,11 +29,12 @@ def spv_to_cpp_array(spv_path, var_name):
 def main():
     script_dir = Path(__file__).parent
 
+    # Use Slang-compiled shaders as fallbacks
     shaders = [
-        ('MeshFallback.vert.spv', 'meshVertSpv'),
-        ('MeshFallback.frag.spv', 'meshFragSpv'),
-        ('SkyboxFallback.vert.spv', 'skyboxVertSpv'),
-        ('SkyboxFallback.frag.spv', 'skyboxFragSpv'),
+        ('mesh.vert.spv', 'meshVertSpv'),
+        ('mesh.frag.spv', 'meshFragSpv'),
+        ('skybox.vert.spv', 'skyboxVertSpv'),
+        ('skybox.frag.spv', 'skyboxFragSpv'),
     ]
 
     # Generate header file

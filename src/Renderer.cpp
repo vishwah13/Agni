@@ -249,7 +249,7 @@ void Renderer::initBackgroundPipelines()
 	m_device, &computeLayout, nullptr, &m_gradientPipelineLayout));
 
 	VkShaderModule gradientShader;
-	if (!vkutil::loadShaderModule("../../shaders/glsl/gradient_color.comp.spv",
+	if (!vkutil::loadShaderModule("../../shaders/slang/gradient_color.comp.spv",
 	                              m_device,
 	                              &gradientShader))
 	{
@@ -258,7 +258,7 @@ void Renderer::initBackgroundPipelines()
 
 	VkShaderModule skyShader;
 	if (!vkutil::loadShaderModule(
-	    "../../shaders//glsl/sky.comp.spv", m_device, &skyShader))
+	    "../../shaders/slang/sky.comp.spv", m_device, &skyShader))
 	{
 		AGNI_PRINT("Error when building the compute shader \n");
 	}
