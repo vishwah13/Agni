@@ -102,8 +102,8 @@ void main()
 	// Reflectance equation
 	vec3 Lo = vec3(0.0);
 
-	// Directional light calculation
-	vec3 L = normalize(sceneData.sunlightDirection.xyz);
+	// Directional light calculation (negate direction: emission -> to-light)
+	vec3 L = normalize(-sceneData.sunlightDirection.xyz);
 	vec3 H = normalize(V + L);
 	vec3 radiance = sceneData.sunlightColor.rgb * sceneData.sunlightColor.w;
 

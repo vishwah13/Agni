@@ -745,7 +745,7 @@ void AgniEngine::initDefaultData()
 
 	std::string meshPrimitivesPath = {"../../assets/MeshPrimitives.glb"};
 	// std::string structurePath = {"../../assets/structure.glb"};
-	std::string helmetPath = {"../../assets/flighthelmet/helmet.glb"};
+	std::string helmetPath = {"../../assets/LightTest.glb"};
 	// auto        structureFile = m_assetLoader.loadGltf(this, structurePath);
 	auto meshPrimitivesFile = m_assetLoader.loadGltf(this, meshPrimitivesPath);
 	auto helmetPathFile = m_assetLoader.loadGltf(this, helmetPath);
@@ -770,48 +770,48 @@ void AgniEngine::initDefaultData()
 	m_renderer.getLoadedScenes()["helmet"] = *helmetPathFile;
 
 	// Add test point lights
-	auto testLight1 = std::make_shared<LightNode>();
-	testLight1->setColor(glm::vec3(1.0f, 0.f, 0.f)); // red light
-	testLight1->setIntensity(5.0f);
-	testLight1->setRadius(10.0f);
-	testLight1->setMesh(m_assetLoader.getMeshResources().get()->meshes["Sphere"]);
-	testLight1->getLocalTransform() =
-	glm::translate(glm::mat4(1.0f), glm::vec3(2.0f, 2.0f, 2.0f));
-	testLight1->setMeshScale(0.1f);
-	helmetPathFile->get()->m_topNodes.push_back(testLight1);
+	//auto testLight1 = std::make_shared<LightNode>();
+	//testLight1->setColor(glm::vec3(1.0f, 0.f, 0.f)); // red light
+	//testLight1->setIntensity(5.0f);
+	//testLight1->setRadius(10.0f);
+	//testLight1->setMesh(m_assetLoader.getMeshResources().get()->meshes["Sphere"]);
+	//testLight1->getLocalTransform() =
+	//glm::translate(glm::mat4(1.0f), glm::vec3(2.0f, 2.0f, 2.0f));
+	//testLight1->setMeshScale(0.1f);
+	//helmetPathFile->get()->m_topNodes.push_back(testLight1);
 
-	auto testLight2 = std::make_shared<LightNode>();
-	testLight2->setColor(glm::vec3(0.0f, 1.f, 0.0f)); // Green light
-	testLight2->setIntensity(10.0f);
-	testLight2->setRadius(18.0f);
-	testLight2->getLocalTransform() =
-	glm::translate(glm::mat4(1.0f), glm::vec3(-2.0f, 1.5f, -1.0f));
-	testLight2->setMesh(
-	m_assetLoader.getMeshResources().get()->meshes["Cube"]);
-	testLight2->setMeshScale(0.1f);
-	helmetPathFile->get()->m_topNodes.push_back(testLight2);
+	//auto testLight2 = std::make_shared<LightNode>();
+	//testLight2->setColor(glm::vec3(0.0f, 1.f, 0.0f)); // Green light
+	//testLight2->setIntensity(10.0f);
+	//testLight2->setRadius(18.0f);
+	//testLight2->getLocalTransform() =
+	//glm::translate(glm::mat4(1.0f), glm::vec3(-2.0f, 1.5f, -1.0f));
+	//testLight2->setMesh(
+	//m_assetLoader.getMeshResources().get()->meshes["Cube"]);
+	//testLight2->setMeshScale(0.1f);
+	//helmetPathFile->get()->m_topNodes.push_back(testLight2);
 
 	// Add directional light (sun)
-	auto sunLight = std::make_shared<LightNode>();
-	sunLight->setType(LightType::Directional);
-	sunLight->setColor(glm::vec3(1.0f, 0.95f, 0.9f)); // Warm white sunlight
-	sunLight->setIntensity(1.0f);
-	sunLight->setDirection(glm::vec3(0.0f, 1.0f, 0.5f)); // Direction towards light
-	helmetPathFile->get()->m_topNodes.push_back(sunLight);
+	//auto sunLight = std::make_shared<LightNode>();
+	//sunLight->setType(LightType::Directional);
+	//sunLight->setColor(glm::vec3(1.0f, 0.95f, 0.9f)); // Warm white sunlight
+	//sunLight->setIntensity(1.0f);
+	//sunLight->setDirection(glm::vec3(0.0f, 1.0f, 0.5f)); // Direction towards light
+	//helmetPathFile->get()->m_topNodes.push_back(sunLight);
 
 	// Add spot light
-	auto spotLight = std::make_shared<LightNode>();
-	spotLight->setType(LightType::Spot);
-	spotLight->setColor(glm::vec3(1.0f, 1.0f, 0.8f)); // Warm white
-	spotLight->setIntensity(15.0f);
-	spotLight->setRadius(20.0f);
-	spotLight->setDirection(glm::vec3(0.0f, -1.0f, 0.0f)); // Pointing down
-	spotLight->setConeAngles(15.0f, 25.0f); // Inner 15°, Outer 25°
-	spotLight->getLocalTransform() =
-		glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 4.0f, 0.0f));
-	spotLight->setMesh(m_assetLoader.getMeshResources().get()->meshes["Cone"]);
-	spotLight->setMeshScale(0.15f);
-	helmetPathFile->get()->m_topNodes.push_back(spotLight);
+	//auto spotLight = std::make_shared<LightNode>();
+	//spotLight->setType(LightType::Spot);
+	//spotLight->setColor(glm::vec3(1.0f, 1.0f, 0.8f)); // Warm white
+	//spotLight->setIntensity(15.0f);
+	//spotLight->setRadius(20.0f);
+	//spotLight->setDirection(glm::vec3(0.0f, -1.0f, 0.0f)); // Pointing down
+	//spotLight->setConeAngles(15.0f, 25.0f); // Inner 15°, Outer 25°
+	//spotLight->getLocalTransform() =
+	//	glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 4.0f, 0.0f));
+	//spotLight->setMesh(m_assetLoader.getMeshResources().get()->meshes["Cone"]);
+	//spotLight->setMeshScale(0.15f);
+	//helmetPathFile->get()->m_topNodes.push_back(spotLight);
 
 	// Initialize m_skybox
 	// Load cubemap faces (order: right, left, top, bottom, front, back for
@@ -859,9 +859,13 @@ void MeshNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
 
 void LightNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
 {
-	// Calculate world position from transform hierarchy
+	// Calculate world position and direction from transform hierarchy
 	glm::mat4 nodeMatrix    = topMatrix * m_worldTransform;
 	glm::vec3 worldPosition = glm::vec3(nodeMatrix[3]); // Extract translation
+
+	// Transform local direction by world rotation (upper 3x3 of the matrix)
+	// Both spot and directional shaders now expect emission direction (they negate internally)
+	glm::vec3 worldDirection = glm::normalize(glm::mat3(nodeMatrix) * m_light.direction);
 
 	switch (m_light.type)
 	{
@@ -883,7 +887,7 @@ void LightNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
 		case LightType::Directional:
 		{
 			// Set directional light (only one supported, last one wins)
-			ctx.m_DirectionalLight.direction = m_light.direction;
+			ctx.m_DirectionalLight.direction = worldDirection;
 			ctx.m_DirectionalLight.color     = m_light.color;
 			ctx.m_DirectionalLight.intensity = m_light.intensity;
 			ctx.m_DirectionalLight.active    = true;
@@ -896,7 +900,7 @@ void LightNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
 			{
 				GPUSpotLight gpuLight;
 				gpuLight.m_position    = worldPosition;
-				gpuLight.m_direction   = glm::normalize(m_light.direction);
+				gpuLight.m_direction   = worldDirection;
 				gpuLight.m_color       = m_light.color;
 				gpuLight.m_intensity   = m_light.intensity;
 				gpuLight.m_radius      = m_light.radius;

@@ -503,7 +503,7 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 	scene->m_creator                  = engine;
 	LoadedGLTF& file                  = *scene.get();
 
-	fastgltf::Parser parser {};
+	fastgltf::Parser parser(fastgltf::Extensions::KHR_lights_punctual);
 
 	constexpr auto gltfOptions =
 	fastgltf::Options::DontRequireValidAssetMember |
@@ -942,14 +942,73 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 	{
 		std::shared_ptr<Node> newNode;
 
-		// find if the node has a mesh, and if it does hook it to the mesh
-		// pointer and allocate it with the meshnode class
-		if (node.meshIndex.has_value())
+		// Check for light first (KHR_lights_punctual extension)
+		// LightNode uses composition for optional mesh attachment
+		if (node.lightIndex.has_value())
+		{
+			auto lightNode = std::make_shared<LightNode>();
+
+			// Get light data from glTF
+			const fastgltf::Light& gltfLight = gltf.lights[*node.lightIndex];
+
+			// Set common properties (explicit cast from num which may be double)
+			lightNode->setColor(glm::vec3(
+			    static_cast<float>(gltfLight.color[0]),
+			    static_cast<float>(gltfLight.color[1]),
+			    static_cast<float>(gltfLight.color[2])));
+			lightNode->setIntensity(static_cast<float>(gltfLight.intensity));
+
+			// Set range (with default fallback)
+			float radius = gltfLight.range.has_value()
+			    ? static_cast<float>(*gltfLight.range)
+			    : 10.0f;
+
+			// Map fastgltf::LightType to engine LightType and set type-specific properties
+			switch (gltfLight.type)
+			{
+				case fastgltf::LightType::Point:
+					lightNode->setType(LightType::Point);
+					lightNode->setRadius(radius);
+					break;
+
+				case fastgltf::LightType::Spot:
+				{
+					lightNode->setType(LightType::Spot);
+					lightNode->setRadius(radius);
+					lightNode->setDirection(glm::vec3(0.0f, 0.0f, -1.0f));
+
+					// Convert cone angles from radians to degrees
+					float innerDegrees = glm::degrees(
+					    static_cast<float>(gltfLight.innerConeAngle.value_or(0.0f)));
+					float outerDegrees = glm::degrees(
+					    static_cast<float>(gltfLight.outerConeAngle.value_or(glm::radians(45.0f))));
+					lightNode->setConeAngles(innerDegrees, outerDegrees);
+					break;
+				}
+
+				case fastgltf::LightType::Directional:
+					lightNode->setType(LightType::Directional);
+					lightNode->setDirection(glm::vec3(0.0f, 0.0f, -1.0f));
+					// Directional lights don't use radius
+					break;
+			}
+
+			// If node also has a mesh, attach it via composition
+			if (node.meshIndex.has_value())
+			{
+				lightNode->setMesh(meshes[*node.meshIndex]);
+			}
+
+			newNode = lightNode;
+		}
+		// No light, check for mesh
+		else if (node.meshIndex.has_value())
 		{
 			newNode = std::make_shared<MeshNode>();
 			static_cast<MeshNode*>(newNode.get())->getMesh() =
 			meshes[*node.meshIndex];
 		}
+		// Empty node
 		else
 		{
 			newNode = std::make_shared<Node>();

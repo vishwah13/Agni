@@ -176,8 +176,8 @@ float4 fragmentMain(VertexOutput input) : SV_Target
     // Reflectance equation
     float3 Lo = float3(0.0);
 
-    // Directional light calculation
-    float3 L = normalize(sceneData.sunlightDirection.xyz);
+    // Directional light calculation (negate: emission direction -> to-light direction)
+    float3 L = normalize(-sceneData.sunlightDirection.xyz);
     float3 H = normalize(V + L);
     float3 radiance = sceneData.sunlightColor.rgb * sceneData.sunlightColor.w;
 
