@@ -56,7 +56,7 @@ target_include_directories(engine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
 add_dependencies(engine Shaders)
 
-target_link_libraries(engine PUBLIC vma glm volk::volk Vulkan::Headers fmt::fmt stb_image SDL3::SDL3 vkbootstrap imgui fastgltf::fastgltf renderdoc mikktspace)
+target_link_libraries(engine PUBLIC vma glm volk::volk Vulkan::Headers fmt::fmt stb_image SDL3::SDL3 vkbootstrap imgui fastgltf::fastgltf renderdoc mikktspace flecs::flecs_static)
 
 # Link Slang library only if shader compilation is enabled (for runtime shader compilation)
 if(AGNI_COMPILE_SHADERS)

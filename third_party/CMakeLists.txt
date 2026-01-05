@@ -137,6 +137,12 @@ target_sources(mikktspace PRIVATE
 
 target_include_directories(mikktspace PUBLIC mikktspace)
 
+# Flecs ECS
+set(FLECS_STATIC ON CACHE BOOL "" FORCE)
+set(FLECS_SHARED OFF CACHE BOOL "" FORCE)
+set(FLECS_TESTS OFF CACHE BOOL "" FORCE)
+add_subdirectory(flecs)
+
 # Tracy Profiler
 option(AGNI_ENABLE_TRACY "Enable Tracy profiler integration" ON)
 
