@@ -15,8 +15,8 @@ struct GeoSurface;
 struct MaterialInstance;
 enum class MaterialPass : uint8_t;
 
-// Entity ID type for future ECS integration
-using EntityID = uint32_t;
+// Entity ID type - compatible with Flecs entity IDs
+using EntityID = uint64_t;
 constexpr EntityID NULL_ENTITY = 0;
 
 // ============================================================================

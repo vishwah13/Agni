@@ -38,6 +38,21 @@ add_executable (engine
   VulkanTools.cpp
   Scene.hpp
   Scene.cpp
+
+  # ECS Core
+  Interfaces/IWorld.hpp
+  ECS/World.hpp
+  ECS/World.cpp
+  ECS/SyncPass.hpp
+  ECS/SyncPass.cpp
+  ECS/EntityFactory.hpp
+  ECS/EntityFactory.cpp
+
+  # ECS Systems
+  ECS/Systems/RenderSystem.hpp
+  ECS/Systems/RenderSystem.cpp
+  ECS/Systems/LightSystem.hpp
+  ECS/Systems/LightSystem.cpp
 )
 
 # Add shader files to the project so they appear in Visual Studio

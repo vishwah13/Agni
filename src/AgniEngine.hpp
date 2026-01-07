@@ -6,6 +6,9 @@
 #include <Camera.hpp>
 #include <Components.hpp>
 #include <Descriptors.hpp>
+#include <ECS/EntityFactory.hpp>
+#include <ECS/SyncPass.hpp>
+#include <ECS/World.hpp>
 #include <Loader.hpp>
 #include <Material.hpp>
 #include <Renderer.hpp>
@@ -18,6 +21,7 @@
 
 #include <deque>
 #include <functional>
+#include <memory>
 #include <vector>
 
 constexpr uint32_t FRAME_OVERLAP = 2;
@@ -175,6 +179,31 @@ public:
 
 	// m_skybox
 	Skybox m_skybox;
+
+	// ECS World and related systems
+	std::unique_ptr<agni::ecs::World>         m_ecsWorld;
+	std::unique_ptr<agni::ecs::SyncPass>      m_syncPass;
+	std::unique_ptr<agni::ecs::EntityFactory> m_entityFactory;
+
+	// ECS accessors
+	agni::ecs::World& getECSWorld()
+	{
+		return *m_ecsWorld;
+	}
+	agni::IWorld& getWorld()
+	{
+		return *m_ecsWorld;
+	}
+	agni::ecs::EntityFactory& getEntityFactory()
+	{
+		return *m_entityFactory;
+	}
+
+	// Enable/disable ECS mode for rendering
+	void setECSMode(bool enabled)
+	{
+		m_renderer.setECSMode(enabled, m_syncPass.get());
+	}
 
 private:
 	RENDERDOC_API_1_1_2* m_rdocAPI = NULL;

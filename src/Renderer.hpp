@@ -16,6 +16,11 @@ class Camera;
 class Skybox;
 struct FrameData;
 
+namespace agni::ecs
+{
+class SyncPass;
+}
+
 struct EngineStats
 {
 	float m_frametime;
@@ -134,6 +139,18 @@ public:
 		return m_loadedScenes;
 	}
 
+	// ECS mode control
+	void setECSMode(bool enabled, agni::ecs::SyncPass* syncPass)
+	{
+		m_useECS   = enabled;
+		m_syncPass = syncPass;
+	}
+
+	bool isECSMode() const
+	{
+		return m_useECS;
+	}
+
 private:
 	// Dependencies (set during init)
 	VkDevice                        m_device                     = VK_NULL_HANDLE;
@@ -171,6 +188,10 @@ private:
 
 	// Statistics
 	EngineStats m_stats;
+
+	// ECS mode
+	bool                  m_useECS {false};
+	agni::ecs::SyncPass* m_syncPass {nullptr};
 
 	// Private rendering functions
 	void drawBackground(VkCommandBuffer cmd);

@@ -84,6 +84,12 @@ void AgniEngine::init()
 	initPipelines();
 
 	initImgui();
+
+	// Initialize ECS World and related systems
+	m_ecsWorld      = std::make_unique<agni::ecs::World>();
+	m_syncPass      = std::make_unique<agni::ecs::SyncPass>(*m_ecsWorld);
+	m_entityFactory = std::make_unique<agni::ecs::EntityFactory>(*m_ecsWorld);
+
 	initDefaultData();
 
 	// everything went fine
@@ -396,6 +402,9 @@ void AgniEngine::run()
 
 		// make imgui calculate internal draw structures
 		ImGui::Render();
+
+		// Progress ECS systems (transform hierarchy, etc.)
+		m_ecsWorld->progress(m_deltaTime);
 
 		draw();
 
@@ -767,7 +776,32 @@ void AgniEngine::initDefaultData()
 
 	// m_renderer.getLoadedScenes()["structure"] = *structureFile;
 	m_assetLoader.getMeshResources() = *meshPrimitivesFile;
-	m_renderer.getLoadedScenes()["helmet"] = *helmetPathFile;
+
+	// ============================================================================
+	// ECS Mode Test: Convert loaded scene to ECS entities
+	// ============================================================================
+	constexpr bool USE_ECS_MODE = true;
+
+	if (USE_ECS_MODE)
+	{
+		// IMPORTANT: Store the LoadedGLTF to keep GPU resources alive
+		// Even though we're using ECS entities, they reference the mesh/material data
+		m_renderer.getLoadedScenes()["helmet"] = *helmetPathFile;
+
+		// Convert the loaded glTF to ECS entities
+		auto rootEntity = m_entityFactory->createFromGltf(*helmetPathFile.value(), "LightTestScene");
+		AGNI_PRINT("Created ECS scene with root entity ID: {}\n", rootEntity.id());
+
+		// Enable ECS rendering mode
+		setECSMode(true);
+		AGNI_PRINT("ECS Mode: ENABLED\n");
+	}
+	else
+	{
+		// Legacy mode: use Node-based rendering
+		m_renderer.getLoadedScenes()["helmet"] = *helmetPathFile;
+		AGNI_PRINT("ECS Mode: DISABLED (using legacy Node rendering)\n");
+	}
 
 	// Add test point lights
 	//auto testLight1 = std::make_shared<LightNode>();

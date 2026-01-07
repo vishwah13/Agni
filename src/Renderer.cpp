@@ -2,6 +2,7 @@
 
 #include <AgniEngine.hpp>
 #include <Debug.hpp>
+#include <ECS/SyncPass.hpp>
 #include <Images.hpp>
 #include <Initializers.hpp>
 #include <Pipelines.hpp>
@@ -752,9 +753,19 @@ void Renderer::updateScene(float deltaTime, VkExtent2D windowExtent)
 	// to opengl and gltf axis
 	projection[1][1] *= -1;
 
-	for (auto& [name, scene] : m_loadedScenes)
+	// Populate DrawContext from either ECS or legacy Node system
+	if (m_useECS && m_syncPass)
 	{
-		scene->Draw(glm::mat4 {1.f}, m_mainDrawContext);
+		// ECS path: use sync pass to populate DrawContext
+		m_syncPass->sync(m_mainDrawContext);
+	}
+	else
+	{
+		// Legacy path: use Node hierarchy
+		for (auto& [name, scene] : m_loadedScenes)
+		{
+			scene->Draw(glm::mat4 {1.f}, m_mainDrawContext);
+		}
 	}
 
 	m_sceneData.m_view = view;
