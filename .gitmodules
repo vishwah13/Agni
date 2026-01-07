@@ -38,3 +38,6 @@
 [submodule "third_party/flecs"]
 	path = third_party/flecs
 	url = https://github.com/SanderMertens/flecs.git
+[submodule "third_party/jolt"]
+	path = third_party/jolt
+	url = https://github.com/jrouwe/JoltPhysics.git
