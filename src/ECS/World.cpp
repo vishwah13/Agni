@@ -25,12 +25,17 @@ void World::registerComponents()
 	m_world.component<CameraComponent>();
 	m_world.component<RenderableTag>();
 
+	// Physics components
+	m_world.component<RigidBodyComponent>();
+	m_world.component<ColliderComponent>();
+
 	// Register tag components
 	m_world.component<MeshEntityTag>();
 	m_world.component<LightEntityTag>();
 	m_world.component<CameraEntityTag>();
 	m_world.component<StaticTag>();
 	m_world.component<DynamicTag>();
+	m_world.component<PhysicsEnabledTag>();
 }
 
 void World::registerSystems()

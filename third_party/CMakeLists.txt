@@ -143,6 +143,44 @@ set(FLECS_SHARED OFF CACHE BOOL "" FORCE)
 set(FLECS_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory(flecs)
 
+# Jolt Physics Engine
+option(AGNI_ENABLE_JOLT "Enable Jolt physics integration" ON)
+
+if(AGNI_ENABLE_JOLT)
+    message(STATUS "Jolt physics enabled")
+
+    # Jolt configuration options
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    set(DOUBLE_PRECISION OFF CACHE BOOL "" FORCE)
+    set(GENERATE_DEBUG_symbols ON CACHE BOOL "" FORCE)
+    set(OVERRIDE_CXX_FLAGS OFF CACHE BOOL "" FORCE)
+    set(CROSS_PLATFORM_DETERMINISTIC OFF CACHE BOOL "" FORCE)
+    set(INTERPROCEDURAL_OPTIMIZATION ON CACHE BOOL "" FORCE)
+    set(FLOATING_POINT_EXCEPTIONS_ENABLED OFF CACHE BOOL "" FORCE)
+    set(CROSS_COMPILE_ARM OFF CACHE BOOL "" FORCE)
+    set(USE_STD_VECTOR ON CACHE BOOL "" FORCE)
+    set(USE_ASSERTS ON CACHE BOOL "" FORCE)
+
+    # CRITICAL: Use dynamic runtime to match the engine
+    set(USE_STATIC_MSVC_RUNTIME_LIBRARY OFF CACHE BOOL "" FORCE)
+
+    # Disable examples and tests
+    set(TARGET_UNIT_TESTS OFF CACHE BOOL "" FORCE)
+    set(TARGET_HELLO_WORLD OFF CACHE BOOL "" FORCE)
+    set(TARGET_PERFORMANCE_TEST OFF CACHE BOOL "" FORCE)
+    set(TARGET_SAMPLES OFF CACHE BOOL "" FORCE)
+    set(TARGET_VIEWER OFF CACHE BOOL "" FORCE)
+
+    add_subdirectory(jolt/Build EXCLUDE_FROM_ALL)
+
+    # Create interface target for easier linking
+    add_library(jolt_interface INTERFACE)
+    target_link_libraries(jolt_interface INTERFACE Jolt)
+    target_include_directories(jolt_interface INTERFACE jolt)
+else()
+    message(STATUS "Jolt physics disabled")
+endif()
+
 # Tracy Profiler
 option(AGNI_ENABLE_TRACY "Enable Tracy profiler integration" ON)
 

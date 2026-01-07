@@ -90,6 +90,20 @@ void AgniEngine::init()
 	m_syncPass      = std::make_unique<agni::ecs::SyncPass>(*m_ecsWorld);
 	m_entityFactory = std::make_unique<agni::ecs::EntityFactory>(*m_ecsWorld);
 
+#ifdef AGNI_HAS_JOLT
+	// Initialize Jolt Physics
+	m_physicsManager = std::make_unique<agni::physics::JoltPhysicsManager>();
+	agni::physics::PhysicsSettings physicsSettings;
+	physicsSettings.gravity = glm::vec3(0.0f, -9.81f, 0.0f);
+	physicsSettings.maxBodies = 1024;
+	physicsSettings.collisionSteps = 1;
+
+	if (!m_physicsManager->initialize(physicsSettings))
+	{
+		fmt::print("[AgniEngine] Failed to initialize Jolt physics\n");
+	}
+#endif
+
 	initDefaultData();
 
 	// everything went fine
@@ -126,6 +140,15 @@ void AgniEngine::cleanup()
 
 		// Cleanup m_skybox resources
 		m_skybox.cleanup(this);
+
+#ifdef AGNI_HAS_JOLT
+		// Cleanup physics before renderer
+		if (m_physicsManager)
+		{
+			m_physicsManager->shutdown();
+			m_physicsManager.reset();
+		}
+#endif
 
 		// Cleanup renderer (render targets, pipelines, descriptors, scenes)
 		m_renderer.cleanup();
@@ -405,6 +428,24 @@ void AgniEngine::run()
 
 		// Progress ECS systems (transform hierarchy, etc.)
 		m_ecsWorld->progress(m_deltaTime);
+
+#ifdef AGNI_HAS_JOLT
+		// Physics simulation step
+		if (m_physicsManager)
+		{
+			// 1. Initialize any new physics bodies
+			agni::ecs::PhysicsSystem::initializePhysicsBodies(*m_ecsWorld, *m_physicsManager);
+
+			// 2. Sync kinematic bodies from ECS to Jolt
+			agni::ecs::PhysicsSystem::syncToPhysics(*m_ecsWorld, *m_physicsManager);
+
+			// 3. Run physics simulation
+			m_physicsManager->update(m_deltaTime);
+
+			// 4. Sync dynamic bodies from Jolt back to ECS
+			agni::ecs::PhysicsSystem::syncFromPhysics(*m_ecsWorld, *m_physicsManager);
+		}
+#endif
 
 		draw();
 

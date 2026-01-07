@@ -113,3 +113,57 @@ struct RenderableTag
 {
 	bool visible {true};
 };
+
+// ============================================================================
+// Physics Components (Jolt)
+// ============================================================================
+
+enum class RigidBodyType : uint8_t
+{
+	Static,    // Immovable (terrain, walls)
+	Dynamic,   // Fully simulated (boxes, spheres)
+	Kinematic  // Animation-driven
+};
+
+struct RigidBodyComponent
+{
+	RigidBodyType type {RigidBodyType::Dynamic};
+	float         mass {1.0f};
+	float         friction {0.5f};
+	float         restitution {0.0f}; // Bounciness (0 = no bounce, 1 = perfect bounce)
+	bool          useGravity {true};
+
+	// Velocity (synced from Jolt after simulation)
+	glm::vec3 linearVelocity {0.0f};
+	glm::vec3 angularVelocity {0.0f};
+
+	// Jolt BodyID (0 = invalid)
+	uint32_t joltBodyID {0};
+};
+
+enum class ColliderType : uint8_t
+{
+	Box,
+	Sphere,
+	Capsule
+};
+
+struct ColliderComponent
+{
+	ColliderType type {ColliderType::Box};
+
+	// Shape parameters (use based on type)
+	glm::vec3 boxHalfExtents {0.5f, 0.5f, 0.5f};
+	float     sphereRadius {0.5f};
+	float     capsuleRadius {0.5f};
+	float     capsuleHalfHeight {1.0f};
+
+	// Local offset from entity transform
+	glm::vec3 center {0.0f};
+
+	// Collision flags
+	bool isTrigger {false};
+};
+
+// Tag for entities participating in physics simulation
+struct PhysicsEnabledTag {};

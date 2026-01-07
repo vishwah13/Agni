@@ -19,6 +19,11 @@
 #include <Texture.hpp>
 #include <Types.hpp>
 
+#ifdef AGNI_HAS_JOLT
+#include <Physics/JoltPhysicsManager.hpp>
+#include <ECS/Systems/PhysicsSystem.hpp>
+#endif
+
 #include <deque>
 #include <functional>
 #include <memory>
@@ -204,6 +209,16 @@ public:
 	{
 		m_renderer.setECSMode(enabled, m_syncPass.get());
 	}
+
+#ifdef AGNI_HAS_JOLT
+	// Physics Manager
+	std::unique_ptr<agni::physics::JoltPhysicsManager> m_physicsManager;
+
+	agni::physics::JoltPhysicsManager& getPhysicsManager()
+	{
+		return *m_physicsManager;
+	}
+#endif
 
 private:
 	RENDERDOC_API_1_1_2* m_rdocAPI = NULL;

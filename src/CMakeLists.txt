@@ -55,6 +55,16 @@ add_executable (engine
   ECS/Systems/LightSystem.cpp
 )
 
+# Add Physics source files conditionally
+if(AGNI_ENABLE_JOLT)
+    target_sources(engine PRIVATE
+        Physics/JoltPhysicsManager.hpp
+        Physics/JoltPhysicsManager.cpp
+        ECS/Systems/PhysicsSystem.hpp
+        ECS/Systems/PhysicsSystem.cpp
+    )
+endif()
+
 # Add shader files to the project so they appear in Visual Studio
 file(GLOB_RECURSE SLANG_SHADER_FILES
   "${PROJECT_SOURCE_DIR}/shaders/slang/*.slang"
@@ -72,6 +82,12 @@ target_include_directories(engine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 add_dependencies(engine Shaders)
 
 target_link_libraries(engine PUBLIC vma glm volk::volk Vulkan::Headers fmt::fmt stb_image SDL3::SDL3 vkbootstrap imgui fastgltf::fastgltf renderdoc mikktspace flecs::flecs_static)
+
+# Link Jolt if enabled
+if(AGNI_ENABLE_JOLT)
+    target_link_libraries(engine PUBLIC jolt_interface)
+    target_compile_definitions(engine PUBLIC AGNI_HAS_JOLT=1)
+endif()
 
 # Link Slang library only if shader compilation is enabled (for runtime shader compilation)
 if(AGNI_COMPILE_SHADERS)
