@@ -85,7 +85,7 @@ target_include_directories(engine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
 add_dependencies(engine Shaders)
 
-target_link_libraries(engine PUBLIC vma glm volk::volk Vulkan::Headers fmt::fmt stb_image SDL3::SDL3 vkbootstrap imgui fastgltf::fastgltf renderdoc mikktspace flecs::flecs_static)
+target_link_libraries(engine PUBLIC vma glm volk::volk Vulkan::Headers fmt::fmt stb_image SDL3::SDL3 vkbootstrap imgui imguizmo fastgltf::fastgltf renderdoc mikktspace flecs::flecs_static)
 
 # Link Jolt if enabled
 if(AGNI_ENABLE_JOLT)

@@ -13,6 +13,8 @@ namespace agni::ecs
 class EntityFactory;
 }
 
+class Camera;
+
 namespace agni
 {
 namespace editor
@@ -26,6 +28,9 @@ public:
 
 	// Render the inspector window
 	void render();
+
+	// Render gizmo overlay (call after rendering scene, before ImGui::Render())
+	void renderGizmo(Camera* camera, VkExtent2D windowExtent);
 
 	// Set reference to mesh resources for entity creation
 	void setMeshResources(std::shared_ptr<LoadedGLTF> meshResources)
@@ -50,6 +55,12 @@ private:
 
 	// Filter
 	char m_entityFilter[128] = "";
+
+	// Gizmo state
+	int  m_gizmoOperation {0}; // 0=Translate, 1=Rotate, 2=Scale
+	int  m_gizmoMode {0};      // 0=Local, 1=World
+	bool m_useSnap {false};
+	float m_snapValues[3] {1.0f, 15.0f, 0.5f}; // Translate, Rotate, Scale snap
 
 	// UI rendering functions
 	void renderEntityList();

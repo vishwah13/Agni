@@ -126,6 +126,18 @@ target_sources(imgui PRIVATE
 
 target_link_libraries(imgui PUBLIC volk::volk_headers SDL3::SDL3 Vulkan::Headers)
 
+# ImGuizmo (3D gizmos for transform manipulation)
+add_library(imguizmo STATIC)
+
+target_include_directories(imguizmo PUBLIC ImGuizmo)
+
+target_sources(imguizmo PRIVATE
+  ImGuizmo/ImGuizmo.h
+  ImGuizmo/ImGuizmo.cpp
+)
+
+target_link_libraries(imguizmo PUBLIC imgui)
+
 target_include_directories(stb_image INTERFACE stb_image)
 
 target_include_directories(renderdoc INTERFACE renderdoc)

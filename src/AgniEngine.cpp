@@ -439,6 +439,8 @@ void AgniEngine::run()
 		if (m_ecsInspector)
 		{
 			m_ecsInspector->render();
+			// Render gizmo overlay (must be after inspector UI, before ImGui::Render())
+			m_ecsInspector->renderGizmo(&m_mainCamera, m_windowExtent);
 		}
 
 		// make imgui calculate internal draw structures

@@ -1,7 +1,9 @@
 #include <Editor/ECSInspector.hpp>
 #include <ECS/EntityFactory.hpp>
+#include <Camera.hpp>
 
 #include <imgui.h>
+#include <ImGuizmo.h>
 #include <fmt/core.h>
 
 #include <glm/gtc/type_ptr.hpp>
@@ -32,6 +34,45 @@ void ECSInspector::render()
 	{
 		m_world.destroyEntity(m_selectedEntity);
 		m_selectedEntity = NULL_ENTITY;
+	}
+
+	ImGui::Separator();
+
+	// Gizmo controls
+	ImGui::Text("Gizmo:");
+	ImGui::SameLine();
+	if (ImGui::RadioButton("Translate", m_gizmoOperation == 0))
+		m_gizmoOperation = 0;
+	ImGui::SameLine();
+	if (ImGui::RadioButton("Rotate", m_gizmoOperation == 1))
+		m_gizmoOperation = 1;
+	ImGui::SameLine();
+	if (ImGui::RadioButton("Scale", m_gizmoOperation == 2))
+		m_gizmoOperation = 2;
+
+	ImGui::SameLine();
+	ImGui::Text("|");
+	ImGui::SameLine();
+
+	if (ImGui::RadioButton("Local", m_gizmoMode == 0))
+		m_gizmoMode = 0;
+	ImGui::SameLine();
+	if (ImGui::RadioButton("World", m_gizmoMode == 1))
+		m_gizmoMode = 1;
+
+	ImGui::SameLine();
+	ImGui::Checkbox("Snap", &m_useSnap);
+
+	if (m_useSnap)
+	{
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(100);
+		if (m_gizmoOperation == 0)
+			ImGui::DragFloat("##snap", &m_snapValues[0], 0.1f, 0.1f, 10.0f, "%.1f");
+		else if (m_gizmoOperation == 1)
+			ImGui::DragFloat("##snap", &m_snapValues[1], 1.0f, 1.0f, 90.0f, "%.0f°");
+		else
+			ImGui::DragFloat("##snap", &m_snapValues[2], 0.05f, 0.05f, 2.0f, "%.2f");
 	}
 
 	ImGui::Separator();
@@ -452,6 +493,113 @@ bool ECSInspector::matchesFilter(const char* entityName) const
 		return true;
 
 	return strstr(entityName, m_entityFilter) != nullptr;
+}
+
+void ECSInspector::renderGizmo(Camera* camera, VkExtent2D windowExtent)
+{
+	if (!camera || m_selectedEntity == NULL_ENTITY)
+		return;
+
+	auto entity = m_world.get().entity(m_selectedEntity);
+	if (!entity.is_valid())
+		return;
+
+	TransformComponent* transform = m_world.getComponent<TransformComponent>(m_selectedEntity);
+	if (!transform)
+		return;
+
+	// Setup ImGuizmo
+	ImGuizmo::SetOrthographic(false);
+	ImGuizmo::BeginFrame();
+
+	// Get camera matrices
+	glm::mat4 view = camera->getViewMatrix();
+	glm::mat4 projection = glm::perspective(
+	    glm::radians(70.f),
+	    (float) windowExtent.width / (float) windowExtent.height,
+	    10000.f,
+	    0.1f);
+
+	// Flip Y for Vulkan
+	projection[1][1] *= -1;
+
+	// Set ImGuizmo rect to cover full viewport
+	ImGuizmo::SetRect(0, 0, (float) windowExtent.width, (float) windowExtent.height);
+
+	// Get gizmo operation
+	ImGuizmo::OPERATION operation;
+	switch (m_gizmoOperation)
+	{
+	case 0:
+		operation = ImGuizmo::TRANSLATE;
+		break;
+	case 1:
+		operation = ImGuizmo::ROTATE;
+		break;
+	case 2:
+		operation = ImGuizmo::SCALE;
+		break;
+	default:
+		operation = ImGuizmo::TRANSLATE;
+	}
+
+	// Get gizmo mode
+	ImGuizmo::MODE mode = (m_gizmoMode == 0) ? ImGuizmo::LOCAL : ImGuizmo::WORLD;
+
+	// Prepare snap values
+	float* snap = m_useSnap ? &m_snapValues[m_gizmoOperation] : nullptr;
+
+	// Get the SceneNode to check hierarchy
+	const agni::ecs::SceneNodeComponent* node = m_world.getComponent<agni::ecs::SceneNodeComponent>(m_selectedEntity);
+
+	// Use local transform for root entities, world transform for children
+	// This ensures the gizmo shows the correct position
+	glm::mat4 matrix;
+	if (node && node->parent == NULL_ENTITY)
+	{
+		// Root entity: use local transform (which equals world transform)
+		matrix = transform->localTransform;
+	}
+	else
+	{
+		// Child entity: use world transform
+		matrix = transform->worldTransform;
+	}
+
+	// Manipulate
+	bool manipulated = ImGuizmo::Manipulate(
+	    glm::value_ptr(view),
+	    glm::value_ptr(projection),
+	    operation,
+	    mode,
+	    glm::value_ptr(matrix),
+	    nullptr,
+	    snap);
+
+	// Update transform if manipulated
+	if (manipulated)
+	{
+		if (node && node->parent == NULL_ENTITY)
+		{
+			// No parent: directly set local transform
+			m_world.setLocalTransform(m_selectedEntity, matrix);
+		}
+		else if (node && node->parent != NULL_ENTITY)
+		{
+			// Has parent: calculate local from world
+			// localTransform = inverse(parentWorld) * worldTransform
+			auto parent = m_world.get().entity(node->parent);
+			if (parent.is_valid())
+			{
+				const TransformComponent* parentTransform = m_world.getComponent<TransformComponent>(node->parent);
+				if (parentTransform)
+				{
+					glm::mat4 localTransform = glm::inverse(parentTransform->worldTransform) * matrix;
+					m_world.setLocalTransform(m_selectedEntity, localTransform);
+				}
+			}
+		}
+	}
 }
 
 } // namespace editor
