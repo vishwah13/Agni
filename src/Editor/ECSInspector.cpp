@@ -60,7 +60,11 @@ void ECSInspector::render()
 
 void ECSInspector::renderEntityList()
 {
-	ImGui::Text("Entities");
+	// Count total entities
+	int totalCount = 0;
+	m_world.get().each([&totalCount](flecs::entity e) { totalCount++; });
+
+	ImGui::Text("Entities (%d)", totalCount);
 	ImGui::Separator();
 
 	// Filter input
@@ -71,16 +75,24 @@ void ECSInspector::renderEntityList()
 	// Scrollable entity list
 	ImGui::BeginChild("EntityList", ImVec2(0, 0), true);
 
-	// Iterate through all entities
-	m_world.get().each([this](flecs::entity e) {
-		const char* name = e.name().c_str();
-		if (!name || strlen(name) == 0)
+	// Iterate through all entities with TransformComponent (filters out internal Flecs entities)
+	m_world.get().query<const TransformComponent>().each([this](flecs::entity e, const TransformComponent&) {
+		// Get entity name
+		const char* namePtr = e.name();
+		std::string displayName;
+
+		if (namePtr && strlen(namePtr) > 0)
 		{
-			name = "(unnamed)";
+			displayName = namePtr;
+		}
+		else
+		{
+			// Generate name from ID if unnamed
+			displayName = "Entity_" + std::to_string(e.id());
 		}
 
 		// Apply filter
-		if (!matchesFilter(name))
+		if (!matchesFilter(displayName.c_str()))
 			return;
 
 		// Check if this entity is selected
@@ -88,16 +100,18 @@ void ECSInspector::renderEntityList()
 
 		// Create selectable item with entity info
 		char label[256];
-		snprintf(label, sizeof(label), "%s##%llu", name, e.id());
+		snprintf(label, sizeof(label), "%s##%llu", displayName.c_str(), e.id());
 
 		if (ImGui::Selectable(label, isSelected))
 		{
 			m_selectedEntity = e.id();
 		}
 
-		// Show entity ID on same line
-		ImGui::SameLine();
-		ImGui::TextDisabled("(ID: %llu)", e.id());
+		// Show entity ID on hover
+		if (ImGui::IsItemHovered())
+		{
+			ImGui::SetTooltip("Entity ID: %llu", e.id());
+		}
 	});
 
 	ImGui::EndChild();
