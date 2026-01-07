@@ -268,6 +268,18 @@ void World::progress(float deltaTime)
 	m_world.progress(deltaTime);
 }
 
+void World::clearAllEntities()
+{
+	// Delete all entities to release component data (especially RenderMeshComponent which holds shared_ptr to mesh assets)
+	m_world.defer_begin();
+
+	m_world.each([](flecs::entity e) {
+		e.destruct();
+	});
+
+	m_world.defer_end();
+}
+
 flecs::entity World::createMeshEntity(const char* name)
 {
 	flecs::entity entity = name ? m_world.entity(name) : m_world.entity();

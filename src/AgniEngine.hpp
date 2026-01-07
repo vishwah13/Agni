@@ -9,6 +9,7 @@
 #include <ECS/EntityFactory.hpp>
 #include <ECS/SyncPass.hpp>
 #include <ECS/World.hpp>
+#include <Editor/ECSInspector.hpp>
 #include <Loader.hpp>
 #include <Material.hpp>
 #include <Renderer.hpp>
@@ -189,6 +190,7 @@ public:
 	std::unique_ptr<agni::ecs::World>         m_ecsWorld;
 	std::unique_ptr<agni::ecs::SyncPass>      m_syncPass;
 	std::unique_ptr<agni::ecs::EntityFactory> m_entityFactory;
+	std::unique_ptr<agni::editor::ECSInspector> m_ecsInspector;
 
 	// ECS accessors
 	agni::ecs::World& getECSWorld()

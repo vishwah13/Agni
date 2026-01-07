@@ -53,6 +53,10 @@ add_executable (engine
   ECS/Systems/RenderSystem.cpp
   ECS/Systems/LightSystem.hpp
   ECS/Systems/LightSystem.cpp
+
+  # Editor Tools
+  Editor/ECSInspector.hpp
+  Editor/ECSInspector.cpp
 )
 
 # Add Physics source files conditionally

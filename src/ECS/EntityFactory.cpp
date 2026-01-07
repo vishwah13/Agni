@@ -79,7 +79,9 @@ flecs::entity EntityFactory::convertNodeRecursive(std::shared_ptr<Node> node, fl
 	MeshNode* meshNode = dynamic_cast<MeshNode*>(node.get());
 	if (meshNode)
 	{
-		entity = m_world.createMeshEntity();
+		// Use mesh name for entity
+		const char* name = meshNode->getMesh() ? meshNode->getMesh()->m_name.c_str() : nullptr;
+		entity           = m_world.createMeshEntity(name);
 
 		// Set mesh
 		RenderMeshComponent& renderMesh = entity.ensure<RenderMeshComponent>();
@@ -89,7 +91,11 @@ flecs::entity EntityFactory::convertNodeRecursive(std::shared_ptr<Node> node, fl
 	// Check if this is a LightNode
 	else if (LightNode* lightNode = dynamic_cast<LightNode*>(node.get()))
 	{
-		entity = m_world.createLightEntity();
+		// Generate light name based on type
+		const char* lightTypeName = lightNode->getType() == LightType::Point          ? "PointLight"
+		                            : lightNode->getType() == LightType::Directional  ? "DirectionalLight"
+		                                                                              : "SpotLight";
+		entity                    = m_world.createLightEntity(lightTypeName);
 
 		// Copy light component
 		LightComponent& lc = entity.ensure<LightComponent>();
@@ -98,7 +104,7 @@ flecs::entity EntityFactory::convertNodeRecursive(std::shared_ptr<Node> node, fl
 		// If light has attached mesh, create a child entity for it
 		if (lightNode->hasMesh())
 		{
-			flecs::entity meshChild = m_world.createMeshEntity();
+			flecs::entity meshChild = m_world.createMeshEntity("LightMesh");
 
 			RenderMeshComponent& renderMesh = meshChild.ensure<RenderMeshComponent>();
 			renderMesh.meshAsset            = lightNode->getMesh();
@@ -111,7 +117,7 @@ flecs::entity EntityFactory::convertNodeRecursive(std::shared_ptr<Node> node, fl
 	// Empty node (just transform)
 	else
 	{
-		entity = m_world.get().entity();
+		entity = m_world.get().entity("Node");
 		entity.set<TransformComponent>({});
 		entity.set<SceneNodeComponent>({});
 	}

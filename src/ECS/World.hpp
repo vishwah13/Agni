@@ -67,6 +67,9 @@ public:
 
 	void progress(float deltaTime) override;
 
+	// Cleanup all entities (releases all component data)
+	void clearAllEntities();
+
 	// Entity creation helpers (return flecs entity for internal use)
 	flecs::entity createMeshEntity(const char* name = nullptr);
 	flecs::entity createLightEntity(const char* name = nullptr);

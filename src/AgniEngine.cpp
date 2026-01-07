@@ -89,6 +89,7 @@ void AgniEngine::init()
 	m_ecsWorld      = std::make_unique<agni::ecs::World>();
 	m_syncPass      = std::make_unique<agni::ecs::SyncPass>(*m_ecsWorld);
 	m_entityFactory = std::make_unique<agni::ecs::EntityFactory>(*m_ecsWorld);
+	m_ecsInspector  = std::make_unique<agni::editor::ECSInspector>(*m_ecsWorld, *m_entityFactory);
 
 #ifdef AGNI_HAS_JOLT
 	// Initialize Jolt Physics
@@ -149,6 +150,17 @@ void AgniEngine::cleanup()
 			m_physicsManager.reset();
 		}
 #endif
+
+		// Cleanup ECS (destroys all entities and releases mesh references)
+		// IMPORTANT: Do this BEFORE renderer cleanup so entities release their mesh asset references
+		if (m_ecsWorld)
+		{
+			m_ecsWorld->clearAllEntities(); // Explicitly destroy all entities first
+		}
+		m_ecsInspector.reset();
+		m_entityFactory.reset();
+		m_syncPass.reset();
+		m_ecsWorld.reset();
 
 		// Cleanup renderer (render targets, pipelines, descriptors, scenes)
 		m_renderer.cleanup();
@@ -422,6 +434,12 @@ void AgniEngine::run()
 			}
 		}
 		ImGui::End();
+
+		// ECS Inspector
+		if (m_ecsInspector)
+		{
+			m_ecsInspector->render();
+		}
 
 		// make imgui calculate internal draw structures
 		ImGui::Render();
@@ -817,6 +835,9 @@ void AgniEngine::initDefaultData()
 
 	// m_renderer.getLoadedScenes()["structure"] = *structureFile;
 	m_assetLoader.getMeshResources() = *meshPrimitivesFile;
+
+	// Set mesh resources for the ECS inspector (for live entity creation)
+	m_ecsInspector->setMeshResources(*meshPrimitivesFile);
 
 	// ============================================================================
 	// ECS Mode Test: Convert loaded scene to ECS entities
