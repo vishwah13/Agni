@@ -58,6 +58,7 @@ struct RenderObject
 	Bounds            m_bounds;
 	glm::mat4         m_transform;
 	VkDeviceAddress   m_vertexBufferAddress;
+	uint64_t          m_entityID {0};  // Entity ID for picking
 };
 
 // Directional light data for DrawContext
@@ -151,6 +152,13 @@ public:
 		return m_useECS;
 	}
 
+	// Object picking
+	void     requestPicking(float x, float y);
+	void     processPickingResult();  // Call after fence wait to read GPU result
+	uint64_t getPickedEntityID() const { return m_lastPickedEntityID; }
+	bool     hasPickingResult() const { return m_pickingResultReady; }
+	void     clearPickingResult() { m_pickingResultReady = false; }
+
 private:
 	// Dependencies (set during init)
 	VkDevice                        m_device                     = VK_NULL_HANDLE;
@@ -193,13 +201,30 @@ private:
 	bool                  m_useECS {false};
 	agni::ecs::SyncPass* m_syncPass {nullptr};
 
+	// Object picking resources
+	AllocatedImage   m_objectIDImage;
+	AllocatedImage   m_pickingDepthImage;  // Non-MSAA depth for picking
+	AllocatedBuffer  m_pickingStagingBuffer;
+	VkPipeline       m_objectIDPipeline       = VK_NULL_HANDLE;
+	VkPipelineLayout m_objectIDPipelineLayout = VK_NULL_HANDLE;
+
+	// Picking state
+	bool      m_pickingRequested    = false;  // User requested picking
+	int       m_pickingFramesLeft   = 0;      // Frames to wait before reading (for sync)
+	bool      m_pickingResultReady  = false;  // Result is available
+	glm::vec2 m_pickingScreenPos    = {0.0f, 0.0f};
+	uint64_t  m_lastPickedEntityID  = 0;
+
 	// Private rendering functions
 	void drawBackground(VkCommandBuffer cmd);
 	void drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame);
 	void drawImgui(VkCommandBuffer cmd, VkImageView targetImageView);
+	void drawObjectIDPass(VkCommandBuffer cmd, FrameData& currentFrame);
 
 	// Initialization helpers
 	void initRenderTargets(VkExtent2D windowExtent);
 	void initDescriptors();
 	void initBackgroundPipelines();
+	void initPickingResources(VkExtent2D windowExtent);
+	void initObjectIDPipeline();
 };

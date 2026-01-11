@@ -201,6 +201,9 @@ void AgniEngine::draw()
 	VK_CHECK(vkWaitForFences(
 	m_device, 1, &getCurrentFrame().m_renderFence, true, 1000000000));
 
+	// Process picking result now that GPU has finished
+	m_renderer.processPickingResult();
+
 	getCurrentFrame().m_deletionQueue.flush();
 	getCurrentFrame().m_frameDescriptors.clearPools(m_device);
 	VK_CHECK(vkResetFences(m_device, 1, &getCurrentFrame().m_renderFence));
@@ -341,6 +344,14 @@ void AgniEngine::run()
 				// fmt::print("Key down: {}\n", SDL_GetKeyName(e.key.key));
 			}
 
+			// Handle viewport picking on left mouse click
+			if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
+			    e.button.button == SDL_BUTTON_LEFT &&
+			    !ImGui::GetIO().WantCaptureMouse)
+			{
+				m_renderer.requestPicking(e.button.x, e.button.y);
+			}
+
 			ImGui_ImplSDL3_ProcessEvent(&e);
 		}
 
@@ -468,6 +479,17 @@ void AgniEngine::run()
 #endif
 
 		draw();
+
+		// Check for picking result and update selection
+		if (m_renderer.hasPickingResult() && m_ecsInspector)
+		{
+			uint64_t pickedEntity = m_renderer.getPickedEntityID();
+			if (pickedEntity != 0)
+			{
+				m_ecsInspector->setSelectedEntity(pickedEntity);
+			}
+			m_renderer.clearPickingResult();
+		}
 
 		// get clock again to compare with start clock
 		auto end = std::chrono::system_clock::now();

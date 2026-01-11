@@ -38,6 +38,18 @@ public:
 		m_meshResources = meshResources;
 	}
 
+	// Set selected entity (for viewport picking)
+	void setSelectedEntity(EntityID entity)
+	{
+		m_selectedEntity = entity;
+	}
+
+	// Get selected entity
+	EntityID getSelectedEntity() const
+	{
+		return m_selectedEntity;
+	}
+
 private:
 	agni::ecs::World&         m_world;
 	agni::ecs::EntityFactory& m_entityFactory;

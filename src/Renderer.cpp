@@ -11,6 +11,7 @@
 #include <imgui.h>
 #include <imgui_impl_vulkan.h>
 
+#include <algorithm>
 #include <chrono>
 
 #ifdef TRACY_ENABLE
@@ -85,6 +86,8 @@ void Renderer::init(VkDevice                     device,
 	initRenderTargets(windowExtent);
 	initDescriptors();
 	initBackgroundPipelines();
+	initPickingResources(windowExtent);
+	initObjectIDPipeline();
 }
 
 void Renderer::cleanup()
@@ -93,6 +96,15 @@ void Renderer::cleanup()
 	m_resourceManager->destroyImage(m_drawImage);
 	m_resourceManager->destroyImage(m_msaaColorImage);
 	m_resourceManager->destroyImage(m_depthImage);
+
+	// Cleanup picking resources
+	m_resourceManager->destroyImage(m_objectIDImage);
+	m_resourceManager->destroyImage(m_pickingDepthImage);
+	m_resourceManager->destroyBuffer(m_pickingStagingBuffer);
+	if (m_objectIDPipeline != VK_NULL_HANDLE)
+		vkDestroyPipeline(m_device, m_objectIDPipeline, nullptr);
+	if (m_objectIDPipelineLayout != VK_NULL_HANDLE)
+		vkDestroyPipelineLayout(m_device, m_objectIDPipelineLayout, nullptr);
 
 	// Cleanup pipelines
 	vkDestroyPipelineLayout(m_device, m_gradientPipelineLayout, nullptr);
@@ -117,6 +129,8 @@ void Renderer::resize(VkExtent2D newExtent, VkSampleCountFlagBits msaaSamples)
 	m_resourceManager->destroyImage(m_drawImage);
 	m_resourceManager->destroyImage(m_msaaColorImage);
 	m_resourceManager->destroyImage(m_depthImage);
+	m_resourceManager->destroyImage(m_objectIDImage);
+	m_resourceManager->destroyImage(m_pickingDepthImage);
 
 	// Recreate render targets with new extent and MSAA settings
 	VkExtent3D drawImageExtent = {newExtent.width, newExtent.height, 1};
@@ -150,6 +164,25 @@ void Renderer::resize(VkExtent2D newExtent, VkSampleCountFlagBits msaaSamples)
 	                                             depthImageUsages,
 	                                             false,
 	                                             m_msaaSamples);
+
+	// Recreate object ID image for picking
+	VkImageUsageFlags pickingColorUsages = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+	                                       VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	m_objectIDImage = m_resourceManager->createImage(
+	    drawImageExtent,
+	    VK_FORMAT_R8G8B8A8_UNORM,
+	    pickingColorUsages,
+	    false,
+	    VK_SAMPLE_COUNT_1_BIT);
+
+	// Recreate picking depth image
+	VkImageUsageFlags pickingDepthUsages = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	m_pickingDepthImage = m_resourceManager->createImage(
+	    drawImageExtent,
+	    VK_FORMAT_D32_SFLOAT,
+	    pickingDepthUsages,
+	    false,
+	    VK_SAMPLE_COUNT_1_BIT);
 
 	// Update the draw image descriptor to point to the new image
 	DescriptorWriter writer;
@@ -351,6 +384,9 @@ void Renderer::renderFrame(VkCommandBuffer cmd,
 	                        m_drawImage.m_image,
 	                        VK_IMAGE_LAYOUT_UNDEFINED,
 	                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+	// Object ID pass for picking (only runs when picking is requested)
+	drawObjectIDPass(cmd, currentFrame);
 
 	drawGeometry(cmd, currentFrame);
 
@@ -802,4 +838,292 @@ void Renderer::updateScene(float deltaTime, VkExtent2D windowExtent)
 	auto elapsed =
 	std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 	m_stats.m_sceneUpdateTime = elapsed.count() / 1000.f;
+}
+
+void Renderer::initPickingResources(VkExtent2D windowExtent)
+{
+	// Create object ID render target (R8G8B8A8 for color-encoded entity IDs)
+	VkExtent3D extent = {windowExtent.width, windowExtent.height, 1};
+	VkImageUsageFlags colorUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+	                               VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+
+	m_objectIDImage = m_resourceManager->createImage(
+	    extent,
+	    VK_FORMAT_R8G8B8A8_UNORM,
+	    colorUsage,
+	    false,
+	    VK_SAMPLE_COUNT_1_BIT);  // No MSAA for picking
+
+	// Create non-MSAA depth buffer for picking pass
+	VkImageUsageFlags depthUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	m_pickingDepthImage = m_resourceManager->createImage(
+	    extent,
+	    VK_FORMAT_D32_SFLOAT,
+	    depthUsage,
+	    false,
+	    VK_SAMPLE_COUNT_1_BIT);  // No MSAA for picking
+
+	// Create staging buffer for reading back pixel data (4 bytes for RGBA)
+	m_pickingStagingBuffer = m_resourceManager->createBuffer(
+	    4,
+	    VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+	    VMA_MEMORY_USAGE_GPU_TO_CPU);
+}
+
+void Renderer::initObjectIDPipeline()
+{
+	// Load object ID shaders
+	VkShaderModule vertexShader;
+	VkShaderModule fragmentShader;
+
+	if (!vkutil::loadShaderModule("../../shaders/slang/objectid.vert.spv",
+	                              m_device, &vertexShader))
+	{
+		AGNI_PRINT("Failed to load objectid vertex shader\n");
+		return;
+	}
+
+	if (!vkutil::loadShaderModule("../../shaders/slang/objectid.frag.spv",
+	                              m_device, &fragmentShader))
+	{
+		AGNI_PRINT("Failed to load objectid fragment shader\n");
+		vkDestroyShaderModule(m_device, vertexShader, nullptr);
+		return;
+	}
+
+	// Create pipeline layout with push constants
+	VkPushConstantRange pushConstantRange {};
+	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+	pushConstantRange.offset = 0;
+	pushConstantRange.size = sizeof(ObjectIDPushConstants);
+
+	VkPipelineLayoutCreateInfo layoutInfo {};
+	layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	layoutInfo.setLayoutCount = 1;
+	layoutInfo.pSetLayouts = &m_gpuSceneDataDescriptorLayout;
+	layoutInfo.pushConstantRangeCount = 1;
+	layoutInfo.pPushConstantRanges = &pushConstantRange;
+
+	VK_CHECK(vkCreatePipelineLayout(m_device, &layoutInfo, nullptr, &m_objectIDPipelineLayout));
+
+	// Build pipeline
+	PipelineBuilder builder;
+	builder.setShaders(vertexShader, fragmentShader);
+	builder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	builder.setPolygonMode(VK_POLYGON_MODE_FILL);
+	builder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+	builder.setMultisamplingNone();
+	builder.disableBlending();
+	builder.enableDepthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);  // Reversed-Z
+	builder.setColorAttachmentFormat(VK_FORMAT_R8G8B8A8_UNORM);
+	builder.setDepthFormat(VK_FORMAT_D32_SFLOAT);
+	builder.m_pipelineLayout = m_objectIDPipelineLayout;
+
+	m_objectIDPipeline = builder.buildPipeline(m_device);
+
+	// Cleanup shader modules
+	vkDestroyShaderModule(m_device, vertexShader, nullptr);
+	vkDestroyShaderModule(m_device, fragmentShader, nullptr);
+}
+
+void Renderer::requestPicking(float x, float y)
+{
+	m_pickingRequested = true;
+	m_pickingScreenPos = glm::vec2(x, y);
+	m_pickingResultReady = false;
+}
+
+void Renderer::drawObjectIDPass(VkCommandBuffer cmd, FrameData& currentFrame)
+{
+	if (!m_pickingRequested)
+		return;
+
+	// Transition object ID image for rendering
+	vkutil::transitionImage(cmd,
+	                        m_objectIDImage.m_image,
+	                        VK_IMAGE_LAYOUT_UNDEFINED,
+	                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+	// Transition picking depth image for rendering
+	vkutil::transitionImage(cmd,
+	                        m_pickingDepthImage.m_image,
+	                        VK_IMAGE_LAYOUT_UNDEFINED,
+	                        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
+	// Setup rendering attachment
+	VkClearValue clearValue = {};
+	clearValue.color = {{0.0f, 0.0f, 0.0f, 0.0f}};  // Clear to 0 (no entity)
+
+	VkRenderingAttachmentInfo colorAttachment = vkinit::attachmentInfo(
+	    m_objectIDImage.m_imageView,
+	    &clearValue,
+	    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+	// Use non-MSAA depth buffer for picking (matches color sample count)
+	VkRenderingAttachmentInfo depthAttachment = vkinit::depthAttachmentInfo(
+	    m_pickingDepthImage.m_imageView,
+	    VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
+	VkRenderingInfo renderInfo = vkinit::renderingInfo(m_drawExtent, &colorAttachment, &depthAttachment);
+
+	vkCmdBeginRendering(cmd, &renderInfo);
+
+	// Bind pipeline
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_objectIDPipeline);
+
+	// Set viewport and scissor
+	VkViewport viewport = {};
+	viewport.x = 0;
+	viewport.y = 0;
+	viewport.width = static_cast<float>(m_drawExtent.width);
+	viewport.height = static_cast<float>(m_drawExtent.height);
+	viewport.minDepth = 0.f;
+	viewport.maxDepth = 1.f;
+	vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+	VkRect2D scissor = {};
+	scissor.offset = {0, 0};
+	scissor.extent = m_drawExtent;
+	vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+	// Create temporary scene data buffer (like drawGeometry does)
+	AllocatedBuffer gpuSceneDataBuffer =
+	    m_resourceManager->createBuffer(sizeof(GPUSceneData),
+	                                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+	                                    VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+	// Create temporary light data buffer (required by descriptor layout)
+	AllocatedBuffer gpuLightDataBuffer =
+	    m_resourceManager->createBuffer(sizeof(GPULightData),
+	                                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+	                                    VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+	// Schedule deletion after frame is done
+	ResourceManager* rm = m_resourceManager;
+	currentFrame.m_deletionQueue.push_function(
+	    [rm, gpuSceneDataBuffer, gpuLightDataBuffer]() {
+		    rm->destroyBuffer(gpuSceneDataBuffer);
+		    rm->destroyBuffer(gpuLightDataBuffer);
+	    });
+
+	// Write scene data
+	GPUSceneData* sceneUniformData = (GPUSceneData*)gpuSceneDataBuffer.m_info.pMappedData;
+	*sceneUniformData = m_sceneData;
+
+	// Write empty light data (not used for picking, but required by layout)
+	GPULightData* lightData = (GPULightData*)gpuLightDataBuffer.m_info.pMappedData;
+	lightData->m_numPointLights = 0;
+	lightData->m_numSpotLights = 0;
+
+	// Bind scene descriptor
+	VkDescriptorSet globalDescriptor = currentFrame.m_frameDescriptors.allocate(
+	    m_device, m_gpuSceneDataDescriptorLayout);
+
+	DescriptorWriter writer;
+	writer.writeBuffer(0,
+	                   gpuSceneDataBuffer.m_buffer,
+	                   sizeof(GPUSceneData),
+	                   0,
+	                   VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+	writer.writeBuffer(1,
+	                   gpuLightDataBuffer.m_buffer,
+	                   sizeof(GPULightData),
+	                   0,
+	                   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+	writer.updateSet(m_device, globalDescriptor);
+
+	vkCmdBindDescriptorSets(cmd,
+	                        VK_PIPELINE_BIND_POINT_GRAPHICS,
+	                        m_objectIDPipelineLayout,
+	                        0,
+	                        1,
+	                        &globalDescriptor,
+	                        0,
+	                        nullptr);
+
+	// Draw all opaque objects with their entity IDs
+	VkBuffer lastIndexBuffer = VK_NULL_HANDLE;
+	for (const auto& obj : m_mainDrawContext.m_OpaqueSurfaces)
+	{
+		if (obj.m_indexBuffer != lastIndexBuffer)
+		{
+			lastIndexBuffer = obj.m_indexBuffer;
+			vkCmdBindIndexBuffer(cmd, obj.m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+		}
+
+		ObjectIDPushConstants pushConstants;
+		pushConstants.m_worldMatrix = obj.m_transform;
+		pushConstants.m_vertexBuffer = obj.m_vertexBufferAddress;
+		pushConstants.m_entityID = static_cast<uint32_t>(obj.m_entityID & 0xFFFFFF);  // Use lower 24 bits
+		pushConstants.m_padding = 0;
+
+		vkCmdPushConstants(cmd,
+		                   m_objectIDPipelineLayout,
+		                   VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+		                   0,
+		                   sizeof(ObjectIDPushConstants),
+		                   &pushConstants);
+
+		vkCmdDrawIndexed(cmd, obj.m_indexCount, 1, obj.m_firstIndex, 0, 0);
+	}
+
+	vkCmdEndRendering(cmd);
+
+	// Transition for copy
+	vkutil::transitionImage(cmd,
+	                        m_objectIDImage.m_image,
+	                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+	                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+	// Copy the pixel at the mouse position to the staging buffer
+	int pixelX = static_cast<int>(m_pickingScreenPos.x);
+	int pixelY = static_cast<int>(m_pickingScreenPos.y);
+
+	// Clamp to image bounds
+	pixelX = std::clamp(pixelX, 0, static_cast<int>(m_drawExtent.width) - 1);
+	pixelY = std::clamp(pixelY, 0, static_cast<int>(m_drawExtent.height) - 1);
+
+	VkBufferImageCopy copyRegion = {};
+	copyRegion.bufferOffset = 0;
+	copyRegion.bufferRowLength = 0;
+	copyRegion.bufferImageHeight = 0;
+	copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	copyRegion.imageSubresource.mipLevel = 0;
+	copyRegion.imageSubresource.baseArrayLayer = 0;
+	copyRegion.imageSubresource.layerCount = 1;
+	copyRegion.imageOffset = {pixelX, pixelY, 0};
+	copyRegion.imageExtent = {1, 1, 1};
+
+	vkCmdCopyImageToBuffer(cmd,
+	                       m_objectIDImage.m_image,
+	                       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+	                       m_pickingStagingBuffer.m_buffer,
+	                       1,
+	                       &copyRegion);
+
+	m_pickingRequested = false;
+	m_pickingFramesLeft = 2;  // Wait 2 frames for GPU to complete (FRAME_OVERLAP)
+}
+
+void Renderer::processPickingResult()
+{
+	if (m_pickingFramesLeft <= 0)
+		return;
+
+	m_pickingFramesLeft--;
+
+	if (m_pickingFramesLeft == 0)
+	{
+		// GPU has finished, read the staging buffer
+		void* data;
+		vmaMapMemory(m_resourceManager->getAllocator(), m_pickingStagingBuffer.m_allocation, &data);
+		uint8_t* pixels = static_cast<uint8_t*>(data);
+		uint32_t r = pixels[0];
+		uint32_t g = pixels[1];
+		uint32_t b = pixels[2];
+		m_lastPickedEntityID = (r << 16) | (g << 8) | b;
+		vmaUnmapMemory(m_resourceManager->getAllocator(), m_pickingStagingBuffer.m_allocation);
+
+		m_pickingResultReady = true;
+	}
 }

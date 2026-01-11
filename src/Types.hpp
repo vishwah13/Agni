@@ -70,6 +70,15 @@ struct GPUDrawPushConstants
 	VkDeviceAddress m_vertexBuffer;
 };
 
+// push constants for object ID picking pass
+struct ObjectIDPushConstants
+{
+	glm::mat4       m_worldMatrix;
+	VkDeviceAddress m_vertexBuffer;
+	uint32_t        m_entityID;
+	uint32_t        m_padding;
+};
+
 struct GPUSceneData
 {
 	glm::mat4 m_view;

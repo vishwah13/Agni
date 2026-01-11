@@ -15,7 +15,8 @@ void RenderSystem::collectRenderables(World& world, DrawContext& ctx)
 
 	// Build and run a query for all mesh entities
 	flecsWorld.query<const TransformComponent, const RenderMeshComponent, const RenderableTag>()
-	    .each([&ctx](const TransformComponent& transform,
+	    .each([&ctx](flecs::entity              e,
+	                 const TransformComponent&  transform,
 	                 const RenderMeshComponent& mesh,
 	                 const RenderableTag&       renderable) {
 		    // Skip invisible or invalid meshes
@@ -33,6 +34,7 @@ void RenderSystem::collectRenderables(World& world, DrawContext& ctx)
 			    obj.m_bounds              = surface.m_bounds;
 			    obj.m_transform           = transform.worldTransform;
 			    obj.m_vertexBufferAddress = mesh.meshAsset->m_meshBuffers.m_vertexBufferAddress;
+			    obj.m_entityID            = e.id();  // Store entity ID for picking
 
 			    // Sort into opaque or transparent based on material pass type
 			    if (surface.m_material->m_data.m_passType == MaterialPass::Transparent)
