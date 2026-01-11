@@ -170,7 +170,7 @@ void Renderer::resize(VkExtent2D newExtent, VkSampleCountFlagBits msaaSamples)
 	                                       VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	m_objectIDImage = m_resourceManager->createImage(
 	    drawImageExtent,
-	    VK_FORMAT_R8G8B8A8_UNORM,
+	    VK_FORMAT_R32_UINT,
 	    pickingColorUsages,
 	    false,
 	    VK_SAMPLE_COUNT_1_BIT);
@@ -842,14 +842,14 @@ void Renderer::updateScene(float deltaTime, VkExtent2D windowExtent)
 
 void Renderer::initPickingResources(VkExtent2D windowExtent)
 {
-	// Create object ID render target (R8G8B8A8 for color-encoded entity IDs)
+	// Create object ID render target (R32_UINT for direct integer storage)
 	VkExtent3D extent = {windowExtent.width, windowExtent.height, 1};
 	VkImageUsageFlags colorUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
 	                               VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
 	m_objectIDImage = m_resourceManager->createImage(
 	    extent,
-	    VK_FORMAT_R8G8B8A8_UNORM,
+	    VK_FORMAT_R32_UINT,
 	    colorUsage,
 	    false,
 	    VK_SAMPLE_COUNT_1_BIT);  // No MSAA for picking
@@ -915,7 +915,7 @@ void Renderer::initObjectIDPipeline()
 	builder.setMultisamplingNone();
 	builder.disableBlending();
 	builder.enableDepthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);  // Reversed-Z
-	builder.setColorAttachmentFormat(VK_FORMAT_R8G8B8A8_UNORM);
+	builder.setColorAttachmentFormat(VK_FORMAT_R32_UINT);
 	builder.setDepthFormat(VK_FORMAT_D32_SFLOAT);
 	builder.m_pipelineLayout = m_objectIDPipelineLayout;
 
@@ -950,9 +950,9 @@ void Renderer::drawObjectIDPass(VkCommandBuffer cmd, FrameData& currentFrame)
 	                        VK_IMAGE_LAYOUT_UNDEFINED,
 	                        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
-	// Setup rendering attachment
+	// Setup rendering attachment (clear to 0 = no entity)
 	VkClearValue clearValue = {};
-	clearValue.color = {{0.0f, 0.0f, 0.0f, 0.0f}};  // Clear to 0 (no entity selected)
+	clearValue.color = {{0, 0, 0, 0}};
 
 	VkRenderingAttachmentInfo colorAttachment = vkinit::attachmentInfo(
 	    m_objectIDImage.m_imageView,
@@ -1117,16 +1117,11 @@ void Renderer::processPickingResult()
 		// GPU has finished, read the staging buffer
 		void* data;
 		vmaMapMemory(m_resourceManager->getAllocator(), m_pickingStagingBuffer.m_allocation, &data);
-		uint8_t* pixels = static_cast<uint8_t*>(data);
-		uint32_t r = pixels[0];
-		uint32_t g = pixels[1];
-		uint32_t b = pixels[2];
-		uint32_t a = pixels[3];
-		// Decode all 4 channels (RGBA) to support up to 4 billion unique IDs
-		m_lastPickedEntityID = (static_cast<uint64_t>(r) << 24) |
-		                       (static_cast<uint64_t>(g) << 16) |
-		                       (static_cast<uint64_t>(b) << 8) |
-		                       static_cast<uint64_t>(a);
+
+		// Direct read - no decoding needed with R32_UINT format
+		uint32_t* pixel = static_cast<uint32_t*>(data);
+		m_lastPickedEntityID = *pixel;
+
 		vmaUnmapMemory(m_resourceManager->getAllocator(), m_pickingStagingBuffer.m_allocation);
 
 		m_pickingResultReady = true;
