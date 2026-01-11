@@ -952,7 +952,7 @@ void Renderer::drawObjectIDPass(VkCommandBuffer cmd, FrameData& currentFrame)
 
 	// Setup rendering attachment
 	VkClearValue clearValue = {};
-	clearValue.color = {{0.0f, 0.0f, 0.0f, 0.0f}};  // Clear to 0 (no entity)
+	clearValue.color = {{0.0f, 0.0f, 0.0f, 0.0f}};  // Clear to 0 (no entity selected)
 
 	VkRenderingAttachmentInfo colorAttachment = vkinit::attachmentInfo(
 	    m_objectIDImage.m_imageView,
@@ -1054,7 +1054,7 @@ void Renderer::drawObjectIDPass(VkCommandBuffer cmd, FrameData& currentFrame)
 		ObjectIDPushConstants pushConstants;
 		pushConstants.m_worldMatrix = obj.m_transform;
 		pushConstants.m_vertexBuffer = obj.m_vertexBufferAddress;
-		pushConstants.m_entityID = static_cast<uint32_t>(obj.m_entityID & 0xFFFFFF);  // Use lower 24 bits
+		pushConstants.m_entityID = static_cast<uint32_t>(obj.m_entityID & 0xFFFFFFFF);  // Use full 32 bits
 		pushConstants.m_padding = 0;
 
 		vkCmdPushConstants(cmd,
@@ -1121,7 +1121,12 @@ void Renderer::processPickingResult()
 		uint32_t r = pixels[0];
 		uint32_t g = pixels[1];
 		uint32_t b = pixels[2];
-		m_lastPickedEntityID = (r << 16) | (g << 8) | b;
+		uint32_t a = pixels[3];
+		// Decode all 4 channels (RGBA) to support up to 4 billion unique IDs
+		m_lastPickedEntityID = (static_cast<uint64_t>(r) << 24) |
+		                       (static_cast<uint64_t>(g) << 16) |
+		                       (static_cast<uint64_t>(b) << 8) |
+		                       static_cast<uint64_t>(a);
 		vmaUnmapMemory(m_resourceManager->getAllocator(), m_pickingStagingBuffer.m_allocation);
 
 		m_pickingResultReady = true;

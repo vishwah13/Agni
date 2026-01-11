@@ -46,12 +46,12 @@ VertexOutput vertexMain(uint vertexIndex : SV_VertexID)
 [shader("fragment")]
 float4 fragmentMain(VertexOutput input) : SV_Target0
 {
-    // Encode entity ID as RGB color (supports up to 16 million unique IDs)
+    // Encode entity ID as RGBA color (supports up to 4 billion unique IDs)
     uint id = pushConstants.entityID;
     float4 color;
-    color.r = float((id >> 16) & 0xFF) / 255.0;
-    color.g = float((id >> 8) & 0xFF) / 255.0;
-    color.b = float(id & 0xFF) / 255.0;
-    color.a = 1.0;
+    color.r = float((id >> 24) & 0xFF) / 255.0;
+    color.g = float((id >> 16) & 0xFF) / 255.0;
+    color.b = float((id >> 8) & 0xFF) / 255.0;
+    color.a = float(id & 0xFF) / 255.0;
     return color;
 }
