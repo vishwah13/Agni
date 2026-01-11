@@ -514,14 +514,12 @@ void ECSInspector::renderGizmo(Camera* camera, VkExtent2D windowExtent)
 
 	// Get camera matrices
 	glm::mat4 view = camera->getViewMatrix();
+	// ImGuizmo expects OpenGL-style projection (no Y-flip, standard near/far order)
 	glm::mat4 projection = glm::perspective(
 	    glm::radians(70.f),
 	    (float) windowExtent.width / (float) windowExtent.height,
-	    10000.f,
-	    0.1f);
-
-	// Flip Y for Vulkan
-	projection[1][1] *= -1;
+	    0.1f,
+	    10000.f);
 
 	// Set ImGuizmo rect to cover full viewport
 	ImGuizmo::SetRect(0, 0, (float) windowExtent.width, (float) windowExtent.height);
