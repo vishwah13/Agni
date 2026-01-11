@@ -13,6 +13,11 @@ namespace agni::ecs
 class EntityFactory;
 }
 
+namespace agni::physics
+{
+class JoltPhysicsManager;
+}
+
 class Camera;
 
 namespace agni
@@ -23,7 +28,7 @@ namespace editor
 class ECSInspector
 {
 public:
-	ECSInspector(agni::ecs::World& world, agni::ecs::EntityFactory& entityFactory);
+	ECSInspector(agni::ecs::World& world, agni::ecs::EntityFactory& entityFactory, agni::physics::JoltPhysicsManager* physicsManager = nullptr);
 	~ECSInspector() = default;
 
 	// Render the inspector window
@@ -50,9 +55,16 @@ public:
 		return m_selectedEntity;
 	}
 
+	// Set physics manager reference (for gizmo physics sync)
+	void setPhysicsManager(agni::physics::JoltPhysicsManager* physicsManager)
+	{
+		m_physicsManager = physicsManager;
+	}
+
 private:
 	agni::ecs::World&         m_world;
 	agni::ecs::EntityFactory& m_entityFactory;
+	agni::physics::JoltPhysicsManager* m_physicsManager;
 	std::shared_ptr<LoadedGLTF> m_meshResources;
 
 	// Selected entity

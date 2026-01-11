@@ -103,6 +103,9 @@ void AgniEngine::init()
 	{
 		fmt::print("[AgniEngine] Failed to initialize Jolt physics\n");
 	}
+
+	// Give physics manager to editor for gizmo-physics sync
+	m_ecsInspector->setPhysicsManager(m_physicsManager.get());
 #endif
 
 	initDefaultData();
@@ -835,7 +838,7 @@ void AgniEngine::initDefaultData()
 
 	std::string meshPrimitivesPath = {"../../assets/MeshPrimitives.glb"};
 	// std::string structurePath = {"../../assets/structure.glb"};
-	std::string helmetPath = {"../../assets/LightTest.glb"};
+	std::string helmetPath = {"../../assets/free_1975_porsche_911_930_turbo.glb"};
 	// auto        structureFile = m_assetLoader.loadGltf(this, structurePath);
 	auto meshPrimitivesFile = m_assetLoader.loadGltf(this, meshPrimitivesPath);
 	auto helmetPathFile = m_assetLoader.loadGltf(this, helmetPath);

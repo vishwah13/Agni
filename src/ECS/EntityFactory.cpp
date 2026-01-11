@@ -117,7 +117,7 @@ flecs::entity EntityFactory::convertNodeRecursive(std::shared_ptr<Node> node, fl
 	// Empty node (just transform)
 	else
 	{
-		entity = m_world.get().entity("Node");
+		entity = m_world.get().entity();  // Auto-generate unique name
 		entity.set<TransformComponent>({});
 		entity.set<SceneNodeComponent>({});
 	}

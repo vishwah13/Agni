@@ -2,6 +2,10 @@
 #include <ECS/EntityFactory.hpp>
 #include <Camera.hpp>
 
+#ifdef AGNI_HAS_JOLT
+#include <Physics/JoltPhysicsManager.hpp>
+#endif
+
 #include <imgui.h>
 #include <ImGuizmo.h>
 #include <fmt/core.h>
@@ -13,9 +17,10 @@ namespace agni
 namespace editor
 {
 
-ECSInspector::ECSInspector(agni::ecs::World& world, agni::ecs::EntityFactory& entityFactory)
+ECSInspector::ECSInspector(agni::ecs::World& world, agni::ecs::EntityFactory& entityFactory, agni::physics::JoltPhysicsManager* physicsManager)
     : m_world(world)
     , m_entityFactory(entityFactory)
+    , m_physicsManager(physicsManager)
 {
 }
 
@@ -597,6 +602,20 @@ void ECSInspector::renderGizmo(Camera* camera, VkExtent2D windowExtent)
 				}
 			}
 		}
+
+#ifdef AGNI_HAS_JOLT
+		// Also update physics body if this entity has one
+		// This prevents physics from overwriting the gizmo changes
+		if (m_physicsManager)
+		{
+			const RigidBodyComponent* rigidbody = m_world.getComponent<RigidBodyComponent>(m_selectedEntity);
+			if (rigidbody && rigidbody->joltBodyID != 0)
+			{
+				// Update the physics body transform to match the new world transform
+				m_physicsManager->setBodyTransform(rigidbody->joltBodyID, matrix);
+			}
+		}
+#endif
 	}
 }
 
