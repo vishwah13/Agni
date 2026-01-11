@@ -1,5 +1,6 @@
 # Agni
-My personal Vulkan renderer
+
+My personal Game Engine featuring bleeding-edge Vulkan 1.4, physically-based rendering, entity-component-system architecture, and integrated physics simulation.
 
 ## Progress
 
@@ -9,15 +10,34 @@ My personal Vulkan renderer
 
 ## Features
 
-- Modern Vulkan rendering with dynamic rendering (VK_KHR_dynamic_rendering)
+### Rendering
+- Bleeding-edge Vulkan 1.4 with dynamic rendering
 - Physically-Based Rendering (PBR) with metallic-roughness workflow
-- glTF 2.0 model loading
+- glTF 2.0 model loading with automatic material extraction
 - Skybox rendering with cubemaps
 - Compute shader effects (gradients, raymarching, procedural sky)
-- ImGui integration with docking support
 - Frustum culling for performance optimization
 - MSAA (4x) anti-aliasing
-- Tracy Profiler integrationfor real-time performance analysis
+- Double-buffered frame overlap for GPU-CPU parallelism
+
+### Entity-Component-System (ECS)
+- Data-driven architecture using [Flecs](https://github.com/SanderMertens/flecs)
+- Transform hierarchy with dirty flag optimization
+- Modular systems: RenderSystem, LightSystem, PhysicsSystem
+- EntityFactory for converting glTF scenes to ECS entities
+
+### Physics
+- [Jolt Physics](https://github.com/jrouwe/JoltPhysics) integration for 3D simulation
+- Rigid body support (static, dynamic, kinematic)
+- Collider shapes: box, sphere, capsule
+- Physics system syncs transforms to ECS
+
+### Editor & Tools
+- ImGui integration with docking support
+- ECS Inspector for runtime entity/component debugging
+- [ImGuizmo](https://github.com/CedricGuillemet/ImGuizmo) for 3D transform gizmos
+- Tracy Profiler integration for real-time performance analysis
+- RenderDoc support for graphics debugging
 
 ## Building
 
@@ -84,8 +104,9 @@ If you prefer to use CMake directly:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `AGNI_COMPILE_SHADERS` | `ON` | Compile GLSL shaders to SPIR-V. Set to `OFF` to use pre-compiled `.spv` files |
+| `AGNI_COMPILE_SHADERS` | `ON` | Compile shaders to SPIR-V. Set to `OFF` to use pre-compiled `.spv` files |
 | `AGNI_ENABLE_TRACY` | `ON` | Enable Tracy profiler integration. Set to `OFF` for production builds |
+| `AGNI_ENABLE_JOLT` | `ON` | Enable Jolt Physics integration |
 
 ## Shader System
 
@@ -111,9 +132,13 @@ All dependencies are included as git submodules in `third_party/`:
 | [VMA](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator) | Vulkan memory allocation |
 | [glm](https://github.com/g-truc/glm) | Mathematics library |
 | [ImGui](https://github.com/ocornut/imgui) | Immediate mode GUI (docking branch) |
+| [ImGuizmo](https://github.com/CedricGuillemet/ImGuizmo) | 3D transform gizmos |
 | [fastgltf](https://github.com/spnda/fastgltf) | glTF 2.0 loader |
 | [stb_image](https://github.com/nothings/stb) | Image loading |
+| [mikktspace](https://github.com/mmikk/MikkTSpace) | Tangent space computation |
 | [fmt](https://github.com/fmtlib/fmt) | String formatting |
+| [Flecs](https://github.com/SanderMertens/flecs) | Entity-Component-System |
+| [Jolt Physics](https://github.com/jrouwe/JoltPhysics) | 3D physics simulation |
 | [Tracy](https://github.com/wolfpld/tracy) | Real-time profiler |
 
 ## Performance Profiling with Tracy
