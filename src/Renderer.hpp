@@ -85,13 +85,14 @@ public:
 	Renderer()  = default;
 	~Renderer() = default;
 
-	void init(VkDevice                     device,
-	          ResourceManager*             resourceManager,
-	          SwapchainManager*            swapchainManager,
-	          Camera*                      camera,
-	          Skybox*                      skybox,
-	          DescriptorAllocatorGrowable* globalDescriptorAllocator,
-	          VkExtent2D                   windowExtent);
+	void init(VkDevice                          device,
+	          ResourceManager*                resourceManager,
+	          SwapchainManager*               swapchainManager,
+	          Camera*                         camera,
+	          Skybox*                         skybox,
+	          DescriptorAllocatorGrowable*    globalDescriptorAllocator,
+	          const DescriptorBufferProperties& descriptorBufferProps,
+	          VkExtent2D                      windowExtent);
 	void cleanup();
 	void resize(VkExtent2D newExtent, VkSampleCountFlagBits msaaSamples);
 
@@ -122,6 +123,11 @@ public:
 	VkDescriptorSetLayout getGpuSceneDataDescriptorLayout() const
 	{
 		return m_gpuSceneDataDescriptorLayout;
+	}
+
+	DescriptorBufferAllocator& getGlobalMaterialDescriptorBuffer()
+	{
+		return m_globalMaterialDescriptorBuffer;
 	}
 
 	const AllocatedImage& getMsaaColorImage() const
@@ -186,6 +192,11 @@ private:
 	VkDescriptorSetLayout m_drawImageDescriptorLayout;
 	VkDescriptorSet       m_drawImageDescriptors;
 	VkDescriptorSetLayout m_gpuSceneDataDescriptorLayout;
+
+	// Descriptor buffer system
+	DescriptorLayoutInfo      m_gpuSceneDataLayoutInfo;
+	DescriptorBufferWriter    m_descriptorBufferWriter;
+	DescriptorBufferAllocator m_globalMaterialDescriptorBuffer;  // Shared for all materials
 
 	// Background effects
 	VkPipeline                 m_gradientPipeline;

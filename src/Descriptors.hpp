@@ -2,6 +2,9 @@
 
 #include <Types.hpp>
 
+// Forward declaration
+struct DescriptorLayoutInfo;
+
 struct DescriptorLayoutBuilder
 {
 
@@ -9,10 +12,17 @@ struct DescriptorLayoutBuilder
 
 	void                  addBinding(uint32_t binding, VkDescriptorType type);
 	void                  clear();
+
+	// Legacy method - creates layout for traditional descriptor sets
 	VkDescriptorSetLayout build(VkDevice           device,
 	                            VkShaderStageFlags shaderStages,
 	                            void*              m_pNext = nullptr,
 	                            VkDescriptorSetLayoutCreateFlags m_flags = 0);
+
+	// New method for VK_EXT_descriptor_buffer
+	// Creates layout with DESCRIPTOR_BUFFER flag and queries size/offsets
+	DescriptorLayoutInfo buildForDescriptorBuffer(VkDevice           device,
+	                                              VkShaderStageFlags shaderStages);
 };
 
 struct DescriptorAllocatorGrowable

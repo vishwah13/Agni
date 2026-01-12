@@ -1,5 +1,6 @@
 #pragma once
 
+#include <DescriptorBuffer.hpp>
 #include <Descriptors.hpp>
 #include <Types.hpp>
 
@@ -33,7 +34,7 @@ public:
 
 	// Draw the skybox
 	void draw(VkCommandBuffer cmd,
-	          VkDescriptorSet sceneDescriptor,
+	          VkDeviceSize    sceneDescriptorOffset,
 	          VkExtent2D      drawExtent);
 
 	// Clear only pipeline resources (for rebuilding pipelines)
@@ -54,13 +55,15 @@ private:
 	// Pipeline and material
 	MaterialPipeline      m_skyboxPipeline {};
 	VkDescriptorSetLayout m_skyboxMaterialLayout {VK_NULL_HANDLE};
+	DescriptorLayoutInfo  m_skyboxMaterialLayoutInfo {};  // For descriptor buffer
 	MaterialInstance*     m_skyboxMaterial {nullptr};
 
 	// Cubemap resources
 	AllocatedImage m_cubemapImage {};
 	VkSampler      m_cubemapSampler {VK_NULL_HANDLE};
 
-	DescriptorWriter m_writer;
+	DescriptorWriter       m_writer;
+	DescriptorBufferWriter m_bufferWriter;
 
 	// Internal helper methods
 	void createCubeMesh(AgniEngine* engine);
@@ -69,6 +72,11 @@ private:
 	writeMaterial(VkDevice                     device,
 	              const MaterialResources&     resources,
 	              DescriptorAllocatorGrowable& descriptorAllocator);
+
+	MaterialInstance
+	writeMaterialToBuffer(VkDevice                   device,
+	                      const MaterialResources&   resources,
+	                      DescriptorBufferAllocator& bufferAllocator);
 
 	AllocatedImage createCubemap(
 	    class ResourceManager&            resourceManager,

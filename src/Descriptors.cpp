@@ -1,4 +1,5 @@
 ﻿#include <Descriptors.hpp>
+#include <DescriptorBuffer.hpp>
 #include <VulkanTools.hpp>
 
 void DescriptorLayoutBuilder::addBinding(uint32_t         binding,
@@ -42,6 +43,43 @@ DescriptorLayoutBuilder::build(VkDevice                         device,
 	VK_CHECK(vkCreateDescriptorSetLayout(device, &info, nullptr, &set));
 
 	return set;
+}
+
+DescriptorLayoutInfo
+DescriptorLayoutBuilder::buildForDescriptorBuffer(VkDevice           device,
+                                                   VkShaderStageFlags shaderStages)
+{
+	// Apply shader stages to all bindings
+	for (auto& b : m_bindings)
+	{
+		b.stageFlags |= shaderStages;
+	}
+
+	// Create layout with descriptor buffer flag
+	VkDescriptorSetLayoutCreateInfo info {};
+	info.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	info.pNext        = nullptr;
+	info.pBindings    = m_bindings.data();
+	info.bindingCount = static_cast<uint32_t>(m_bindings.size());
+	info.flags        = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+
+	DescriptorLayoutInfo result {};
+	VK_CHECK(vkCreateDescriptorSetLayout(device, &info, nullptr, &result.layout));
+
+	// Query the total size needed for this layout
+	vkGetDescriptorSetLayoutSizeEXT(device, result.layout, &result.size);
+
+	// Query binding offsets for each binding
+	result.bindingOffsets.resize(m_bindings.size());
+	for (size_t i = 0; i < m_bindings.size(); i++)
+	{
+		vkGetDescriptorSetLayoutBindingOffsetEXT(device,
+		                                          result.layout,
+		                                          m_bindings[i].binding,
+		                                          &result.bindingOffsets[i]);
+	}
+
+	return result;
 }
 
 void DescriptorAllocatorGrowable::init(VkDevice                 device,

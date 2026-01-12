@@ -1,5 +1,6 @@
 #pragma once
 
+#include <DescriptorBuffer.hpp>
 #include <Descriptors.hpp>
 #include <Texture.hpp>
 #include <Types.hpp>
@@ -25,7 +26,8 @@ struct MaterialPipeline
 struct MaterialInstance
 {
 	MaterialPipeline* m_pipeline;
-	VkDescriptorSet   m_materialSet;
+	VkDescriptorSet   m_materialSet;        // Legacy descriptor set (still used)
+	VkDeviceSize      m_descriptorOffset;   // Descriptor buffer offset (new system)
 	MaterialPass      m_passType;
 };
 
@@ -35,6 +37,7 @@ struct GltfPbrMaterial
 	MaterialPipeline m_transparentPipeline {};
 
 	VkDescriptorSetLayout m_materialLayout {VK_NULL_HANDLE};
+	DescriptorLayoutInfo  m_materialLayoutInfo {};  // For descriptor buffer
 
 	struct MaterialConstants
 	{
@@ -54,7 +57,8 @@ struct GltfPbrMaterial
 		uint32_t    m_dataBufferOffset;
 	};
 
-	DescriptorWriter m_writer;
+	DescriptorWriter       m_writer;        // Legacy writer
+	DescriptorBufferWriter m_bufferWriter;  // Descriptor buffer writer
 
 	void buildPipelines(AgniEngine* engine);
 
@@ -69,4 +73,11 @@ struct GltfPbrMaterial
 	              MaterialPass                 pass,
 	              const MaterialResources&     resources,
 	              DescriptorAllocatorGrowable& descriptorAllocator);
+
+	// New method for descriptor buffer path
+	MaterialInstance
+	writeMaterialToBuffer(VkDevice                  device,
+	                      MaterialPass              pass,
+	                      const MaterialResources&  resources,
+	                      DescriptorBufferAllocator& bufferAllocator);
 };

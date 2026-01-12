@@ -69,13 +69,14 @@ static bool isVisible(const RenderObject& obj, const glm::mat4& viewproj)
 	}
 }
 
-void Renderer::init(VkDevice                     device,
-                    ResourceManager*             resourceManager,
-                    SwapchainManager*            swapchainManager,
-                    Camera*                      camera,
-                    Skybox*                      skybox,
-                    DescriptorAllocatorGrowable* globalDescriptorAllocator,
-                    VkExtent2D                   windowExtent)
+void Renderer::init(VkDevice                          device,
+                    ResourceManager*                  resourceManager,
+                    SwapchainManager*                 swapchainManager,
+                    Camera*                           camera,
+                    Skybox*                           skybox,
+                    DescriptorAllocatorGrowable*      globalDescriptorAllocator,
+                    const DescriptorBufferProperties& descriptorBufferProps,
+                    VkExtent2D                        windowExtent)
 {
 	m_device                     = device;
 	m_resourceManager            = resourceManager;
@@ -83,6 +84,16 @@ void Renderer::init(VkDevice                     device,
 	m_camera                     = camera;
 	m_skybox                     = skybox;
 	m_globalDescriptorAllocator  = globalDescriptorAllocator;
+
+	// Initialize descriptor buffer writer
+	m_descriptorBufferWriter.init(device, descriptorBufferProps);
+
+	// Initialize global material descriptor buffer (shared by all materials)
+	m_globalMaterialDescriptorBuffer.init(device,
+	                                       resourceManager,
+	                                       descriptorBufferProps,
+	                                       4 * 1024 * 1024,  // 4MB for all materials
+	                                       true);             // Include samplers
 
 	initRenderTargets(windowExtent);
 	initDescriptors();
@@ -117,6 +128,9 @@ void Renderer::cleanup()
 	// Cleanup descriptor layouts
 	vkDestroyDescriptorSetLayout(m_device, m_drawImageDescriptorLayout, nullptr);
 	vkDestroyDescriptorSetLayout(m_device, m_gpuSceneDataDescriptorLayout, nullptr);
+
+	// Cleanup descriptor buffers
+	m_globalMaterialDescriptorBuffer.destroy();
 
 	// Clear loaded scenes
 	m_loadedScenes.clear();
@@ -244,13 +258,14 @@ void Renderer::initDescriptors()
 	m_drawImageDescriptors =
 	m_globalDescriptorAllocator->allocate(m_device, m_drawImageDescriptorLayout);
 
-	// Create descriptor set layout for GPU scene data + lights
+	// Create descriptor set layout for GPU scene data + lights (using descriptor buffer)
 	{
 		DescriptorLayoutBuilder builder;
 		builder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);   // Scene data
 		builder.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);   // Light data
-		m_gpuSceneDataDescriptorLayout = builder.build(
+		m_gpuSceneDataLayoutInfo = builder.buildForDescriptorBuffer(
 		m_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+		m_gpuSceneDataDescriptorLayout = m_gpuSceneDataLayoutInfo.layout;
 	}
 
 	// Write descriptor for draw image
@@ -309,6 +324,7 @@ void Renderer::initBackgroundPipelines()
 	computePipelineCreateInfo.sType =
 	VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
 	computePipelineCreateInfo.pNext              = nullptr;
+	computePipelineCreateInfo.flags              = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
 	computePipelineCreateInfo.layout             = m_gradientPipelineLayout;
 	computePipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
 	computePipelineCreateInfo.stage              = stageinfo;
@@ -585,13 +601,13 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	//  allocate a new uniform buffer for the scene data
 	AllocatedBuffer gpuSceneDataBuffer =
 	m_resourceManager->createBuffer(sizeof(GPUSceneData),
-	                               VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+	                               VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 	                               VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 	// allocate storage buffer for light data
 	AllocatedBuffer gpuLightDataBuffer =
 	m_resourceManager->createBuffer(sizeof(GPULightData),
-	                               VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+	                               VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 	                               VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 	// add buffers to the deletion queue of this frame so they get deleted once used
@@ -622,23 +638,50 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 		lightData->m_spotLights[i] = m_mainDrawContext.m_SpotLights[i];
 	}
 
-	// create a descriptor set that binds both buffers and update it
-	VkDescriptorSet globalDescriptor =
-	currentFrame.m_frameDescriptors.allocate(
-	m_device, m_gpuSceneDataDescriptorLayout);
+	// Allocate descriptor buffer space for scene data
+	VkDeviceSize sceneDescriptorOffset = currentFrame.m_descriptorBuffer.allocate(m_gpuSceneDataLayoutInfo);
 
-	DescriptorWriter writer;
-	writer.writeBuffer(0,
-	                   gpuSceneDataBuffer.m_buffer,
-	                   sizeof(GPUSceneData),
-	                   0,
-	                   VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-	writer.writeBuffer(1,
-	                   gpuLightDataBuffer.m_buffer,
-	                   sizeof(GPULightData),
-	                   0,
-	                   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-	writer.updateSet(m_device, globalDescriptor);
+	// Get buffer device addresses
+	VkBufferDeviceAddressInfo addressInfo {};
+	addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+
+	addressInfo.buffer = gpuSceneDataBuffer.m_buffer;
+	VkDeviceAddress sceneDataAddress = vkGetBufferDeviceAddress(m_device, &addressInfo);
+
+	addressInfo.buffer = gpuLightDataBuffer.m_buffer;
+	VkDeviceAddress lightDataAddress = vkGetBufferDeviceAddress(m_device, &addressInfo);
+
+	// Write descriptors directly to descriptor buffer
+	void* sceneDescriptorPtr = currentFrame.m_descriptorBuffer.getPtrAtOffset(sceneDescriptorOffset);
+
+	// Binding 0: Scene data uniform buffer
+	m_descriptorBufferWriter.writeUniformBuffer(sceneDescriptorPtr,
+	                                             m_gpuSceneDataLayoutInfo.bindingOffsets[0],
+	                                             sceneDataAddress,
+	                                             sizeof(GPUSceneData));
+
+	// Binding 1: Light data storage buffer
+	m_descriptorBufferWriter.writeStorageBuffer(sceneDescriptorPtr,
+	                                             m_gpuSceneDataLayoutInfo.bindingOffsets[1],
+	                                             lightDataAddress,
+	                                             sizeof(GPULightData));
+
+	// Bind descriptor buffers once before any draws
+	VkDescriptorBufferBindingInfoEXT bufferBindings[2] = {};
+
+	// Buffer 0: Frame descriptor buffer (scene data)
+	bufferBindings[0].sType   = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT;
+	bufferBindings[0].address = currentFrame.m_descriptorBuffer.getDeviceAddress();
+	bufferBindings[0].usage   = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
+	                            VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT;
+
+	// Buffer 1: Global material descriptor buffer
+	bufferBindings[1].sType   = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT;
+	bufferBindings[1].address = m_globalMaterialDescriptorBuffer.getDeviceAddress();
+	bufferBindings[1].usage   = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
+	                            VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT;
+
+	vkCmdBindDescriptorBuffersEXT(cmd, 2, bufferBindings);
 
 	// keep track of what state we are binding
 	MaterialPipeline* lastPipeline    = nullptr;
@@ -658,14 +701,16 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 				vkCmdBindPipeline(cmd,
 				                  VK_PIPELINE_BIND_POINT_GRAPHICS,
 				                  r.m_material->m_pipeline->m_pipeline);
-				vkCmdBindDescriptorSets(cmd,
-				                        VK_PIPELINE_BIND_POINT_GRAPHICS,
-				                        r.m_material->m_pipeline->m_layout,
-				                        0,
-				                        1,
-				                        &globalDescriptor,
-				                        0,
-				                        nullptr);
+
+				// Bind descriptor buffer offsets for scene data (set 0)
+				uint32_t sceneBufferIndex = 0;
+				vkCmdSetDescriptorBufferOffsetsEXT(cmd,
+				                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+				                                    r.m_material->m_pipeline->m_layout,
+				                                    0,  // first set
+				                                    1,  // descriptor count
+				                                    &sceneBufferIndex,
+				                                    &sceneDescriptorOffset);
 
 				// set dynamic viewport and scissor
 				VkViewport viewport = {};
@@ -687,14 +732,15 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 				vkCmdSetScissor(cmd, 0, 1, &scissor);
 			}
 
-			vkCmdBindDescriptorSets(cmd,
-			                        VK_PIPELINE_BIND_POINT_GRAPHICS,
-			                        r.m_material->m_pipeline->m_layout,
-			                        1,
-			                        1,
-			                        &r.m_material->m_materialSet,
-			                        0,
-			                        nullptr);
+			// Bind descriptor buffer offset for material data (set 1)
+			uint32_t materialBufferIndex = 1;
+			vkCmdSetDescriptorBufferOffsetsEXT(cmd,
+			                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+			                                    r.m_material->m_pipeline->m_layout,
+			                                    1,  // second set
+			                                    1,  // descriptor count
+			                                    &materialBufferIndex,
+			                                    &r.m_material->m_descriptorOffset);
 		}
 
 		// rebind index buffer if needed
@@ -748,7 +794,7 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 		ZoneScopedN("Draw Skybox");
 #endif
 		// Draw skybox last (after all geometry)
-		m_skybox->draw(cmd, globalDescriptor, m_drawExtent);
+		m_skybox->draw(cmd, sceneDescriptorOffset, m_drawExtent);
 	}
 
 	vkCmdEndRendering(cmd);
@@ -998,6 +1044,7 @@ void Renderer::initObjectIDPipeline()
 	builder.setColorAttachmentFormat(VK_FORMAT_R32_UINT);
 	builder.setDepthFormat(VK_FORMAT_D32_SFLOAT);
 	builder.m_pipelineLayout = m_objectIDPipelineLayout;
+	builder.enableDescriptorBuffer();
 
 	m_objectIDPipeline = builder.buildPipeline(m_device);
 
@@ -1069,13 +1116,13 @@ void Renderer::drawObjectIDPass(VkCommandBuffer cmd, FrameData& currentFrame)
 	// Create temporary scene data buffer (like drawGeometry does)
 	AllocatedBuffer gpuSceneDataBuffer =
 	    m_resourceManager->createBuffer(sizeof(GPUSceneData),
-	                                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+	                                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 	                                    VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 	// Create temporary light data buffer (required by descriptor layout)
 	AllocatedBuffer gpuLightDataBuffer =
 	    m_resourceManager->createBuffer(sizeof(GPULightData),
-	                                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+	                                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 	                                    VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 	// Schedule deletion after frame is done
@@ -1095,31 +1142,50 @@ void Renderer::drawObjectIDPass(VkCommandBuffer cmd, FrameData& currentFrame)
 	lightData->m_numPointLights = 0;
 	lightData->m_numSpotLights = 0;
 
-	// Bind scene descriptor
-	VkDescriptorSet globalDescriptor = currentFrame.m_frameDescriptors.allocate(
-	    m_device, m_gpuSceneDataDescriptorLayout);
+	// Allocate descriptor buffer space for scene data
+	VkDeviceSize sceneDescriptorOffset = currentFrame.m_descriptorBuffer.allocate(m_gpuSceneDataLayoutInfo);
 
-	DescriptorWriter writer;
-	writer.writeBuffer(0,
-	                   gpuSceneDataBuffer.m_buffer,
-	                   sizeof(GPUSceneData),
-	                   0,
-	                   VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-	writer.writeBuffer(1,
-	                   gpuLightDataBuffer.m_buffer,
-	                   sizeof(GPULightData),
-	                   0,
-	                   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-	writer.updateSet(m_device, globalDescriptor);
+	// Get buffer device addresses
+	VkBufferDeviceAddressInfo addressInfo {};
+	addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
 
-	vkCmdBindDescriptorSets(cmd,
-	                        VK_PIPELINE_BIND_POINT_GRAPHICS,
-	                        m_objectIDPipelineLayout,
-	                        0,
-	                        1,
-	                        &globalDescriptor,
-	                        0,
-	                        nullptr);
+	addressInfo.buffer = gpuSceneDataBuffer.m_buffer;
+	VkDeviceAddress sceneDataAddress = vkGetBufferDeviceAddress(m_device, &addressInfo);
+
+	addressInfo.buffer = gpuLightDataBuffer.m_buffer;
+	VkDeviceAddress lightDataAddress = vkGetBufferDeviceAddress(m_device, &addressInfo);
+
+	// Write descriptors directly to descriptor buffer
+	void* sceneDescriptorPtr = currentFrame.m_descriptorBuffer.getPtrAtOffset(sceneDescriptorOffset);
+
+	m_descriptorBufferWriter.writeUniformBuffer(sceneDescriptorPtr,
+	                                             m_gpuSceneDataLayoutInfo.bindingOffsets[0],
+	                                             sceneDataAddress,
+	                                             sizeof(GPUSceneData));
+
+	m_descriptorBufferWriter.writeStorageBuffer(sceneDescriptorPtr,
+	                                             m_gpuSceneDataLayoutInfo.bindingOffsets[1],
+	                                             lightDataAddress,
+	                                             sizeof(GPULightData));
+
+	// Bind descriptor buffers (frame buffer only - no materials in picking pass)
+	VkDescriptorBufferBindingInfoEXT bufferBinding = {};
+	bufferBinding.sType   = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT;
+	bufferBinding.address = currentFrame.m_descriptorBuffer.getDeviceAddress();
+	bufferBinding.usage   = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
+	                        VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT;
+
+	vkCmdBindDescriptorBuffersEXT(cmd, 1, &bufferBinding);
+
+	// Set descriptor buffer offset for scene data (set 0)
+	uint32_t bufferIndex = 0;
+	vkCmdSetDescriptorBufferOffsetsEXT(cmd,
+	                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+	                                    m_objectIDPipelineLayout,
+	                                    0,  // first set
+	                                    1,  // descriptor count
+	                                    &bufferIndex,
+	                                    &sceneDescriptorOffset);
 
 	// Draw all opaque objects with their entity IDs
 	VkBuffer lastIndexBuffer = VK_NULL_HANDLE;

@@ -10,6 +10,8 @@ add_executable (engine
   Images.cpp
   Descriptors.hpp
   Descriptors.cpp
+  DescriptorBuffer.hpp
+  DescriptorBuffer.cpp
   Pipelines.hpp
   Pipelines.cpp
   AgniEngine.hpp

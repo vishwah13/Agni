@@ -114,6 +114,8 @@ void PipelineBuilder::clear()
 	m_renderInfo = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
 
 	m_shaderStages.clear();
+
+	m_flags = 0;
 }
 
 VkPipeline PipelineBuilder::buildPipeline(VkDevice device)
@@ -150,6 +152,7 @@ VkPipeline PipelineBuilder::buildPipeline(VkDevice device)
 	.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
 	// connect the renderInfo to the pNext extension mechanism
 	pipelineInfo.pNext = &m_renderInfo;
+	pipelineInfo.flags = m_flags;
 
 	pipelineInfo.stageCount          = (uint32_t) m_shaderStages.size();
 	pipelineInfo.pStages             = m_shaderStages.data();
@@ -184,6 +187,11 @@ VkPipeline PipelineBuilder::buildPipeline(VkDevice device)
 	{
 		return newPipeline;
 	}
+}
+
+void PipelineBuilder::enableDescriptorBuffer()
+{
+	m_flags |= VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
 }
 
 void PipelineBuilder::setShaders(VkShaderModule vertexShader,

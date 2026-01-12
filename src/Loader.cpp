@@ -204,7 +204,7 @@ void AssetLoader::buildPipelines(AgniEngine* engine)
 		// Create buffer for default material constants
 		m_defaultMaterialBuffer = m_resourceManager->createBuffer(
 			sizeof(GltfPbrMaterial::MaterialConstants),
-			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 			VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 		// Set default material constants (white, non-metallic, medium roughness)
@@ -222,10 +222,10 @@ void AssetLoader::buildPipelines(AgniEngine* engine)
 		materialResources.m_dataBuffer        = m_defaultMaterialBuffer.m_buffer;
 		materialResources.m_dataBufferOffset  = 0;
 
-		// Create the default material
+		// Create the default material using descriptor buffer
 		m_defaultMaterial       = std::make_shared<GLTFMaterial>();
-		m_defaultMaterial->m_data = m_metalRoughMaterial.writeMaterial(
-			m_device, MaterialPass::MainColor, materialResources, m_defaultMaterialDescriptorPool);
+		m_defaultMaterial->m_data = m_metalRoughMaterial.writeMaterialToBuffer(
+			m_device, MaterialPass::MainColor, materialResources, engine->m_renderer.getGlobalMaterialDescriptorBuffer());
 	}
 	else
 	{
@@ -652,7 +652,7 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 	{
 		file.m_materialDataBuffer = engine->m_resourceManager.createBuffer(
 		sizeof(GltfPbrMaterial::MaterialConstants) * gltf.materials.size(),
-		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 		VMA_MEMORY_USAGE_CPU_TO_GPU);
 		sceneMaterialConstants = (GltfPbrMaterial::MaterialConstants*)
 		file.m_materialDataBuffer.m_info.pMappedData;
@@ -742,9 +742,9 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 			materialResources.m_aoTexture.image   = images[img];
 			materialResources.m_aoTexture.sampler = samplerMapping[sampler];
 		}
-		// build material
-		newMat->m_data = engine->m_assetLoader.getMaterialSystem().writeMaterial(
-		engine->m_device, passType, materialResources, file.m_descriptorPool);
+		// build material using descriptor buffer
+		newMat->m_data = engine->m_assetLoader.getMaterialSystem().writeMaterialToBuffer(
+		engine->m_device, passType, materialResources, engine->m_renderer.getGlobalMaterialDescriptorBuffer());
 
 		dataIndex++;
 	}

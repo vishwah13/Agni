@@ -5,6 +5,7 @@
 
 #include <Camera.hpp>
 #include <Components.hpp>
+#include <DescriptorBuffer.hpp>
 #include <Descriptors.hpp>
 #include <ECS/EntityFactory.hpp>
 #include <ECS/World.hpp>
@@ -43,6 +44,8 @@ struct FrameData
 	DeletionQueue m_deletionQueue;
 	// To allocate descriptor sets at runtime.
 	DescriptorAllocatorGrowable m_frameDescriptors;
+	// Descriptor buffer allocator (replaces m_frameDescriptors)
+	DescriptorBufferAllocator m_descriptorBuffer;
 };
 
 class MeshNode : public Node
@@ -139,6 +142,9 @@ public:
 	VkDevice                 m_device;    // Vulkan device for commands
 	VkSurfaceKHR             m_surface;   // Vulkan window surface
 	VkDescriptorPool         m_imguiPool {VK_NULL_HANDLE}; // ImGui descriptor pool
+
+	// Descriptor buffer extension properties
+	DescriptorBufferProperties m_descriptorBufferProps {};
 
 	FrameData m_frames[FRAME_OVERLAP];
 

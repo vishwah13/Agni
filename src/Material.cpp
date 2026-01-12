@@ -48,9 +48,14 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 		layoutBuilder.addBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 		layoutBuilder.addBinding(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-		m_materialLayout = layoutBuilder.build(engine->m_device,
-		                                       VK_SHADER_STAGE_VERTEX_BIT |
-		                                       VK_SHADER_STAGE_FRAGMENT_BIT);
+		// Build for descriptor buffer
+		m_materialLayoutInfo = layoutBuilder.buildForDescriptorBuffer(
+			engine->m_device,
+			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+		m_materialLayout = m_materialLayoutInfo.layout;
+
+		// Initialize buffer writer
+		m_bufferWriter.init(engine->m_device, engine->m_descriptorBufferProps);
 	}
 
 	VkDescriptorSetLayout layouts[] = {
@@ -90,6 +95,9 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 
 	// use the triangle layout we created
 	pipelineBuilder.m_pipelineLayout = newLayout;
+
+	// Enable descriptor buffer extension
+	pipelineBuilder.enableDescriptorBuffer();
 
 	// finally build the pipeline
 	m_opaquePipeline.m_pipeline =
@@ -193,6 +201,74 @@ GltfPbrMaterial::writeMaterial(VkDevice                     device,
 
 	// use the materialSet and update it here.
 	m_writer.updateSet(device, matData.m_materialSet);
+
+	return matData;
+}
+
+MaterialInstance
+GltfPbrMaterial::writeMaterialToBuffer(VkDevice                   device,
+                                        MaterialPass               pass,
+                                        const MaterialResources&   resources,
+                                        DescriptorBufferAllocator& bufferAllocator)
+{
+	MaterialInstance matData;
+	matData.m_passType = pass;
+	if (pass == MaterialPass::Transparent)
+	{
+		matData.m_pipeline = &m_transparentPipeline;
+	}
+	else
+	{
+		matData.m_pipeline = &m_opaquePipeline;
+	}
+
+	// Allocate space in descriptor buffer
+	matData.m_descriptorOffset = bufferAllocator.allocate(m_materialLayoutInfo);
+
+	// Get pointer to write descriptors
+	void* bufferPtr = bufferAllocator.getPtrAtOffset(matData.m_descriptorOffset);
+
+	// Get buffer device address for uniform buffer
+	VkBufferDeviceAddressInfo addressInfo {};
+	addressInfo.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+	addressInfo.buffer = resources.m_dataBuffer;
+	VkDeviceAddress bufferAddress = vkGetBufferDeviceAddress(device, &addressInfo);
+	bufferAddress += resources.m_dataBufferOffset;
+
+	// Write descriptors directly to buffer
+	// Binding 0: Uniform buffer (material constants)
+	m_bufferWriter.writeUniformBuffer(bufferPtr,
+	                                   m_materialLayoutInfo.bindingOffsets[0],
+	                                   bufferAddress,
+	                                   sizeof(MaterialConstants));
+
+	// Binding 1: Color texture
+	m_bufferWriter.writeImageSampler(bufferPtr,
+	                                  m_materialLayoutInfo.bindingOffsets[1],
+	                                  resources.m_colorTexture.image.m_imageView,
+	                                  resources.m_colorTexture.sampler,
+	                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+	// Binding 2: Metal-rough texture
+	m_bufferWriter.writeImageSampler(bufferPtr,
+	                                  m_materialLayoutInfo.bindingOffsets[2],
+	                                  resources.m_metalRoughTexture.image.m_imageView,
+	                                  resources.m_metalRoughTexture.sampler,
+	                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+	// Binding 3: Normal texture
+	m_bufferWriter.writeImageSampler(bufferPtr,
+	                                  m_materialLayoutInfo.bindingOffsets[3],
+	                                  resources.m_normalTexture.image.m_imageView,
+	                                  resources.m_normalTexture.sampler,
+	                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+	// Binding 4: AO texture
+	m_bufferWriter.writeImageSampler(bufferPtr,
+	                                  m_materialLayoutInfo.bindingOffsets[4],
+	                                  resources.m_aoTexture.image.m_imageView,
+	                                  resources.m_aoTexture.sampler,
+	                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	return matData;
 }

@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include <Components.hpp>
+#include <DescriptorBuffer.hpp>
 #include <Descriptors.hpp>
 #include <Material.hpp>
 #include <Scene.hpp>

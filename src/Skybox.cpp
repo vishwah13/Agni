@@ -81,9 +81,14 @@ void Skybox::buildPipelines(AgniEngine* engine)
 		DescriptorLayoutBuilder layoutBuilder;
 		layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-		m_skyboxMaterialLayout = layoutBuilder.build(engine->m_device,
-		                                             VK_SHADER_STAGE_VERTEX_BIT |
-		                                             VK_SHADER_STAGE_FRAGMENT_BIT);
+		// Build for descriptor buffer
+		m_skyboxMaterialLayoutInfo = layoutBuilder.buildForDescriptorBuffer(
+		    engine->m_device,
+		    VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+		m_skyboxMaterialLayout = m_skyboxMaterialLayoutInfo.layout;
+
+		// Initialize buffer writer
+		m_bufferWriter.init(engine->m_device, engine->m_descriptorBufferProps);
 	}
 
 	VkDescriptorSetLayout layouts[] = {
@@ -124,6 +129,9 @@ void Skybox::buildPipelines(AgniEngine* engine)
 
 	// use the triangle layout we created
 	pipelineBuilder.m_pipelineLayout = newLayout;
+
+	// Enable descriptor buffer extension
+	pipelineBuilder.enableDescriptorBuffer();
 
 	// finally build the pipeline
 	m_skyboxPipeline.m_pipeline =
@@ -168,7 +176,7 @@ void Skybox::cleanup(AgniEngine* engine)
 }
 
 void Skybox::draw(VkCommandBuffer cmd,
-                  VkDescriptorSet sceneDescriptor,
+                  VkDeviceSize    sceneDescriptorOffset,
                   VkExtent2D      drawExtent)
 {
 #ifdef TRACY_ENABLE
@@ -198,25 +206,26 @@ void Skybox::draw(VkCommandBuffer cmd,
 
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
 
+	// Set descriptor buffer offsets (buffers already bound by drawGeometry)
 	// Bind scene descriptor (set 0)
-	vkCmdBindDescriptorSets(cmd,
-	                        VK_PIPELINE_BIND_POINT_GRAPHICS,
-	                        m_skyboxPipeline.m_layout,
-	                        0,
-	                        1,
-	                        &sceneDescriptor,
-	                        0,
-	                        nullptr);
+	uint32_t sceneBufferIndex = 0;
+	vkCmdSetDescriptorBufferOffsetsEXT(cmd,
+	                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+	                                    m_skyboxPipeline.m_layout,
+	                                    0,  // first set
+	                                    1,  // descriptor count
+	                                    &sceneBufferIndex,
+	                                    &sceneDescriptorOffset);
 
 	// Bind skybox material descriptor (set 1)
-	vkCmdBindDescriptorSets(cmd,
-	                        VK_PIPELINE_BIND_POINT_GRAPHICS,
-	                        m_skyboxPipeline.m_layout,
-	                        1,
-	                        1,
-	                        &m_skyboxMaterial->m_materialSet,
-	                        0,
-	                        nullptr);
+	uint32_t materialBufferIndex = 1;
+	vkCmdSetDescriptorBufferOffsetsEXT(cmd,
+	                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+	                                    m_skyboxPipeline.m_layout,
+	                                    1,  // second set
+	                                    1,  // descriptor count
+	                                    &materialBufferIndex,
+	                                    &m_skyboxMaterial->m_descriptorOffset);
 
 	// Bind index buffer
 	vkCmdBindIndexBuffer(
@@ -296,9 +305,9 @@ void Skybox::createMaterial(AgniEngine* engine)
 	skyboxResources.m_cubemapImage   = m_cubemapImage;
 	skyboxResources.m_cubemapSampler = m_cubemapSampler;
 
-	// Write skybox material
-	m_skyboxMaterial = new MaterialInstance(writeMaterial(
-	engine->m_device, skyboxResources, engine->m_globalDescriptorAllocator));
+	// Write skybox material using descriptor buffer
+	m_skyboxMaterial = new MaterialInstance(writeMaterialToBuffer(
+	engine->m_device, skyboxResources, engine->m_renderer.getGlobalMaterialDescriptorBuffer()));
 }
 
 void Skybox::clearPipelineResources(VkDevice device)
@@ -338,6 +347,31 @@ Skybox::writeMaterial(VkDevice                     device,
 
 	// use the materialSet and update it here.
 	m_writer.updateSet(device, matData.m_materialSet);
+
+	return matData;
+}
+
+MaterialInstance
+Skybox::writeMaterialToBuffer(VkDevice                   device,
+                               const MaterialResources&   resources,
+                               DescriptorBufferAllocator& bufferAllocator)
+{
+	MaterialInstance matData;
+	matData.m_passType = MaterialPass::Other;
+	matData.m_pipeline = &m_skyboxPipeline;
+
+	// Allocate space in descriptor buffer
+	matData.m_descriptorOffset = bufferAllocator.allocate(m_skyboxMaterialLayoutInfo);
+
+	// Get pointer to write descriptors
+	void* bufferPtr = bufferAllocator.getPtrAtOffset(matData.m_descriptorOffset);
+
+	// Write cubemap sampler (binding 0)
+	m_bufferWriter.writeImageSampler(bufferPtr,
+	                                  m_skyboxMaterialLayoutInfo.bindingOffsets[0],
+	                                  resources.m_cubemapImage.m_imageView,
+	                                  resources.m_cubemapSampler,
+	                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	return matData;
 }

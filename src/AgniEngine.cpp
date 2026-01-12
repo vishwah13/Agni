@@ -75,6 +75,7 @@ void AgniEngine::init()
 	                &m_mainCamera,
 	                &m_skybox,
 	                &m_globalDescriptorAllocator,
+	                m_descriptorBufferProps,
 	                m_windowExtent);
 
 	// Initialize asset loader (creates default textures and samplers)
@@ -210,6 +211,7 @@ void AgniEngine::draw()
 
 	getCurrentFrame().m_deletionQueue.flush();
 	getCurrentFrame().m_frameDescriptors.clearPools(m_device);
+	getCurrentFrame().m_descriptorBuffer.reset();  // Reset descriptor buffer allocator
 	VK_CHECK(vkResetFences(m_device, 1, &getCurrentFrame().m_renderFence));
 
 	// request image from the swapchain
@@ -550,6 +552,11 @@ void AgniEngine::initVulkan()
 	.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES};
 	features11.shaderDrawParameters = true;  // Required for SV_VertexID in Slang shaders
 
+	// VK_EXT_descriptor_buffer features
+	VkPhysicalDeviceDescriptorBufferFeaturesEXT descriptorBufferFeatures {
+	.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT};
+	descriptorBufferFeatures.descriptorBuffer = VK_TRUE;
+
 	// use vkbootstrap to select a gpu.
 	vkb::PhysicalDeviceSelector selector {vkbInstance};
 	vkb::PhysicalDevice physicalDevice = selector.set_minimum_version(1, 3)
@@ -557,12 +564,14 @@ void AgniEngine::initVulkan()
 	                                     .set_required_features_13(features13)
 	                                     .set_required_features_12(features12)
 	                                     .set_required_features_11(features11)
+	                                     .add_required_extension(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME)
 	                                     .set_surface(m_surface)
 	                                     .select()
 	                                     .value();
 
 	// create the final vulkan device
 	vkb::DeviceBuilder deviceBuilder {physicalDevice};
+	deviceBuilder.add_pNext(&descriptorBufferFeatures);
 
 	vkb::Device vkbDevice = deviceBuilder.build().value();
 
@@ -571,6 +580,9 @@ void AgniEngine::initVulkan()
 
 	// Load device-level Vulkan function pointers
 	volkLoadDevice(m_device);
+
+	// Query descriptor buffer properties
+	DescriptorBufferAllocator::queryProperties(m_chosenGPU, m_descriptorBufferProps);
 
 	// use vkbootstrap to get a Graphics queue
 	m_graphicsQueue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
@@ -739,8 +751,18 @@ void AgniEngine::initDescriptors()
 		m_frames[i].m_frameDescriptors = DescriptorAllocatorGrowable {};
 		m_frames[i].m_frameDescriptors.init(m_device, 1000, frameSizes);
 
+		// Initialize descriptor buffer allocator
+		m_frames[i].m_descriptorBuffer.init(m_device,
+		                                     &m_resourceManager,
+		                                     m_descriptorBufferProps,
+		                                     1024 * 1024,  // 1MB per frame
+		                                     true);         // Include samplers
+
 		m_resourceManager.getMainDeletionQueue().push_function(
-		[&, i]() { m_frames[i].m_frameDescriptors.destroyPools(m_device); });
+		[&, i]() {
+			m_frames[i].m_frameDescriptors.destroyPools(m_device);
+			m_frames[i].m_descriptorBuffer.destroy();
+		});
 	}
 
 	// adding vkDestroyDescriptorPool to the deletion queue

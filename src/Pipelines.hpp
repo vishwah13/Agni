@@ -32,6 +32,7 @@ public:
 	// holds a list of the attachment formats the pipeline will use.
 	VkPipelineRenderingCreateInfo m_renderInfo;
 	VkFormat                      m_colorAttachmentformat;
+	VkPipelineCreateFlags         m_flags {0};
 
 	PipelineBuilder()
 	{
@@ -41,6 +42,7 @@ public:
 	void clear();
 
 	VkPipeline buildPipeline(VkDevice device);
+	void enableDescriptorBuffer();
 	void setShaders(VkShaderModule vertexShader, VkShaderModule fragmentShader);
 	void setInputTopology(VkPrimitiveTopology topology);
 	void setPolygonMode(VkPolygonMode mode);
