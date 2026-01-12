@@ -9,15 +9,6 @@ void Node::refreshTransform(const glm::mat4& parentMatrix)
 	}
 }
 
-void Node::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
-{
-	// draw m_children
-	for (auto& c : m_children)
-	{
-		c->Draw(topMatrix, ctx);
-	}
-}
-
 // Accessors
 glm::mat4& Node::getLocalTransform()
 {

@@ -87,9 +87,11 @@ void AgniEngine::init()
 
 	// Initialize ECS World and related systems
 	m_ecsWorld      = std::make_unique<agni::ecs::World>();
-	m_syncPass      = std::make_unique<agni::ecs::SyncPass>(*m_ecsWorld);
 	m_entityFactory = std::make_unique<agni::ecs::EntityFactory>(*m_ecsWorld);
 	m_ecsInspector  = std::make_unique<agni::editor::ECSInspector>(*m_ecsWorld, *m_entityFactory);
+
+	// Give Renderer direct access to ECS World for queries
+	m_renderer.setWorld(m_ecsWorld.get());
 
 #ifdef AGNI_HAS_JOLT
 	// Initialize Jolt Physics
@@ -162,7 +164,6 @@ void AgniEngine::cleanup()
 		}
 		m_ecsInspector.reset();
 		m_entityFactory.reset();
-		m_syncPass.reset();
 		m_ecsWorld.reset();
 
 		// Cleanup renderer (render targets, pipelines, descriptors, scenes)
@@ -881,10 +882,6 @@ void AgniEngine::initDefaultData()
 		auto rootEntity = m_entityFactory->createFromGltf(*helmetPathFile.value(), "LightTestScene");
 		AGNI_PRINT("Created ECS scene with root entity ID: {}\n", rootEntity.id());
 
-		// Enable ECS rendering mode
-		setECSMode(true);
-		AGNI_PRINT("ECS Mode: ENABLED\n");
-
 #ifdef AGNI_HAS_JOLT
 		// ========================================================================
 		// Physics Test Scene: Falling Box
@@ -1023,101 +1020,6 @@ void AgniEngine::initDefaultData()
 	};
 
 	m_skybox.init(this, cubemapFaces);
-}
-
-void MeshNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
-{
-	glm::mat4 nodeMatrix = topMatrix * m_worldTransform;
-
-	for (auto& s : m_mesh->m_surfaces)
-	{
-		RenderObject def;
-		def.m_indexCount  = s.m_count;
-		def.m_firstIndex  = s.m_startIndex;
-		def.m_indexBuffer = m_mesh->m_meshBuffers.m_indexBuffer.m_buffer;
-		def.m_material    = &s.m_material->m_data;
-		def.m_bounds      = s.m_bounds;
-		def.m_transform   = nodeMatrix;
-		def.m_vertexBufferAddress = m_mesh->m_meshBuffers.m_vertexBufferAddress;
-
-		if (s.m_material->m_data.m_passType == MaterialPass::Transparent)
-		{
-			ctx.m_TransparentSurfaces.push_back(def);
-		}
-		else
-		{
-			ctx.m_OpaqueSurfaces.push_back(def);
-		}
-	}
-
-	// recurse down
-	Node::Draw(topMatrix, ctx);
-}
-
-void LightNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
-{
-	// Calculate world position and direction from transform hierarchy
-	glm::mat4 nodeMatrix    = topMatrix * m_worldTransform;
-	glm::vec3 worldPosition = glm::vec3(nodeMatrix[3]); // Extract translation
-
-	// Transform local direction by world rotation (upper 3x3 of the matrix)
-	// Both spot and directional shaders now expect emission direction (they negate internally)
-	glm::vec3 worldDirection = glm::normalize(glm::mat3(nodeMatrix) * m_light.direction);
-
-	switch (m_light.type)
-	{
-		case LightType::Point:
-		{
-			// Add point light to context if within limit
-			if (ctx.m_PointLights.size() < MAX_POINT_LIGHTS)
-			{
-				GPUPointLight gpuLight;
-				gpuLight.m_position  = worldPosition;
-				gpuLight.m_color     = m_light.color;
-				gpuLight.m_intensity = m_light.intensity;
-				gpuLight.m_radius    = m_light.radius;
-
-				ctx.m_PointLights.push_back(gpuLight);
-			}
-			break;
-		}
-		case LightType::Directional:
-		{
-			// Set directional light (only one supported, last one wins)
-			ctx.m_DirectionalLight.direction = worldDirection;
-			ctx.m_DirectionalLight.color     = m_light.color;
-			ctx.m_DirectionalLight.intensity = m_light.intensity;
-			ctx.m_DirectionalLight.active    = true;
-			break;
-		}
-		case LightType::Spot:
-		{
-			// Add spot light to context if within limit
-			if (ctx.m_SpotLights.size() < MAX_SPOT_LIGHTS)
-			{
-				GPUSpotLight gpuLight;
-				gpuLight.m_position    = worldPosition;
-				gpuLight.m_direction   = worldDirection;
-				gpuLight.m_color       = m_light.color;
-				gpuLight.m_intensity   = m_light.intensity;
-				gpuLight.m_radius      = m_light.radius;
-				gpuLight.m_innerCutoff = glm::cos(glm::radians(m_light.innerConeAngle));
-				gpuLight.m_outerCutoff = glm::cos(glm::radians(m_light.outerConeAngle));
-
-				ctx.m_SpotLights.push_back(gpuLight);
-			}
-			break;
-		}
-	}
-
-	// Draw optional visual mesh if present (delegate to MeshNode)
-	if (m_meshNode)
-	{
-		m_meshNode->Draw(nodeMatrix, ctx);
-	}
-
-	// Recurse to children (lights can have child lights or other nodes)
-	Node::Draw(topMatrix, ctx);
 }
 
 void LightNode::setMesh(std::shared_ptr<MeshAsset> mesh)

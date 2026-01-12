@@ -43,16 +43,8 @@ add_executable (engine
   Interfaces/IWorld.hpp
   ECS/World.hpp
   ECS/World.cpp
-  ECS/SyncPass.hpp
-  ECS/SyncPass.cpp
   ECS/EntityFactory.hpp
   ECS/EntityFactory.cpp
-
-  # ECS Systems
-  ECS/Systems/RenderSystem.hpp
-  ECS/Systems/RenderSystem.cpp
-  ECS/Systems/LightSystem.hpp
-  ECS/Systems/LightSystem.cpp
 
   # Editor Tools
   Editor/ECSInspector.hpp

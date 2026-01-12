@@ -1072,21 +1072,6 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 	return scene;
 }
 
-void LoadedGLTF::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
-{
-	// update transforms before drawing
-	for (auto& n : m_topNodes)
-	{
-		n->refreshTransform(topMatrix);
-	}
-
-	// create renderables from the scenenodes
-	for (auto& n : m_topNodes)
-	{
-		n->Draw(topMatrix, ctx);
-	}
-}
-
 void LoadedGLTF::clearAll()
 {
 	VkDevice dv = m_creator->m_device;

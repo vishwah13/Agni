@@ -1,8 +1,9 @@
 #include <Renderer.hpp>
 
 #include <AgniEngine.hpp>
+#include <Components.hpp>
 #include <Debug.hpp>
-#include <ECS/SyncPass.hpp>
+#include <ECS/World.hpp>
 #include <Images.hpp>
 #include <Initializers.hpp>
 #include <Pipelines.hpp>
@@ -789,26 +790,105 @@ void Renderer::updateScene(float deltaTime, VkExtent2D windowExtent)
 	// to opengl and gltf axis
 	projection[1][1] *= -1;
 
-	// Populate DrawContext from either ECS or legacy Node system
-	if (m_useECS && m_syncPass)
+	glm::mat4 viewProj = projection * view;
+
+	// === QUERY RENDERABLES DIRECTLY FROM ECS ===
+	if (m_world)
 	{
-		// ECS path: use sync pass to populate DrawContext
-		m_syncPass->sync(m_mainDrawContext);
-	}
-	else
-	{
-		// Legacy path: use Node hierarchy
-		for (auto& [name, scene] : m_loadedScenes)
-		{
-			scene->Draw(glm::mat4 {1.f}, m_mainDrawContext);
-		}
+		m_world->get().query<const TransformComponent,
+		                     const agni::ecs::RenderMeshComponent,
+		                     const RenderableTag>()
+		    .each([&](flecs::entity                       e,
+		              const TransformComponent&           transform,
+		              const agni::ecs::RenderMeshComponent& mesh,
+		              const RenderableTag&                renderable) {
+			    // Skip invisible or invalid meshes
+			    if (!renderable.visible || !mesh.visible || !mesh.meshAsset)
+				    return;
+
+			    // Create RenderObjects for each surface in the mesh
+			    for (const auto& surface : mesh.meshAsset->m_surfaces)
+			    {
+				    RenderObject obj;
+				    obj.m_indexCount          = surface.m_count;
+				    obj.m_firstIndex          = surface.m_startIndex;
+				    obj.m_indexBuffer         = mesh.meshAsset->m_meshBuffers.m_indexBuffer.m_buffer;
+				    obj.m_material            = &surface.m_material->m_data;
+				    obj.m_bounds              = surface.m_bounds;
+				    obj.m_transform           = transform.worldTransform;
+				    obj.m_vertexBufferAddress = mesh.meshAsset->m_meshBuffers.m_vertexBufferAddress;
+				    obj.m_entityID            = e.id();
+
+				    // Sort into opaque or transparent based on material pass type
+				    if (surface.m_material->m_data.m_passType == MaterialPass::Transparent)
+				    {
+					    m_mainDrawContext.m_TransparentSurfaces.push_back(obj);
+				    }
+				    else
+				    {
+					    m_mainDrawContext.m_OpaqueSurfaces.push_back(obj);
+				    }
+			    }
+		    });
+
+		// === QUERY LIGHTS DIRECTLY FROM ECS ===
+		m_world->get().query<const TransformComponent, const LightComponent>()
+		    .each([&](const TransformComponent& transform, const LightComponent& light) {
+			    // Extract world position from transform matrix
+			    glm::vec3 worldPosition = glm::vec3(transform.worldTransform[3]);
+
+			    // Transform direction by rotation (upper 3x3 of the matrix)
+			    glm::vec3 worldDirection = glm::normalize(glm::mat3(transform.worldTransform) * light.direction);
+
+			    switch (light.type)
+			    {
+			    case LightType::Point:
+			    {
+				    if (m_mainDrawContext.m_PointLights.size() < MAX_POINT_LIGHTS)
+				    {
+					    GPUPointLight gpuLight;
+					    gpuLight.m_position  = worldPosition;
+					    gpuLight.m_color     = light.color;
+					    gpuLight.m_intensity = light.intensity;
+					    gpuLight.m_radius    = light.radius;
+					    m_mainDrawContext.m_PointLights.push_back(gpuLight);
+				    }
+				    break;
+			    }
+
+			    case LightType::Directional:
+			    {
+				    // Only one directional light supported (last one wins)
+				    m_mainDrawContext.m_DirectionalLight.direction = worldDirection;
+				    m_mainDrawContext.m_DirectionalLight.color     = light.color;
+				    m_mainDrawContext.m_DirectionalLight.intensity = light.intensity;
+				    m_mainDrawContext.m_DirectionalLight.active    = true;
+				    break;
+			    }
+
+			    case LightType::Spot:
+			    {
+				    if (m_mainDrawContext.m_SpotLights.size() < MAX_SPOT_LIGHTS)
+				    {
+					    GPUSpotLight gpuLight;
+					    gpuLight.m_position    = worldPosition;
+					    gpuLight.m_direction   = worldDirection;
+					    gpuLight.m_color       = light.color;
+					    gpuLight.m_intensity   = light.intensity;
+					    gpuLight.m_radius      = light.radius;
+					    gpuLight.m_innerCutoff = glm::cos(glm::radians(light.innerConeAngle));
+					    gpuLight.m_outerCutoff = glm::cos(glm::radians(light.outerConeAngle));
+					    m_mainDrawContext.m_SpotLights.push_back(gpuLight);
+				    }
+				    break;
+			    }
+			    }
+		    });
 	}
 
 	m_sceneData.m_view = view;
-	// camera projection
 	m_sceneData.m_proj = projection;
-
-	m_sceneData.m_viewproj = projection * view;
+	m_sceneData.m_viewproj = viewProj;
 
 	// Ambient lighting
 	m_sceneData.m_ambientColor = glm::vec4(.1f);

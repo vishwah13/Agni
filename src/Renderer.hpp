@@ -18,7 +18,7 @@ struct FrameData;
 
 namespace agni::ecs
 {
-class SyncPass;
+class World;
 }
 
 struct EngineStats
@@ -140,16 +140,15 @@ public:
 		return m_loadedScenes;
 	}
 
-	// ECS mode control
-	void setECSMode(bool enabled, agni::ecs::SyncPass* syncPass)
+	// ECS World access (for direct queries)
+	void setWorld(agni::ecs::World* world)
 	{
-		m_useECS   = enabled;
-		m_syncPass = syncPass;
+		m_world = world;
 	}
 
-	bool isECSMode() const
+	agni::ecs::World* getWorld() const
 	{
-		return m_useECS;
+		return m_world;
 	}
 
 	// Object picking
@@ -197,9 +196,8 @@ private:
 	// Statistics
 	EngineStats m_stats;
 
-	// ECS mode
-	bool                  m_useECS {false};
-	agni::ecs::SyncPass* m_syncPass {nullptr};
+	// ECS World for direct queries
+	agni::ecs::World* m_world {nullptr};
 
 	// Object picking resources
 	AllocatedImage   m_objectIDImage;

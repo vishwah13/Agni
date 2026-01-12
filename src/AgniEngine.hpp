@@ -7,7 +7,6 @@
 #include <Components.hpp>
 #include <Descriptors.hpp>
 #include <ECS/EntityFactory.hpp>
-#include <ECS/SyncPass.hpp>
 #include <ECS/World.hpp>
 #include <Editor/ECSInspector.hpp>
 #include <Loader.hpp>
@@ -49,8 +48,6 @@ struct FrameData
 class MeshNode : public Node
 {
 public:
-	virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx) override;
-
 	// Accessor for mesh
 	std::shared_ptr<MeshAsset>& getMesh()
 	{
@@ -68,8 +65,6 @@ protected:
 class LightNode : public Node
 {
 public:
-	virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx) override;
-
 	// Light property accessors
 	LightComponent&       getLightComponent() { return m_light; }
 	const LightComponent& getLightComponent() const { return m_light; }
@@ -188,7 +183,6 @@ public:
 
 	// ECS World and related systems
 	std::unique_ptr<agni::ecs::World>         m_ecsWorld;
-	std::unique_ptr<agni::ecs::SyncPass>      m_syncPass;
 	std::unique_ptr<agni::ecs::EntityFactory> m_entityFactory;
 	std::unique_ptr<agni::editor::ECSInspector> m_ecsInspector;
 
@@ -204,12 +198,6 @@ public:
 	agni::ecs::EntityFactory& getEntityFactory()
 	{
 		return *m_entityFactory;
-	}
-
-	// Enable/disable ECS mode for rendering
-	void setECSMode(bool enabled)
-	{
-		m_renderer.setECSMode(enabled, m_syncPass.get());
 	}
 
 #ifdef AGNI_HAS_JOLT

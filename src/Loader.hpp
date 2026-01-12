@@ -36,9 +36,8 @@ struct MeshAsset
 // forward declarations
 class AgniEngine;
 
-struct LoadedGLTF : public IRenderable
+struct LoadedGLTF
 {
-
 	// storage for all the data on a given glTF file
 	std::unordered_map<std::string, std::shared_ptr<MeshAsset>>    meshes;
 	std::unordered_map<std::string, std::shared_ptr<Node>>         nodes;
@@ -59,8 +58,6 @@ struct LoadedGLTF : public IRenderable
 	{
 		clearAll();
 	};
-
-	virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx) override;
 
 private:
 	void clearAll();
