@@ -1,5 +1,6 @@
 #pragma once
 
+#include <BindlessResources.hpp>
 #include <Descriptors.hpp>
 #include <Loader.hpp>
 #include <Scene.hpp>
@@ -93,6 +94,13 @@ public:
 	          DescriptorAllocatorGrowable*    globalDescriptorAllocator,
 	          const DescriptorBufferProperties& descriptorBufferProps,
 	          VkExtent2D                      windowExtent);
+
+	// Initialize sampler registry (must be called after AssetLoader creates samplers)
+	void initBindlessSamplers(VkSampler linearSampler,
+	                          VkSampler nearestSampler,
+	                          VkSampler linearMipmapSampler,
+	                          VkSampler nearestMipmapSampler);
+
 	void cleanup();
 	void resize(VkExtent2D newExtent, VkSampleCountFlagBits msaaSamples);
 
@@ -129,6 +137,11 @@ public:
 	{
 		return m_globalMaterialDescriptorBuffer;
 	}
+
+	// Bindless resource accessors
+	TextureRegistry& getTextureRegistry() { return m_textureRegistry; }
+	SamplerRegistry& getSamplerRegistry() { return m_samplerRegistry; }
+	MaterialRegistry& getMaterialRegistry() { return m_materialRegistry; }
 
 	const AllocatedImage& getMsaaColorImage() const
 	{
@@ -171,7 +184,8 @@ private:
 	SwapchainManager*               m_swapchainManager           = nullptr;
 	Camera*                         m_camera                     = nullptr;
 	Skybox*                         m_skybox                     = nullptr;
-	DescriptorAllocatorGrowable*    m_globalDescriptorAllocator = nullptr;
+	DescriptorAllocatorGrowable*    m_globalDescriptorAllocator  = nullptr;
+	DescriptorBufferProperties      m_descriptorBufferProps {};
 
 	// Render targets
 	AllocatedImage m_drawImage;
@@ -196,7 +210,12 @@ private:
 	// Descriptor buffer system
 	DescriptorLayoutInfo      m_gpuSceneDataLayoutInfo;
 	DescriptorBufferWriter    m_descriptorBufferWriter;
-	DescriptorBufferAllocator m_globalMaterialDescriptorBuffer;  // Shared for all materials
+	DescriptorBufferAllocator m_globalMaterialDescriptorBuffer;  // Legacy, unused
+
+	// Bindless resources
+	TextureRegistry  m_textureRegistry;
+	SamplerRegistry  m_samplerRegistry;
+	MaterialRegistry m_materialRegistry;
 
 	// Background effects
 	VkPipeline                 m_gradientPipeline;

@@ -1,4 +1,4 @@
-// Mesh shader for PBR rendering
+// Mesh shader for PBR rendering with bindless textures
 import input_structures;
 
 // Scene data (set 0, binding 0)
@@ -9,28 +9,25 @@ ConstantBuffer<SceneData> sceneData;
 [[vk::binding(1, 0)]]
 StructuredBuffer<LightData> lightData;
 
-// Material data (set 1, binding 0)
+// Bindless texture array (set 1, binding 0)
 [[vk::binding(0, 1)]]
-ConstantBuffer<GLTFMaterialData> materialData;
+Texture2D textures[];
 
-// Material textures (set 1)
-[[vk::binding(1, 1)]]
-Sampler2D colorTex;
+// Sampler array (set 2, binding 0)
+[[vk::binding(0, 2)]]
+SamplerState samplers[4];
 
-[[vk::binding(2, 1)]]
-Sampler2D metalRoughTex;
-
-[[vk::binding(3, 1)]]
-Sampler2D normalTex;
-
-[[vk::binding(4, 1)]]
-Sampler2D aoTex;
+// Material data SSBO (set 3, binding 0)
+[[vk::binding(0, 3)]]
+StructuredBuffer<GPUMaterialData> materials;
 
 // Push constants matching C++ GPUDrawPushConstants
 struct PushConstants
 {
     float4x4 worldMatrix;
     uint64_t vertexBufferPtr; // Buffer device address as raw uint64
+    uint     materialIndex;   // Index into materials array
+    uint     padding;
 };
 
 [[vk::push_constant]]
@@ -60,6 +57,9 @@ VertexOutput vertexMain(uint vertexIndex : SV_VertexID)
 {
     Vertex v = loadVertex(pushConstants.vertexBufferPtr, vertexIndex);
 
+    // Get material data for color factors
+    GPUMaterialData mat = materials[pushConstants.materialIndex];
+
     VertexOutput output;
 
     float4 position = float4(v.position, 1.0f);
@@ -68,7 +68,7 @@ VertexOutput vertexMain(uint vertexIndex : SV_VertexID)
     output.position = mul(sceneData.viewproj, worldPos);
     output.worldPos = worldPos.xyz;
     output.normal = normalize(mul((float3x3)pushConstants.worldMatrix, v.normal));
-    output.color = v.color.xyz * materialData.colorFactors.xyz;
+    output.color = v.color.xyz * mat.colorFactors.xyz;
     output.uv = float2(v.uv_x, v.uv_y);
 
     // Transform tangent to world space
@@ -143,15 +143,21 @@ float calculateAttenuation(float distance, float radius)
 [shader("fragment")]
 float4 fragmentMain(VertexOutput input) : SV_Target
 {
-    // Sample textures
-    float3 albedo = pow(colorTex.Sample(input.uv).rgb, float3(2.2)); // sRGB to linear
+    // Get material data using materialIndex
+    GPUMaterialData mat = materials[pushConstants.materialIndex];
+
+    // Get sampler for this material
+    SamplerState matSampler = samplers[mat.samplerIndex];
+
+    // Sample textures using bindless arrays with NonUniformResourceIndex for dynamic indexing
+    float3 albedo = pow(textures[NonUniformResourceIndex(mat.colorTexIndex)].Sample(matSampler, input.uv).rgb, float3(2.2)); // sRGB to linear
     albedo *= input.color;
 
-    float2 metallicRoughness = metalRoughTex.Sample(input.uv).bg; // B=metallic, G=roughness in glTF
-    float metallic = metallicRoughness.x * materialData.metal_rough_factors.x;
-    float roughness = metallicRoughness.y * materialData.metal_rough_factors.y;
+    float2 metallicRoughness = textures[NonUniformResourceIndex(mat.metalRoughTexIndex)].Sample(matSampler, input.uv).bg; // B=metallic, G=roughness in glTF
+    float metallic = metallicRoughness.x * mat.metalRoughFactors.x;
+    float roughness = metallicRoughness.y * mat.metalRoughFactors.y;
 
-    float ao = aoTex.Sample(input.uv).r;
+    float ao = textures[NonUniformResourceIndex(mat.aoTexIndex)].Sample(matSampler, input.uv).r;
 
     // Normal mapping
     // Construct TBN matrix to transform from tangent space to world space
@@ -161,7 +167,7 @@ float4 fragmentMain(VertexOutput input) : SV_Target
     float3x3 TBN = float3x3(T, B, N);
 
     // Sample normal from normal map (stored in tangent space)
-    float3 normalMap = normalTex.Sample(input.uv).xyz;
+    float3 normalMap = textures[NonUniformResourceIndex(mat.normalTexIndex)].Sample(matSampler, input.uv).xyz;
     // Transform from [0,1] range to [-1,1] range
     normalMap = normalMap * 2.0 - 1.0;
     // Transform normal from tangent space to world space

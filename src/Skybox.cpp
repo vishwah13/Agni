@@ -170,6 +170,9 @@ void Skybox::cleanup(AgniEngine* engine)
 		m_skyboxMaterial = nullptr;
 	}
 
+	// Cleanup skybox descriptor buffer
+	m_skyboxDescriptorBuffer.destroy();
+
 	// Cleanup cubemap resources
 	vkDestroySampler(engine->m_device, m_cubemapSampler, nullptr);
 	engine->m_resourceManager.destroyImage(m_cubemapImage);
@@ -177,6 +180,7 @@ void Skybox::cleanup(AgniEngine* engine)
 
 void Skybox::draw(VkCommandBuffer cmd,
                   VkDeviceSize    sceneDescriptorOffset,
+                  VkDeviceAddress frameBufferAddress,
                   VkExtent2D      drawExtent)
 {
 #ifdef TRACY_ENABLE
@@ -206,8 +210,27 @@ void Skybox::draw(VkCommandBuffer cmd,
 
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-	// Set descriptor buffer offsets (buffers already bound by drawGeometry)
-	// Bind scene descriptor (set 0)
+	// Bind skybox-specific descriptor buffers (different from mesh bindless setup)
+	// Skybox uses only 2 descriptor sets: scene data (set 0) and cubemap (set 1)
+	VkDescriptorBufferBindingInfoEXT skyboxBufferBindings[2] = {};
+
+	// Buffer 0: Frame descriptor buffer (scene data)
+	skyboxBufferBindings[0].sType   = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT;
+	skyboxBufferBindings[0].address = frameBufferAddress;
+	skyboxBufferBindings[0].usage   = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
+	                                  VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT;
+
+	// Buffer 1: Skybox's dedicated descriptor buffer (cubemap)
+	skyboxBufferBindings[1].sType   = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT;
+	skyboxBufferBindings[1].address = m_skyboxDescriptorBuffer.getDeviceAddress();
+	skyboxBufferBindings[1].usage   = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
+	                                  VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT;
+
+	// Bind both buffers for skybox rendering
+	vkCmdBindDescriptorBuffersEXT(cmd, 2, skyboxBufferBindings);
+
+	// Set descriptor buffer offsets
+	// Set 0: Scene data (from frame descriptor buffer, buffer index 0)
 	uint32_t sceneBufferIndex = 0;
 	vkCmdSetDescriptorBufferOffsetsEXT(cmd,
 	                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -217,15 +240,16 @@ void Skybox::draw(VkCommandBuffer cmd,
 	                                    &sceneBufferIndex,
 	                                    &sceneDescriptorOffset);
 
-	// Bind skybox material descriptor (set 1)
-	uint32_t materialBufferIndex = 1;
+	// Set 1: Skybox material (from skybox descriptor buffer, buffer index 1)
+	uint32_t     skyboxMaterialBufferIndex = 1;
+	VkDeviceSize skyboxMaterialOffset      = m_skyboxMaterial->m_descriptorOffset;
 	vkCmdSetDescriptorBufferOffsetsEXT(cmd,
 	                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
 	                                    m_skyboxPipeline.m_layout,
 	                                    1,  // second set
 	                                    1,  // descriptor count
-	                                    &materialBufferIndex,
-	                                    &m_skyboxMaterial->m_descriptorOffset);
+	                                    &skyboxMaterialBufferIndex,
+	                                    &skyboxMaterialOffset);
 
 	// Bind index buffer
 	vkCmdBindIndexBuffer(
@@ -300,14 +324,27 @@ void Skybox::createCubeMesh(AgniEngine* engine)
 
 void Skybox::createMaterial(AgniEngine* engine)
 {
+	// Initialize dedicated descriptor buffer for skybox (with samplers for combined image sampler)
+	// Calculate required size based on layout info (will be set after buildPipelines)
+	// For now, allocate enough space for one combined image sampler descriptor
+	VkDeviceSize bufferSize = engine->m_descriptorBufferProps.combinedImageSamplerDescriptorSize;
+	bufferSize = (bufferSize + engine->m_descriptorBufferProps.descriptorBufferOffsetAlignment - 1) &
+	             ~(engine->m_descriptorBufferProps.descriptorBufferOffsetAlignment - 1);
+
+	m_skyboxDescriptorBuffer.init(engine->m_device,
+	                               &engine->m_resourceManager,
+	                               engine->m_descriptorBufferProps,
+	                               bufferSize,
+	                               true);  // Include samplers for combined image sampler
+
 	// Create skybox material resources
 	MaterialResources skyboxResources;
 	skyboxResources.m_cubemapImage   = m_cubemapImage;
 	skyboxResources.m_cubemapSampler = m_cubemapSampler;
 
-	// Write skybox material using descriptor buffer
+	// Write skybox material to our dedicated descriptor buffer
 	m_skyboxMaterial = new MaterialInstance(writeMaterialToBuffer(
-	engine->m_device, skyboxResources, engine->m_renderer.getGlobalMaterialDescriptorBuffer()));
+	    engine->m_device, skyboxResources, m_skyboxDescriptorBuffer));
 }
 
 void Skybox::clearPipelineResources(VkDevice device)

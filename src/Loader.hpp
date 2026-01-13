@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include <BindlessResources.hpp>
 #include <Components.hpp>
 #include <DescriptorBuffer.hpp>
 #include <Descriptors.hpp>
@@ -104,6 +105,9 @@ public:
 	{
 		return m_meshResources;
 	}
+
+	// Register default textures with bindless TextureRegistry (call after init)
+	void registerDefaultTextures(TextureRegistry& textureRegistry);
 
 	// Shared sampler getters
 	VkSampler getLinearSampler() const

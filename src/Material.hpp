@@ -26,8 +26,9 @@ struct MaterialPipeline
 struct MaterialInstance
 {
 	MaterialPipeline* m_pipeline;
-	VkDescriptorSet   m_materialSet;        // Legacy descriptor set (still used)
-	VkDeviceSize      m_descriptorOffset;   // Descriptor buffer offset (new system)
+	VkDescriptorSet   m_materialSet;        // Legacy descriptor set (unused)
+	VkDeviceSize      m_descriptorOffset;   // Descriptor buffer offset (unused, legacy)
+	uint32_t          m_materialIndex;      // Bindless material array index (new system)
 	MaterialPass      m_passType;
 };
 
@@ -59,6 +60,10 @@ struct GltfPbrMaterial
 
 	DescriptorWriter       m_writer;        // Legacy writer
 	DescriptorBufferWriter m_bufferWriter;  // Descriptor buffer writer
+
+	// Pipeline accessors
+	MaterialPipeline& getOpaquePipeline() { return m_opaquePipeline; }
+	MaterialPipeline& getTransparentPipeline() { return m_transparentPipeline; }
 
 	void buildPipelines(AgniEngine* engine);
 

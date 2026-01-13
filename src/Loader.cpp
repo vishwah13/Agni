@@ -140,6 +140,21 @@ void AssetLoader::init(ResourceManager* resourceManager, VkDevice device)
 	vkCreateSampler(m_device, &samplerInfo, nullptr, &m_nearestMipmapSampler);
 }
 
+void AssetLoader::registerDefaultTextures(TextureRegistry& textureRegistry)
+{
+	// Register default textures with the bindless texture registry
+	textureRegistry.whiteTextureIndex = textureRegistry.registerTexture(
+	    m_whiteTexture.image.m_imageView);
+	textureRegistry.blackTextureIndex = textureRegistry.registerTexture(
+	    m_blackTexture.image.m_imageView);
+	textureRegistry.greyTextureIndex = textureRegistry.registerTexture(
+	    m_greyTexture.image.m_imageView);
+	textureRegistry.errorTextureIndex = textureRegistry.registerTexture(
+	    m_errorCheckerboardTexture.image.m_imageView);
+	textureRegistry.defaultNormalIndex = textureRegistry.registerTexture(
+	    m_defaultNormalTexture.image.m_imageView);
+}
+
 void AssetLoader::cleanup()
 {
 	// Destroy default textures
@@ -194,43 +209,40 @@ void AssetLoader::buildPipelines(AgniEngine* engine)
 
 	if (!isResize)
 	{
-		// Initial setup - create descriptor pool
+		// Legacy: create descriptor pool (unused with bindless)
 		std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> sizes = {
 			{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4},
 			{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}
 		};
 		m_defaultMaterialDescriptorPool.init(m_device, 1, sizes);
 
-		// Create buffer for default material constants
+		// Legacy: Create buffer for default material constants (unused with bindless)
 		m_defaultMaterialBuffer = m_resourceManager->createBuffer(
 			sizeof(GltfPbrMaterial::MaterialConstants),
 			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 			VMA_MEMORY_USAGE_CPU_TO_GPU);
 
-		// Set default material constants (white, non-metallic, medium roughness)
-		GltfPbrMaterial::MaterialConstants* constants =
-			(GltfPbrMaterial::MaterialConstants*)m_defaultMaterialBuffer.m_info.pMappedData;
-		constants->m_colorFactors        = glm::vec4(1.0f);
-		constants->m_metal_rough_factors = glm::vec4(0.0f, 0.5f, 0.0f, 0.0f);
+		// Create the default material using bindless system
+		TextureRegistry& texRegistry = engine->m_renderer.getTextureRegistry();
+		MaterialRegistry& matRegistry = engine->m_renderer.getMaterialRegistry();
 
-		// Setup material resources with default textures
-		GltfPbrMaterial::MaterialResources materialResources;
-		materialResources.m_colorTexture      = m_whiteTexture;
-		materialResources.m_metalRoughTexture = m_whiteTexture;
-		materialResources.m_normalTexture     = m_defaultNormalTexture;
-		materialResources.m_aoTexture         = m_whiteTexture;
-		materialResources.m_dataBuffer        = m_defaultMaterialBuffer.m_buffer;
-		materialResources.m_dataBufferOffset  = 0;
+		GPUMaterialData defaultMatData {};
+		defaultMatData.colorFactors       = glm::vec4(1.0f);
+		defaultMatData.metalRoughFactors  = glm::vec4(0.0f, 0.5f, 0.0f, 0.0f);
+		defaultMatData.colorTexIndex      = texRegistry.whiteTextureIndex;
+		defaultMatData.metalRoughTexIndex = texRegistry.whiteTextureIndex;
+		defaultMatData.normalTexIndex     = texRegistry.defaultNormalIndex;
+		defaultMatData.aoTexIndex         = texRegistry.whiteTextureIndex;
+		defaultMatData.samplerIndex       = static_cast<uint32_t>(BindlessSamplerType::LinearMipmap);
 
-		// Create the default material using descriptor buffer
-		m_defaultMaterial       = std::make_shared<GLTFMaterial>();
-		m_defaultMaterial->m_data = m_metalRoughMaterial.writeMaterialToBuffer(
-			m_device, MaterialPass::MainColor, materialResources, engine->m_renderer.getGlobalMaterialDescriptorBuffer());
+		m_defaultMaterial = std::make_shared<GLTFMaterial>();
+		m_defaultMaterial->m_data.m_materialIndex = matRegistry.registerMaterial(defaultMatData);
+		m_defaultMaterial->m_data.m_pipeline = &m_metalRoughMaterial.m_opaquePipeline;
+		m_defaultMaterial->m_data.m_passType = MaterialPass::MainColor;
 	}
 	else
 	{
 		// Resize case - just update the pipeline pointer in existing material
-		// The descriptor set remains valid since we preserved the descriptor layout
 		m_defaultMaterial->m_data.m_pipeline = &m_metalRoughMaterial.m_opaquePipeline;
 	}
 }
@@ -573,9 +585,9 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		file.m_descriptorPool.init(engine->m_device, gltf.materials.size(), sizes);
 	}
 
-	// Map glTF samplers to shared samplers
-	// Instead of creating new samplers, we map to our shared samplers
-	std::vector<VkSampler> samplerMapping;
+	// Map glTF samplers to bindless sampler indices
+	// Instead of storing VkSampler handles, we store indices into the SamplerRegistry
+	std::vector<uint32_t> samplerIndexMapping;
 	for (fastgltf::Sampler& sampler : gltf.samplers)
 	{
 		VkFilter magFilter =
@@ -585,22 +597,22 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		VkSamplerMipmapMode mipmapMode = extractMipmapMode(
 		sampler.minFilter.value_or(fastgltf::Filter::Linear));
 
-		// Select appropriate shared sampler based on filter settings
-		VkSampler sharedSampler;
+		// Select appropriate sampler index based on filter settings
+		uint32_t samplerIndex;
 		if (magFilter == VK_FILTER_LINEAR && minFilter == VK_FILTER_LINEAR)
 		{
-			sharedSampler = (mipmapMode == VK_SAMPLER_MIPMAP_MODE_LINEAR)
-			                ? m_linearMipmapSampler
-			                : m_linearSampler;
+			samplerIndex = (mipmapMode == VK_SAMPLER_MIPMAP_MODE_LINEAR)
+			               ? static_cast<uint32_t>(BindlessSamplerType::LinearMipmap)
+			               : static_cast<uint32_t>(BindlessSamplerType::Linear);
 		}
 		else
 		{
-			sharedSampler = (mipmapMode == VK_SAMPLER_MIPMAP_MODE_LINEAR)
-			                ? m_nearestMipmapSampler
-			                : m_nearestSampler;
+			samplerIndex = (mipmapMode == VK_SAMPLER_MIPMAP_MODE_LINEAR)
+			               ? static_cast<uint32_t>(BindlessSamplerType::NearestMipmap)
+			               : static_cast<uint32_t>(BindlessSamplerType::Nearest);
 		}
 
-		samplerMapping.push_back(sharedSampler);
+		samplerIndexMapping.push_back(samplerIndex);
 	}
 
 	// temporal arrays for all the objects to use while creating the GLTF data
@@ -644,19 +656,9 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		imageIndex++;
 	}
 
-	// create buffer to hold the material data (only if there are materials)
-	int                                 dataIndex              = 0;
-	GltfPbrMaterial::MaterialConstants* sceneMaterialConstants = nullptr;
-
-	if (!gltf.materials.empty())
-	{
-		file.m_materialDataBuffer = engine->m_resourceManager.createBuffer(
-		sizeof(GltfPbrMaterial::MaterialConstants) * gltf.materials.size(),
-		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-		VMA_MEMORY_USAGE_CPU_TO_GPU);
-		sceneMaterialConstants = (GltfPbrMaterial::MaterialConstants*)
-		file.m_materialDataBuffer.m_info.pMappedData;
-	}
+	// Get references to bindless registries
+	TextureRegistry&  textureRegistry  = engine->m_renderer.getTextureRegistry();
+	MaterialRegistry& materialRegistry = engine->m_renderer.getMaterialRegistry();
 
 	for (fastgltf::Material& mat : gltf.materials)
 	{
@@ -664,89 +666,75 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		materials.push_back(newMat);
 		file.materials[mat.name.c_str()] = newMat;
 
-		GltfPbrMaterial::MaterialConstants constants;
-		constants.m_colorFactors.x = mat.pbrData.baseColorFactor[0];
-		constants.m_colorFactors.y = mat.pbrData.baseColorFactor[1];
-		constants.m_colorFactors.z = mat.pbrData.baseColorFactor[2];
-		constants.m_colorFactors.w = mat.pbrData.baseColorFactor[3];
-
-		constants.m_metal_rough_factors.x = mat.pbrData.metallicFactor;
-		constants.m_metal_rough_factors.y = mat.pbrData.roughnessFactor;
-		// write material parameters to buffer
-		sceneMaterialConstants[dataIndex] = constants;
-
+		// Determine pass type
 		MaterialPass passType = MaterialPass::MainColor;
 		if (mat.alphaMode == fastgltf::AlphaMode::Blend)
 		{
 			passType = MaterialPass::Transparent;
 		}
 
-		GltfPbrMaterial::MaterialResources materialResources;
-		// default the material textures
-		materialResources.m_colorTexture      = m_whiteTexture;
-		materialResources.m_metalRoughTexture = m_whiteTexture;
-		materialResources.m_normalTexture     = m_defaultNormalTexture;
-		materialResources.m_aoTexture         = m_whiteTexture;
+		// Set up the pipeline based on pass type
+		if (passType == MaterialPass::Transparent)
+		{
+			newMat->m_data.m_pipeline = &m_metalRoughMaterial.getTransparentPipeline();
+		}
+		else
+		{
+			newMat->m_data.m_pipeline = &m_metalRoughMaterial.getOpaquePipeline();
+		}
+		newMat->m_data.m_passType = passType;
 
-		// set the uniform buffer for the material data
-		materialResources.m_dataBuffer = file.m_materialDataBuffer.m_buffer;
-		materialResources.m_dataBufferOffset =
-		dataIndex * sizeof(GltfPbrMaterial::MaterialConstants);
-		// grab textures from gltf file
+		// Build GPUMaterialData for bindless rendering
+		GPUMaterialData matData {};
+		matData.colorFactors.x = mat.pbrData.baseColorFactor[0];
+		matData.colorFactors.y = mat.pbrData.baseColorFactor[1];
+		matData.colorFactors.z = mat.pbrData.baseColorFactor[2];
+		matData.colorFactors.w = mat.pbrData.baseColorFactor[3];
+
+		matData.metalRoughFactors.x = mat.pbrData.metallicFactor;
+		matData.metalRoughFactors.y = mat.pbrData.roughnessFactor;
+
+		// Default texture indices (use fallbacks from TextureRegistry)
+		matData.colorTexIndex      = textureRegistry.whiteTextureIndex;
+		matData.metalRoughTexIndex = textureRegistry.whiteTextureIndex;
+		matData.normalTexIndex     = textureRegistry.defaultNormalIndex;
+		matData.aoTexIndex         = textureRegistry.whiteTextureIndex;
+		matData.samplerIndex       = static_cast<uint32_t>(BindlessSamplerType::LinearMipmap);
+
+		// Register textures from glTF file and get their indices
 		if (mat.pbrData.baseColorTexture.has_value())
 		{
-			size_t img =
-			gltf.textures[mat.pbrData.baseColorTexture.value().textureIndex]
-			.imageIndex.value();
-			size_t sampler =
-			gltf.textures[mat.pbrData.baseColorTexture.value().textureIndex]
-			.samplerIndex.value();
+			size_t texIdx = mat.pbrData.baseColorTexture.value().textureIndex;
+			size_t img    = gltf.textures[texIdx].imageIndex.value();
+			size_t samp   = gltf.textures[texIdx].samplerIndex.value();
 
-			materialResources.m_colorTexture.image   = images[img];
-			materialResources.m_colorTexture.sampler = samplerMapping[sampler];
+			matData.colorTexIndex = textureRegistry.registerTexture(images[img].m_imageView);
+			matData.samplerIndex  = samplerIndexMapping[samp];
 		}
 		if (mat.pbrData.metallicRoughnessTexture.has_value())
 		{
-			size_t img =
-			gltf
-			.textures[mat.pbrData.metallicRoughnessTexture.value().textureIndex]
-			.imageIndex.value();
-			size_t sampler =
-			gltf
-			.textures[mat.pbrData.metallicRoughnessTexture.value().textureIndex]
-			.samplerIndex.value();
+			size_t texIdx = mat.pbrData.metallicRoughnessTexture.value().textureIndex;
+			size_t img    = gltf.textures[texIdx].imageIndex.value();
 
-			materialResources.m_metalRoughTexture.image   = images[img];
-			materialResources.m_metalRoughTexture.sampler = samplerMapping[sampler];
+			matData.metalRoughTexIndex = textureRegistry.registerTexture(images[img].m_imageView);
 		}
 		if (mat.normalTexture.has_value())
 		{
-			size_t img = gltf.textures[mat.normalTexture.value().textureIndex]
-			             .imageIndex.value();
-			size_t sampler =
-			gltf.textures[mat.normalTexture.value().textureIndex]
-			.samplerIndex.value();
+			size_t texIdx = mat.normalTexture.value().textureIndex;
+			size_t img    = gltf.textures[texIdx].imageIndex.value();
 
-			materialResources.m_normalTexture.image   = images[img];
-			materialResources.m_normalTexture.sampler = samplerMapping[sampler];
+			matData.normalTexIndex = textureRegistry.registerTexture(images[img].m_imageView);
 		}
 		if (mat.occlusionTexture.has_value())
 		{
-			size_t img =
-			gltf.textures[mat.occlusionTexture.value().textureIndex]
-			.imageIndex.value();
-			size_t sampler =
-			gltf.textures[mat.occlusionTexture.value().textureIndex]
-			.samplerIndex.value();
+			size_t texIdx = mat.occlusionTexture.value().textureIndex;
+			size_t img    = gltf.textures[texIdx].imageIndex.value();
 
-			materialResources.m_aoTexture.image   = images[img];
-			materialResources.m_aoTexture.sampler = samplerMapping[sampler];
+			matData.aoTexIndex = textureRegistry.registerTexture(images[img].m_imageView);
 		}
-		// build material using descriptor buffer
-		newMat->m_data = engine->m_assetLoader.getMaterialSystem().writeMaterialToBuffer(
-		engine->m_device, passType, materialResources, engine->m_renderer.getGlobalMaterialDescriptorBuffer());
 
-		dataIndex++;
+		// Register material with bindless MaterialRegistry
+		newMat->m_data.m_materialIndex = materialRegistry.registerMaterial(matData);
 	}
 
 	// use the same vectors for all meshes so that the memory doesnt reallocate

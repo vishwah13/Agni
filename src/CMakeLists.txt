@@ -12,6 +12,8 @@ add_executable (engine
   Descriptors.cpp
   DescriptorBuffer.hpp
   DescriptorBuffer.cpp
+  BindlessResources.hpp
+  BindlessResources.cpp
   Pipelines.hpp
   Pipelines.cpp
   AgniEngine.hpp

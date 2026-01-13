@@ -82,6 +82,16 @@ void AgniEngine::init()
 	// Must be called before initPipelines() which builds material pipelines
 	m_assetLoader.init(&m_resourceManager, m_device);
 
+	// Register default textures with bindless TextureRegistry
+	m_assetLoader.registerDefaultTextures(m_renderer.getTextureRegistry());
+
+	// Initialize bindless samplers (must be after AssetLoader creates samplers)
+	m_renderer.initBindlessSamplers(
+	    m_assetLoader.getLinearSampler(),
+	    m_assetLoader.getNearestSampler(),
+	    m_assetLoader.getLinearMipmapSampler(),
+	    m_assetLoader.getNearestMipmapSampler());
+
 	initPipelines();
 
 	initImgui();
@@ -543,9 +553,12 @@ void AgniEngine::initVulkan()
 	// vulkan 1.2 features
 	VkPhysicalDeviceVulkan12Features features12 {
 	.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
-	features12.bufferDeviceAddress = true;
-	features12.descriptorIndexing  = true;
-	features12.shaderInt8          = true;
+	features12.bufferDeviceAddress                       = true;
+	features12.descriptorIndexing                        = true;
+	features12.shaderInt8                                = true;
+	// Bindless texture indexing features (shader-side only, layout flags implicit with descriptor buffers)
+	features12.shaderSampledImageArrayNonUniformIndexing = true;
+	features12.runtimeDescriptorArray                    = true;
 
 	// vulkan 1.1 features
 	VkPhysicalDeviceVulkan11Features features11 {

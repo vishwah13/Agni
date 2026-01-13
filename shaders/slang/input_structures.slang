@@ -12,11 +12,27 @@ struct SceneData
     float3 camPos; // camera position for view vector
 };
 
-// Material data uniform buffer (set 1, binding 0)
+// Legacy material data uniform buffer (unused with bindless)
 struct GLTFMaterialData
 {
     float4 colorFactors;
     float4 metal_rough_factors;
+};
+
+// Bindless material data (stored in SSBO, indexed by materialIndex)
+// Must match C++ GPUMaterialData struct (std430 layout)
+struct GPUMaterialData
+{
+    float4 colorFactors;
+    float4 metalRoughFactors;
+    uint   colorTexIndex;
+    uint   metalRoughTexIndex;
+    uint   normalTexIndex;
+    uint   aoTexIndex;
+    uint   samplerIndex;
+    uint   padding0;
+    uint   padding1;
+    uint   padding2;
 };
 
 // Vertex structure matching CPU-side layout (64 bytes total)

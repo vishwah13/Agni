@@ -35,10 +35,9 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 	VkPushConstantRange matrixRange {};
 	matrixRange.offset     = 0;
 	matrixRange.size       = sizeof(GPUDrawPushConstants);
-	matrixRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	matrixRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
-	// Only create descriptor set layout if it doesn't exist
-	// This allows material descriptor sets to survive resize
+	// Legacy material layout (kept but unused with bindless)
 	if (m_materialLayout == VK_NULL_HANDLE)
 	{
 		DescriptorLayoutBuilder layoutBuilder;
@@ -58,12 +57,17 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 		m_bufferWriter.init(engine->m_device, engine->m_descriptorBufferProps);
 	}
 
+	// Bindless pipeline layout: Scene + Textures + Samplers + Materials
 	VkDescriptorSetLayout layouts[] = {
-	engine->m_renderer.getGpuSceneDataDescriptorLayout(), m_materialLayout};
+		engine->m_renderer.getGpuSceneDataDescriptorLayout(),        // Set 0: Scene data
+		engine->m_renderer.getTextureRegistry().getLayout(),         // Set 1: Texture array
+		engine->m_renderer.getSamplerRegistry().getLayout(),         // Set 2: Sampler array
+		engine->m_renderer.getMaterialRegistry().getLayout()         // Set 3: Material SSBO
+	};
 
 	VkPipelineLayoutCreateInfo mesh_layout_info =
 	vkinit::pipelineLayoutCreateInfo();
-	mesh_layout_info.setLayoutCount         = 2;
+	mesh_layout_info.setLayoutCount         = 4;  // Scene + Textures + Samplers + Materials
 	mesh_layout_info.pSetLayouts            = layouts;
 	mesh_layout_info.pPushConstantRanges    = &matrixRange;
 	mesh_layout_info.pushConstantRangeCount = 1;

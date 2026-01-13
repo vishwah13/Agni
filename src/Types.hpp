@@ -68,6 +68,8 @@ struct GPUDrawPushConstants
 {
 	glm::mat4       m_worldMatrix;
 	VkDeviceAddress m_vertexBuffer;
+	uint32_t        m_materialIndex;  // Index into bindless material array
+	uint32_t        m_padding;
 };
 
 // push constants for object ID picking pass

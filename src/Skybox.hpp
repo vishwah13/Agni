@@ -35,6 +35,7 @@ public:
 	// Draw the skybox
 	void draw(VkCommandBuffer cmd,
 	          VkDeviceSize    sceneDescriptorOffset,
+	          VkDeviceAddress frameBufferAddress,
 	          VkExtent2D      drawExtent);
 
 	// Clear only pipeline resources (for rebuilding pipelines)
@@ -64,6 +65,9 @@ private:
 
 	DescriptorWriter       m_writer;
 	DescriptorBufferWriter m_bufferWriter;
+
+	// Dedicated descriptor buffer for skybox material (cubemap)
+	DescriptorBufferAllocator m_skyboxDescriptorBuffer;
 
 	// Internal helper methods
 	void createCubeMesh(AgniEngine* engine);

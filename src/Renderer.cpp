@@ -84,22 +84,46 @@ void Renderer::init(VkDevice                          device,
 	m_camera                     = camera;
 	m_skybox                     = skybox;
 	m_globalDescriptorAllocator  = globalDescriptorAllocator;
+	m_descriptorBufferProps      = descriptorBufferProps;
 
 	// Initialize descriptor buffer writer
 	m_descriptorBufferWriter.init(device, descriptorBufferProps);
 
-	// Initialize global material descriptor buffer (shared by all materials)
+	// Initialize global material descriptor buffer (legacy, unused with bindless)
 	m_globalMaterialDescriptorBuffer.init(device,
 	                                       resourceManager,
 	                                       descriptorBufferProps,
 	                                       4 * 1024 * 1024,  // 4MB for all materials
 	                                       true);             // Include samplers
 
+	// Initialize bindless texture registry
+	m_textureRegistry.init(device, resourceManager, descriptorBufferProps);
+
+	// Initialize bindless material registry
+	m_materialRegistry.init(device, resourceManager, descriptorBufferProps);
+
+	// Note: SamplerRegistry is initialized later via initBindlessSamplers()
+	// after AssetLoader creates the samplers
+
 	initRenderTargets(windowExtent);
 	initDescriptors();
 	initBackgroundPipelines();
 	initPickingResources(windowExtent);
 	initObjectIDPipeline();
+}
+
+void Renderer::initBindlessSamplers(VkSampler linearSampler,
+                                     VkSampler nearestSampler,
+                                     VkSampler linearMipmapSampler,
+                                     VkSampler nearestMipmapSampler)
+{
+	m_samplerRegistry.init(m_device,
+	                       m_resourceManager,
+	                       m_descriptorBufferProps,
+	                       linearSampler,
+	                       nearestSampler,
+	                       linearMipmapSampler,
+	                       nearestMipmapSampler);
 }
 
 void Renderer::cleanup()
@@ -131,6 +155,11 @@ void Renderer::cleanup()
 
 	// Cleanup descriptor buffers
 	m_globalMaterialDescriptorBuffer.destroy();
+
+	// Cleanup bindless resources
+	m_textureRegistry.destroy();
+	m_samplerRegistry.destroy();
+	m_materialRegistry.destroy();
 
 	// Clear loaded scenes
 	m_loadedScenes.clear();
@@ -666,8 +695,8 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	                                             lightDataAddress,
 	                                             sizeof(GPULightData));
 
-	// Bind descriptor buffers once before any draws
-	VkDescriptorBufferBindingInfoEXT bufferBindings[2] = {};
+	// Bind descriptor buffers once before any draws (bindless architecture)
+	VkDescriptorBufferBindingInfoEXT bufferBindings[4] = {};
 
 	// Buffer 0: Frame descriptor buffer (scene data)
 	bufferBindings[0].sType   = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT;
@@ -675,72 +704,72 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	bufferBindings[0].usage   = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
 	                            VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT;
 
-	// Buffer 1: Global material descriptor buffer
+	// Buffer 1: Global texture array (bindless)
 	bufferBindings[1].sType   = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT;
-	bufferBindings[1].address = m_globalMaterialDescriptorBuffer.getDeviceAddress();
-	bufferBindings[1].usage   = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
-	                            VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT;
+	bufferBindings[1].address = m_textureRegistry.getBufferAddress();
+	bufferBindings[1].usage   = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
 
-	vkCmdBindDescriptorBuffersEXT(cmd, 2, bufferBindings);
+	// Buffer 2: Sampler array (bindless)
+	bufferBindings[2].sType   = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT;
+	bufferBindings[2].address = m_samplerRegistry.getBufferAddress();
+	bufferBindings[2].usage   = VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT |
+	                            VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
+
+	// Buffer 3: Material SSBO (bindless)
+	bufferBindings[3].sType   = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT;
+	bufferBindings[3].address = m_materialRegistry.getBufferAddress();
+	bufferBindings[3].usage   = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
+
+	vkCmdBindDescriptorBuffersEXT(cmd, 4, bufferBindings);
+
+	// Offsets for bindless descriptor sets (all at offset 0)
+	VkDeviceSize textureOffset  = 0;
+	VkDeviceSize samplerOffset  = 0;
+	VkDeviceSize materialOffset = 0;
 
 	// keep track of what state we are binding
 	MaterialPipeline* lastPipeline    = nullptr;
-	MaterialInstance* lastMaterial    = nullptr;
 	VkBuffer          lastIndexBuffer = VK_NULL_HANDLE;
 
 	auto draw = [&](const RenderObject& r)
 	{
-		if (r.m_material != lastMaterial)
+		// Rebind pipeline if changed
+		if (r.m_material->m_pipeline != lastPipeline)
 		{
-			lastMaterial = r.m_material;
+			lastPipeline = r.m_material->m_pipeline;
+			vkCmdBindPipeline(cmd,
+			                  VK_PIPELINE_BIND_POINT_GRAPHICS,
+			                  r.m_material->m_pipeline->m_pipeline);
 
-			// rebind pipeline and descriptors if the material changed
-			if (r.m_material->m_pipeline != lastPipeline)
-			{
-				lastPipeline = r.m_material->m_pipeline;
-				vkCmdBindPipeline(cmd,
-				                  VK_PIPELINE_BIND_POINT_GRAPHICS,
-				                  r.m_material->m_pipeline->m_pipeline);
-
-				// Bind descriptor buffer offsets for scene data (set 0)
-				uint32_t sceneBufferIndex = 0;
-				vkCmdSetDescriptorBufferOffsetsEXT(cmd,
-				                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
-				                                    r.m_material->m_pipeline->m_layout,
-				                                    0,  // first set
-				                                    1,  // descriptor count
-				                                    &sceneBufferIndex,
-				                                    &sceneDescriptorOffset);
-
-				// set dynamic viewport and scissor
-				VkViewport viewport = {};
-				viewport.x          = 0;
-				viewport.y          = 0;
-				viewport.width      = static_cast<float>(m_drawExtent.width);
-				viewport.height     = static_cast<float>(m_drawExtent.height);
-				viewport.minDepth   = 0.f;
-				viewport.maxDepth   = 1.f;
-
-				vkCmdSetViewport(cmd, 0, 1, &viewport);
-
-				VkRect2D scissor      = {};
-				scissor.offset.x      = 0;
-				scissor.offset.y      = 0;
-				scissor.extent.width  = m_drawExtent.width;
-				scissor.extent.height = m_drawExtent.height;
-
-				vkCmdSetScissor(cmd, 0, 1, &scissor);
-			}
-
-			// Bind descriptor buffer offset for material data (set 1)
-			uint32_t materialBufferIndex = 1;
+			// Bind all 4 descriptor buffer offsets (bindless)
+			uint32_t     bufferIndices[4] = {0, 1, 2, 3};
+			VkDeviceSize offsets[4]       = {sceneDescriptorOffset, textureOffset, samplerOffset, materialOffset};
 			vkCmdSetDescriptorBufferOffsetsEXT(cmd,
 			                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
 			                                    r.m_material->m_pipeline->m_layout,
-			                                    1,  // second set
-			                                    1,  // descriptor count
-			                                    &materialBufferIndex,
-			                                    &r.m_material->m_descriptorOffset);
+			                                    0,  // first set
+			                                    4,  // descriptor count
+			                                    bufferIndices,
+			                                    offsets);
+
+			// set dynamic viewport and scissor
+			VkViewport viewport = {};
+			viewport.x          = 0;
+			viewport.y          = 0;
+			viewport.width      = static_cast<float>(m_drawExtent.width);
+			viewport.height     = static_cast<float>(m_drawExtent.height);
+			viewport.minDepth   = 0.f;
+			viewport.maxDepth   = 1.f;
+
+			vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+			VkRect2D scissor      = {};
+			scissor.offset.x      = 0;
+			scissor.offset.y      = 0;
+			scissor.extent.width  = m_drawExtent.width;
+			scissor.extent.height = m_drawExtent.height;
+
+			vkCmdSetScissor(cmd, 0, 1, &scissor);
 		}
 
 		// rebind index buffer if needed
@@ -750,14 +779,16 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 			vkCmdBindIndexBuffer(cmd, r.m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 		}
 
-		// calculate final mesh matrix
+		// Push constants with material index (bindless)
 		GPUDrawPushConstants push_constants;
-		push_constants.m_worldMatrix  = r.m_transform;
-		push_constants.m_vertexBuffer = r.m_vertexBufferAddress;
+		push_constants.m_worldMatrix   = r.m_transform;
+		push_constants.m_vertexBuffer  = r.m_vertexBufferAddress;
+		push_constants.m_materialIndex = r.m_material->m_materialIndex;
+		push_constants.m_padding       = 0;
 
 		vkCmdPushConstants(cmd,
 		                   r.m_material->m_pipeline->m_layout,
-		                   VK_SHADER_STAGE_VERTEX_BIT,
+		                   VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 		                   0,
 		                   sizeof(GPUDrawPushConstants),
 		                   &push_constants);
@@ -794,7 +825,9 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 		ZoneScopedN("Draw Skybox");
 #endif
 		// Draw skybox last (after all geometry)
-		m_skybox->draw(cmd, sceneDescriptorOffset, m_drawExtent);
+		// Pass frame buffer address so skybox can rebind its own descriptor buffers
+		m_skybox->draw(cmd, sceneDescriptorOffset,
+		               currentFrame.m_descriptorBuffer.getDeviceAddress(), m_drawExtent);
 	}
 
 	vkCmdEndRendering(cmd);
