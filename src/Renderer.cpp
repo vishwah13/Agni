@@ -89,13 +89,6 @@ void Renderer::init(VkDevice                          device,
 	// Initialize descriptor buffer writer
 	m_descriptorBufferWriter.init(device, descriptorBufferProps);
 
-	// Initialize global material descriptor buffer (legacy, unused with bindless)
-	m_globalMaterialDescriptorBuffer.init(device,
-	                                       resourceManager,
-	                                       descriptorBufferProps,
-	                                       4 * 1024 * 1024,  // 4MB for all materials
-	                                       true);             // Include samplers
-
 	// Initialize bindless texture registry
 	m_textureRegistry.init(device, resourceManager, descriptorBufferProps);
 
@@ -152,9 +145,6 @@ void Renderer::cleanup()
 	// Cleanup descriptor layouts
 	vkDestroyDescriptorSetLayout(m_device, m_drawImageDescriptorLayout, nullptr);
 	vkDestroyDescriptorSetLayout(m_device, m_gpuSceneDataDescriptorLayout, nullptr);
-
-	// Cleanup descriptor buffers
-	m_globalMaterialDescriptorBuffer.destroy();
 
 	// Cleanup bindless resources
 	m_textureRegistry.destroy();

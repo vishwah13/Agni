@@ -166,8 +166,6 @@ void AssetLoader::cleanup()
 
 	// Destroy default material resources
 	m_defaultMaterial.reset();
-	m_defaultMaterialDescriptorPool.destroyPools(m_device);
-	m_resourceManager->destroyBuffer(m_defaultMaterialBuffer);
 
 	// Destroy shared samplers
 	if (m_linearSampler != VK_NULL_HANDLE)
@@ -209,19 +207,6 @@ void AssetLoader::buildPipelines(AgniEngine* engine)
 
 	if (!isResize)
 	{
-		// Legacy: create descriptor pool (unused with bindless)
-		std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> sizes = {
-			{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4},
-			{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}
-		};
-		m_defaultMaterialDescriptorPool.init(m_device, 1, sizes);
-
-		// Legacy: Create buffer for default material constants (unused with bindless)
-		m_defaultMaterialBuffer = m_resourceManager->createBuffer(
-			sizeof(GltfPbrMaterial::MaterialConstants),
-			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-			VMA_MEMORY_USAGE_CPU_TO_GPU);
-
 		// Create the default material using bindless system
 		TextureRegistry& texRegistry = engine->m_renderer.getTextureRegistry();
 		MaterialRegistry& matRegistry = engine->m_renderer.getMaterialRegistry();
@@ -571,18 +556,6 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 	{
 		AGNI_PRINT("Failed to determine glTF container \n");
 		return {};
-	}
-
-	// we can stimate the descriptors we will need accurately
-	// Only create descriptor pool if there are materials
-	if (!gltf.materials.empty())
-	{
-		std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> sizes = {
-		{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3},
-		{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3},
-		{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1}};
-
-		file.m_descriptorPool.init(engine->m_device, gltf.materials.size(), sizes);
 	}
 
 	// Map glTF samplers to bindless sampler indices
@@ -1062,11 +1035,6 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 
 void LoadedGLTF::clearAll()
 {
-	VkDevice dv = m_creator->m_device;
-
-	m_descriptorPool.destroyPools(dv);
-	m_creator->m_resourceManager.destroyBuffer(m_materialDataBuffer);
-
 	for (auto& [k, v] : meshes)
 	{
 		if (v)

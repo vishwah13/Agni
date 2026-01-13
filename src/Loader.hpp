@@ -1,8 +1,7 @@
-﻿#pragma once
+#pragma once
 #include <BindlessResources.hpp>
 #include <Components.hpp>
 #include <DescriptorBuffer.hpp>
-#include <Descriptors.hpp>
 #include <Material.hpp>
 #include <Scene.hpp>
 #include <Types.hpp>
@@ -49,10 +48,6 @@ struct LoadedGLTF
 	// nodes that dont have a parent, for iterating through the file in tree
 	// order
 	std::vector<std::shared_ptr<Node>> m_topNodes;
-
-	DescriptorAllocatorGrowable m_descriptorPool;
-
-	AllocatedBuffer m_materialDataBuffer;
 
 	AgniEngine* m_creator;
 
@@ -161,8 +156,6 @@ private:
 
 	// Default material (for glTF files without materials)
 	std::shared_ptr<GLTFMaterial> m_defaultMaterial;
-	DescriptorAllocatorGrowable   m_defaultMaterialDescriptorPool;
-	AllocatedBuffer               m_defaultMaterialBuffer;
 
 	// Mesh resources (kept alive but not rendered)
 	std::shared_ptr<LoadedGLTF> m_meshResources;

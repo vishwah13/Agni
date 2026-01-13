@@ -1,8 +1,5 @@
 #pragma once
 
-#include <DescriptorBuffer.hpp>
-#include <Descriptors.hpp>
-#include <Texture.hpp>
 #include <Types.hpp>
 
 #include <vk_mem_alloc.h>
@@ -26,9 +23,8 @@ struct MaterialPipeline
 struct MaterialInstance
 {
 	MaterialPipeline* m_pipeline;
-	VkDescriptorSet   m_materialSet;        // Legacy descriptor set (unused)
-	VkDeviceSize      m_descriptorOffset;   // Descriptor buffer offset (unused, legacy)
-	uint32_t          m_materialIndex;      // Bindless material array index (new system)
+	uint32_t          m_materialIndex;      // Bindless material array index
+	VkDeviceSize      m_descriptorOffset;   // Used by Skybox for its cubemap descriptor
 	MaterialPass      m_passType;
 };
 
@@ -36,30 +32,6 @@ struct GltfPbrMaterial
 {
 	MaterialPipeline m_opaquePipeline {};
 	MaterialPipeline m_transparentPipeline {};
-
-	VkDescriptorSetLayout m_materialLayout {VK_NULL_HANDLE};
-	DescriptorLayoutInfo  m_materialLayoutInfo {};  // For descriptor buffer
-
-	struct MaterialConstants
-	{
-		glm::vec4 m_colorFactors;
-		glm::vec4 m_metal_rough_factors;
-		// padding, we need it anyway for uniform buffers
-		glm::vec4 extra[14];
-	};
-
-	struct MaterialResources
-	{
-		Texture m_colorTexture;
-		Texture m_metalRoughTexture;
-		Texture m_normalTexture;
-		Texture m_aoTexture;
-		VkBuffer    m_dataBuffer;
-		uint32_t    m_dataBufferOffset;
-	};
-
-	DescriptorWriter       m_writer;        // Legacy writer
-	DescriptorBufferWriter m_bufferWriter;  // Descriptor buffer writer
 
 	// Pipeline accessors
 	MaterialPipeline& getOpaquePipeline() { return m_opaquePipeline; }
@@ -70,19 +42,6 @@ struct GltfPbrMaterial
 	// Clear only pipelines (used during resize - preserves descriptor layout)
 	void clearPipelines(VkDevice device);
 
-	// Clear all resources including descriptor layout (used on shutdown)
+	// Clear all resources (used on shutdown)
 	void clearResources(VkDevice device);
-
-	MaterialInstance
-	writeMaterial(VkDevice                     device,
-	              MaterialPass                 pass,
-	              const MaterialResources&     resources,
-	              DescriptorAllocatorGrowable& descriptorAllocator);
-
-	// New method for descriptor buffer path
-	MaterialInstance
-	writeMaterialToBuffer(VkDevice                  device,
-	                      MaterialPass              pass,
-	                      const MaterialResources&  resources,
-	                      DescriptorBufferAllocator& bufferAllocator);
 };

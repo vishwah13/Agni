@@ -220,7 +220,6 @@ void AgniEngine::draw()
 	m_renderer.processPickingResult();
 
 	getCurrentFrame().m_deletionQueue.flush();
-	getCurrentFrame().m_frameDescriptors.clearPools(m_device);
 	getCurrentFrame().m_descriptorBuffer.reset();  // Reset descriptor buffer allocator
 	VK_CHECK(vkResetFences(m_device, 1, &getCurrentFrame().m_renderFence));
 
@@ -753,17 +752,6 @@ void AgniEngine::initDescriptors()
 
 	for (int i = 0; i < FRAME_OVERLAP; i++)
 	{
-		// create a descriptor pool
-		std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> frameSizes = {
-		{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3},
-		{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3},
-		{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3},
-		{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4},
-		};
-
-		m_frames[i].m_frameDescriptors = DescriptorAllocatorGrowable {};
-		m_frames[i].m_frameDescriptors.init(m_device, 1000, frameSizes);
-
 		// Initialize descriptor buffer allocator
 		m_frames[i].m_descriptorBuffer.init(m_device,
 		                                     &m_resourceManager,
@@ -773,7 +761,6 @@ void AgniEngine::initDescriptors()
 
 		m_resourceManager.getMainDeletionQueue().push_function(
 		[&, i]() {
-			m_frames[i].m_frameDescriptors.destroyPools(m_device);
 			m_frames[i].m_descriptorBuffer.destroy();
 		});
 	}

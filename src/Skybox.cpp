@@ -364,31 +364,6 @@ void Skybox::clearPipelineResources(VkDevice device)
 }
 
 MaterialInstance
-Skybox::writeMaterial(VkDevice                     device,
-                      const MaterialResources&     resources,
-                      DescriptorAllocatorGrowable& descriptorAllocator)
-{
-	MaterialInstance matData;
-	matData.m_passType = MaterialPass::Other;
-
-	matData.m_materialSet =
-	descriptorAllocator.allocate(device, m_skyboxMaterialLayout);
-
-
-	m_writer.clear();
-	m_writer.writeImage(/*binding*/ 0,
-	                    resources.m_cubemapImage.m_imageView,
-	                    resources.m_cubemapSampler,
-	                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-	                    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-
-	// use the materialSet and update it here.
-	m_writer.updateSet(device, matData.m_materialSet);
-
-	return matData;
-}
-
-MaterialInstance
 Skybox::writeMaterialToBuffer(VkDevice                   device,
                                const MaterialResources&   resources,
                                DescriptorBufferAllocator& bufferAllocator)

@@ -42,9 +42,7 @@ struct FrameData
 	VkFence     m_renderFence;
 
 	DeletionQueue m_deletionQueue;
-	// To allocate descriptor sets at runtime.
-	DescriptorAllocatorGrowable m_frameDescriptors;
-	// Descriptor buffer allocator (replaces m_frameDescriptors)
+	// Descriptor buffer allocator for per-frame descriptors
 	DescriptorBufferAllocator m_descriptorBuffer;
 };
 

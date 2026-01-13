@@ -133,11 +133,6 @@ public:
 		return m_gpuSceneDataDescriptorLayout;
 	}
 
-	DescriptorBufferAllocator& getGlobalMaterialDescriptorBuffer()
-	{
-		return m_globalMaterialDescriptorBuffer;
-	}
-
 	// Bindless resource accessors
 	TextureRegistry& getTextureRegistry() { return m_textureRegistry; }
 	SamplerRegistry& getSamplerRegistry() { return m_samplerRegistry; }
@@ -210,7 +205,6 @@ private:
 	// Descriptor buffer system
 	DescriptorLayoutInfo      m_gpuSceneDataLayoutInfo;
 	DescriptorBufferWriter    m_descriptorBufferWriter;
-	DescriptorBufferAllocator m_globalMaterialDescriptorBuffer;  // Legacy, unused
 
 	// Bindless resources
 	TextureRegistry  m_textureRegistry;

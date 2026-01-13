@@ -63,7 +63,6 @@ private:
 	AllocatedImage m_cubemapImage {};
 	VkSampler      m_cubemapSampler {VK_NULL_HANDLE};
 
-	DescriptorWriter       m_writer;
 	DescriptorBufferWriter m_bufferWriter;
 
 	// Dedicated descriptor buffer for skybox material (cubemap)
@@ -72,10 +71,6 @@ private:
 	// Internal helper methods
 	void createCubeMesh(AgniEngine* engine);
 	void createMaterial(AgniEngine* engine);
-	MaterialInstance
-	writeMaterial(VkDevice                     device,
-	              const MaterialResources&     resources,
-	              DescriptorAllocatorGrowable& descriptorAllocator);
 
 	MaterialInstance
 	writeMaterialToBuffer(VkDevice                   device,
