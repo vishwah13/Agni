@@ -93,6 +93,7 @@ public:
 	          Skybox*                         skybox,
 	          DescriptorAllocatorGrowable*    globalDescriptorAllocator,
 	          const DescriptorBufferProperties& descriptorBufferProps,
+	          VkPhysicalDevice                physicalDevice,
 	          VkExtent2D                      windowExtent);
 
 	// Initialize sampler registry (must be called after AssetLoader creates samplers)

@@ -76,6 +76,7 @@ void Renderer::init(VkDevice                          device,
                     Skybox*                           skybox,
                     DescriptorAllocatorGrowable*      globalDescriptorAllocator,
                     const DescriptorBufferProperties& descriptorBufferProps,
+                    VkPhysicalDevice                  physicalDevice,
                     VkExtent2D                        windowExtent)
 {
 	m_device                     = device;
@@ -89,11 +90,14 @@ void Renderer::init(VkDevice                          device,
 	// Initialize descriptor buffer writer
 	m_descriptorBufferWriter.init(device, descriptorBufferProps);
 
-	// Initialize bindless texture registry
-	m_textureRegistry.init(device, resourceManager, descriptorBufferProps);
+	// Query GPU bindless limits
+	BindlessLimits bindlessLimits = queryBindlessLimits(physicalDevice);
 
-	// Initialize bindless material registry
-	m_materialRegistry.init(device, resourceManager, descriptorBufferProps);
+	// Initialize bindless texture registry with GPU-queried limits
+	m_textureRegistry.init(device, resourceManager, descriptorBufferProps, bindlessLimits.maxTextures);
+
+	// Initialize bindless material registry with GPU-queried limits
+	m_materialRegistry.init(device, resourceManager, descriptorBufferProps, bindlessLimits.maxMaterials);
 
 	// Note: SamplerRegistry is initialized later via initBindlessSamplers()
 	// after AssetLoader creates the samplers

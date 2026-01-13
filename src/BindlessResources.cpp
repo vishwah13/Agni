@@ -3,8 +3,44 @@
 #include <ResourceManager.hpp>
 #include <VulkanTools.hpp>
 
+#include <algorithm>
 #include <cassert>
 #include <cstring>
+#include <fmt/core.h>
+
+// ============================================================================
+// Query GPU Bindless Limits
+// ============================================================================
+
+BindlessLimits queryBindlessLimits(VkPhysicalDevice physicalDevice)
+{
+	BindlessLimits limits;
+
+	// Query descriptor indexing properties (Vulkan 1.2 core)
+	VkPhysicalDeviceDescriptorIndexingProperties indexingProps {};
+	indexingProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES;
+
+	VkPhysicalDeviceProperties2 props2 {};
+	props2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+	props2.pNext = &indexingProps;
+
+	vkGetPhysicalDeviceProperties2(physicalDevice, &props2);
+
+	// Use the per-stage sampled images limit for descriptor indexing
+	uint32_t maxTextures = indexingProps.maxPerStageDescriptorUpdateAfterBindSampledImages;
+
+	// Cap at a reasonable maximum (1M textures) to avoid excessive memory usage
+	maxTextures = std::min(maxTextures, 1000000u);
+
+	limits.maxTextures  = maxTextures;
+	limits.maxMaterials = std::min(maxTextures / 2, 65536u);  // Materials typically < textures
+
+	AGNI_PRINT("Bindless limits queried from GPU:\n");
+	AGNI_PRINT("  Max textures: {} (GPU limit: {})\n", limits.maxTextures, indexingProps.maxPerStageDescriptorUpdateAfterBindSampledImages);
+	AGNI_PRINT("  Max materials: {}\n", limits.maxMaterials);
+
+	return limits;
+}
 
 // ============================================================================
 // TextureRegistry Implementation
@@ -12,18 +48,20 @@
 
 void TextureRegistry::init(VkDevice                          device,
                            ResourceManager*                  resourceManager,
-                           const DescriptorBufferProperties& props)
+                           const DescriptorBufferProperties& props,
+                           uint32_t                          maxTextures)
 {
 	m_device          = device;
 	m_resourceManager = resourceManager;
 	m_props           = props;
+	m_maxTextures     = maxTextures;
 
 	// Create descriptor set layout for texture array
-	// Single binding with MAX_BINDLESS_TEXTURES sampled images
+	// Single binding with GPU-queried maximum sampled images
 	VkDescriptorSetLayoutBinding textureBinding {};
 	textureBinding.binding         = 0;
 	textureBinding.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-	textureBinding.descriptorCount = MAX_BINDLESS_TEXTURES;
+	textureBinding.descriptorCount = maxTextures;
 	textureBinding.stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
 	textureBinding.pImmutableSamplers = nullptr;
 
@@ -40,8 +78,8 @@ void TextureRegistry::init(VkDevice                          device,
 	m_layoutInfo.bindingOffsets.resize(1);
 	vkGetDescriptorSetLayoutBindingOffsetEXT(device, m_layoutInfo.layout, 0, &m_layoutInfo.bindingOffsets[0]);
 
-	// Calculate buffer size: need space for MAX_BINDLESS_TEXTURES sampled image descriptors
-	VkDeviceSize bufferSize = props.sampledImageDescriptorSize * MAX_BINDLESS_TEXTURES;
+	// Calculate buffer size: need space for maxTextures sampled image descriptors
+	VkDeviceSize bufferSize = props.sampledImageDescriptorSize * maxTextures;
 	// Align to descriptor buffer offset alignment
 	bufferSize = (bufferSize + props.descriptorBufferOffsetAlignment - 1) &
 	             ~(props.descriptorBufferOffsetAlignment - 1);
@@ -76,7 +114,7 @@ uint32_t TextureRegistry::registerTexture(VkImageView imageView)
 	}
 
 	// Check if we have space
-	if (m_nextIndex >= MAX_BINDLESS_TEXTURES)
+	if (m_nextIndex >= m_maxTextures)
 	{
 		assert(false && "TextureRegistry: Maximum texture count exceeded");
 		return INVALID_BINDLESS_INDEX;
@@ -172,14 +210,16 @@ void SamplerRegistry::destroy()
 
 void MaterialRegistry::init(VkDevice                          device,
                             ResourceManager*                  resourceManager,
-                            const DescriptorBufferProperties& props)
+                            const DescriptorBufferProperties& props,
+                            uint32_t                          maxMaterials)
 {
 	m_device          = device;
 	m_resourceManager = resourceManager;
 	m_props           = props;
+	m_maxMaterials    = maxMaterials;
 
 	// Create material data buffer (SSBO)
-	VkDeviceSize materialBufferSize = sizeof(GPUMaterialData) * MAX_BINDLESS_MATERIALS;
+	VkDeviceSize materialBufferSize = sizeof(GPUMaterialData) * maxMaterials;
 	m_materialBuffer = resourceManager->createBuffer(
 	    materialBufferSize,
 	    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
@@ -251,7 +291,7 @@ void MaterialRegistry::destroy()
 
 uint32_t MaterialRegistry::registerMaterial(const GPUMaterialData& data)
 {
-	if (m_nextIndex >= MAX_BINDLESS_MATERIALS)
+	if (m_nextIndex >= m_maxMaterials)
 	{
 		assert(false && "MaterialRegistry: Maximum material count exceeded");
 		return INVALID_BINDLESS_INDEX;

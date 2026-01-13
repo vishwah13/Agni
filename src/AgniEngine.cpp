@@ -76,6 +76,7 @@ void AgniEngine::init()
 	                &m_skybox,
 	                &m_globalDescriptorAllocator,
 	                m_descriptorBufferProps,
+	                m_chosenGPU,
 	                m_windowExtent);
 
 	// Initialize asset loader (creates default textures and samplers)
