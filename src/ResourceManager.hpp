@@ -39,8 +39,11 @@ public:
 	// Initialize the resource manager with Vulkan objects
 	void init(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, uint32_t graphicsQueueFamily);
 
-	// Cleanup all resources
+	// Cleanup all resources (flushes deletion queue)
 	void cleanup();
+
+	// Destroy VMA allocator (call after VMA stats are printed)
+	void destroyAllocator();
 
 	// Immediate submit for one-time GPU commands (uploads, transitions, etc.)
 	void immediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function);

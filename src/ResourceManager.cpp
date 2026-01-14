@@ -46,8 +46,8 @@ void ResourceManager::init(VkInstance       instance,
 
 	AGNI_PRINT("[VMA] Allocator created with device memory tracking enabled\n");
 
-	m_mainDeletionQueue.push_function([&]()
-	                                  { vmaDestroyAllocator(m_allocator); });
+	// Note: vmaDestroyAllocator is NOT added to deletion queue
+	// It must be destroyed explicitly via destroyAllocator() after VMA stats are printed
 
 	// Initialize immediate submit resources
 	VkCommandPoolCreateInfo commandPoolInfo =
@@ -78,6 +78,15 @@ void ResourceManager::init(VkInstance       instance,
 void ResourceManager::cleanup()
 {
 	m_mainDeletionQueue.flush();
+}
+
+void ResourceManager::destroyAllocator()
+{
+	if (m_allocator != VK_NULL_HANDLE)
+	{
+		vmaDestroyAllocator(m_allocator);
+		m_allocator = VK_NULL_HANDLE;
+	}
 }
 
 AllocatedBuffer ResourceManager::createBuffer(size_t             allocSize,
