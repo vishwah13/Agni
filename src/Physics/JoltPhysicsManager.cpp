@@ -18,7 +18,7 @@
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/quaternion.hpp>
 
-#include <fmt/core.h>
+#include <Debug.hpp>
 
 // Jolt uses namespaces
 using namespace JPH;
@@ -165,7 +165,7 @@ bool JoltPhysicsManager::initialize(const PhysicsSettings& settings)
 	// Install trace and assert callbacks
 	Trace = [](const char* inFMT, ...) {}; // Disable traces
 	JPH_IF_ENABLE_ASSERTS(AssertFailed = [](const char* inExpression, const char* inMessage, const char* inFile, uint inLine) -> bool {
-		fmt::print("[Jolt Assert] {} at {}:{}\n  {}\n", inExpression, inFile, inLine, inMessage ? inMessage : "");
+		AGNI_PRINT("[Jolt Assert] {} at {}:{}\n  {}\n", inExpression, inFile, inLine, inMessage ? inMessage : "");
 		return true; // Trigger breakpoint
 	});
 
@@ -203,9 +203,9 @@ bool JoltPhysicsManager::initialize(const PhysicsSettings& settings)
 	// Set gravity
 	m_physicsSystem->SetGravity(toJoltVec3(settings.gravity));
 
-	fmt::print("[JoltPhysicsManager] Initialized successfully\n");
-	fmt::print("  Max bodies: {}\n", settings.maxBodies);
-	fmt::print("  Gravity: ({:.2f}, {:.2f}, {:.2f})\n", settings.gravity.x, settings.gravity.y, settings.gravity.z);
+	AGNI_PRINT("[JoltPhysicsManager] Initialized successfully\n");
+	AGNI_PRINT("  Max bodies: {}\n", settings.maxBodies);
+	AGNI_PRINT("  Gravity: ({:.2f}, {:.2f}, {:.2f})\n", settings.gravity.x, settings.gravity.y, settings.gravity.z);
 
 	return true;
 }
@@ -228,7 +228,7 @@ void JoltPhysicsManager::shutdown()
 		delete Factory::sInstance;
 		Factory::sInstance = nullptr;
 
-		fmt::print("[JoltPhysicsManager] Shutdown complete\n");
+		AGNI_PRINT("[JoltPhysicsManager] Shutdown complete\n");
 	}
 }
 
@@ -273,7 +273,7 @@ uint32_t JoltPhysicsManager::createDynamicBody(const glm::vec3&        pos,
 		shape = new CapsuleShape(collider.capsuleHalfHeight, collider.capsuleRadius);
 		break;
 	default:
-		fmt::print("[JoltPhysicsManager] Unsupported collider type\n");
+		AGNI_PRINT("[JoltPhysicsManager] Unsupported collider type\n");
 		return 0;
 	}
 
@@ -298,7 +298,7 @@ uint32_t JoltPhysicsManager::createDynamicBody(const glm::vec3&        pos,
 
 	if (bodyID.IsInvalid())
 	{
-		fmt::print("[JoltPhysicsManager] Failed to create dynamic body\n");
+		AGNI_PRINT("[JoltPhysicsManager] Failed to create dynamic body\n");
 		return 0;
 	}
 

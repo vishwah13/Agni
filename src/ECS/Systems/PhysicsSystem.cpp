@@ -7,7 +7,7 @@
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/quaternion.hpp>
 
-#include <fmt/core.h>
+#include <Debug.hpp>
 
 namespace agni
 {
@@ -114,7 +114,7 @@ void PhysicsSystem::initializePhysicsBodies(World& world, agni::physics::JoltPhy
 
 		    if (bodyID == 0)
 		    {
-			    fmt::print("[PhysicsSystem] Failed to create physics body for entity {}\n", e.id());
+			    AGNI_PRINT("[PhysicsSystem] Failed to create physics body for entity {}\n", e.id());
 			    return;
 		    }
 
@@ -124,7 +124,7 @@ void PhysicsSystem::initializePhysicsBodies(World& world, agni::physics::JoltPhy
 		    // Register entity <-> body mapping
 		    physics.registerEntityBody(e.id(), bodyID);
 
-		    fmt::print("[PhysicsSystem] Created {} physics body for entity {} (BodyID: {})\n",
+		    AGNI_PRINT("[PhysicsSystem] Created {} physics body for entity {} (BodyID: {})\n",
 		               rigidbody.type == RigidBodyType::Dynamic    ? "Dynamic"
 		               : rigidbody.type == RigidBodyType::Static   ? "Static"
 		                                                           : "Kinematic",

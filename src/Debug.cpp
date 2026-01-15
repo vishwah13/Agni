@@ -114,7 +114,7 @@ void PrintVmaAllocationStats()
 }
 
 // Print detailed VMA statistics (including suballocations)
-void PrintDetailedVmaStats(VmaAllocator allocator)
+void PrintDetailedVmaStats([[maybe_unused]] VmaAllocator allocator)
 {
 #ifndef NDEBUG
 	if (allocator == VK_NULL_HANDLE)
