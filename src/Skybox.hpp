@@ -73,8 +73,7 @@ private:
 	void createMaterial(AgniEngine* engine);
 
 	MaterialInstance
-	writeMaterialToBuffer(VkDevice                   device,
-	                      const MaterialResources&   resources,
+	writeMaterialToBuffer(const MaterialResources&   resources,
 	                      DescriptorBufferAllocator& bufferAllocator);
 
 	AllocatedImage createCubemap(

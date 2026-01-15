@@ -256,6 +256,8 @@ int mikkGetNumFaces(const SMikkTSpaceContext* pContext)
 int mikkGetNumVerticesOfFace(const SMikkTSpaceContext* pContext,
                              const int                 iFace)
 {
+	(void)pContext;
+	(void)iFace;
 	return 3; // triangles
 }
 
@@ -330,7 +332,7 @@ std::optional<AllocatedImage> AssetLoader::loadImage(fastgltf::Asset& asset,
 
 	std::visit(
 	fastgltf::visitor {
-	[](auto& arg) {},
+	[](auto&) {},
 	[&](fastgltf::sources::URI& filePath)
 	{
 		assert(filePath.fileByteOffset ==
@@ -406,7 +408,7 @@ std::optional<AllocatedImage> AssetLoader::loadImage(fastgltf::Asset& asset,
 		// are already loaded into a vector.
 		// but only sources::Array ended up working here?
 		// still need to have other variants handled
-		[](auto& arg) {},
+		[](auto&) {},
 		[&](fastgltf::sources::Array& vector)
 		{
 			unsigned char* data = stbi_load_from_memory(
@@ -504,8 +506,8 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 
 	constexpr auto gltfOptions =
 	fastgltf::Options::DontRequireValidAssetMember |
-	fastgltf::Options::AllowDouble | fastgltf::Options::LoadGLBBuffers |
-	fastgltf::Options::LoadExternalBuffers;
+	fastgltf::Options::AllowDouble |
+	fastgltf::Options::LoadExternalBuffers |
 	fastgltf::Options::LoadExternalImages;
 
 	auto data = fastgltf::GltfDataBuffer::FromPath(filePath);
@@ -734,7 +736,7 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 			newSurface.m_count =
 			(uint32_t) gltf.accessors[p.indicesAccessor.value()].count;
 
-			size_t initial_vtx = vertices.size();
+			uint32_t initial_vtx = static_cast<uint32_t>(vertices.size());
 
 			// load indexes
 			{

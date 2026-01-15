@@ -395,19 +395,18 @@ void Renderer::initBackgroundPipelines()
 
 void Renderer::renderFrame(VkCommandBuffer cmd,
                             uint32_t        swapchainImageIndex,
-                            FrameData&      currentFrame,
-                            VkExtent2D      windowExtent)
+                            FrameData&      currentFrame)
 {
 #ifdef TRACY_ENABLE
 	ZoneScoped;
 #endif
 
-	m_drawExtent.width =
+	m_drawExtent.width = static_cast<uint32_t>(
 	std::min(m_swapchainManager->getSwapchainExtent().width, m_drawImage.m_imageExtent.width) *
-	m_renderScale;
-	m_drawExtent.height =
+	m_renderScale);
+	m_drawExtent.height = static_cast<uint32_t>(
 	std::min(m_swapchainManager->getSwapchainExtent().height, m_drawImage.m_imageExtent.height) *
-	m_renderScale;
+	m_renderScale);
 
 	// Transition MSAA images for rendering
 	vkutil::transitionImage(cmd,

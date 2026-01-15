@@ -256,8 +256,7 @@ void AgniEngine::draw()
 	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
 	// Render the frame
-	m_renderer.renderFrame(
-	cmd, swapchainImageIndex, getCurrentFrame(), m_windowExtent);
+	m_renderer.renderFrame(cmd, swapchainImageIndex, getCurrentFrame());
 
 	// finalize the command buffer (we can no longer add commands, but it can
 	// now be executed)

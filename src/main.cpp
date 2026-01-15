@@ -1,6 +1,6 @@
 #include <AgniEngine.hpp>
 
-int main(int argc, char* argv[])
+int main()
 {
 	AgniEngine engine;
 

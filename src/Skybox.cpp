@@ -344,7 +344,7 @@ void Skybox::createMaterial(AgniEngine* engine)
 
 	// Write skybox material to our dedicated descriptor buffer
 	m_skyboxMaterial = new MaterialInstance(writeMaterialToBuffer(
-	    engine->m_device, skyboxResources, m_skyboxDescriptorBuffer));
+	    skyboxResources, m_skyboxDescriptorBuffer));
 }
 
 void Skybox::clearPipelineResources(VkDevice device)
@@ -364,8 +364,7 @@ void Skybox::clearPipelineResources(VkDevice device)
 }
 
 MaterialInstance
-Skybox::writeMaterialToBuffer(VkDevice                   device,
-                               const MaterialResources&   resources,
+Skybox::writeMaterialToBuffer(const MaterialResources&   resources,
                                DescriptorBufferAllocator& bufferAllocator)
 {
 	MaterialInstance matData;

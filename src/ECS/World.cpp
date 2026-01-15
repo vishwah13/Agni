@@ -43,7 +43,7 @@ void World::registerSystems()
 	// Transform hierarchy system - processes entities sorted by depth
 	m_world.system<TransformComponent, SceneNodeComponent>("TransformHierarchy")
 	    .kind(flecs::PreUpdate)
-	    .each([this](flecs::entity e, TransformComponent& transform, SceneNodeComponent& node) {
+	    .each([this](TransformComponent& transform, SceneNodeComponent& node) {
 		    if (!node.dirtyWorld)
 			    return;
 

@@ -107,8 +107,7 @@ public:
 
 	void renderFrame(VkCommandBuffer cmd,
 	                 uint32_t        swapchainImageIndex,
-	                 FrameData&      currentFrame,
-	                 VkExtent2D      windowExtent);
+	                 FrameData&      currentFrame);
 	void updateScene(float deltaTime, VkExtent2D windowExtent);
 
 	// Accessors

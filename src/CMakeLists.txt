@@ -79,6 +79,36 @@ set_property(TARGET engine PROPERTY CXX_STANDARD 20)
 target_compile_definitions(engine PUBLIC GLM_FORCE_DEPTH_ZERO_TO_ONE)
 target_include_directories(engine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
+# ============================================================================
+# Treat warnings as errors for main project only
+# ============================================================================
+target_compile_options(engine PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Werror>
+)
+
+# ============================================================================
+# Mark third-party includes as SYSTEM to suppress warnings
+# ============================================================================
+target_include_directories(engine SYSTEM PRIVATE
+    ${PROJECT_SOURCE_DIR}/third_party/glm
+    ${PROJECT_SOURCE_DIR}/third_party/vma/include
+    ${PROJECT_SOURCE_DIR}/third_party/imgui
+    ${PROJECT_SOURCE_DIR}/third_party/imgui/backends
+    ${PROJECT_SOURCE_DIR}/third_party/ImGuizmo
+    ${PROJECT_SOURCE_DIR}/third_party/stb_image
+    ${PROJECT_SOURCE_DIR}/third_party/vkbootstrap/src
+    ${PROJECT_SOURCE_DIR}/third_party/fastgltf/include
+    ${PROJECT_SOURCE_DIR}/third_party/fmt/include
+    ${PROJECT_SOURCE_DIR}/third_party/renderdoc
+    ${PROJECT_SOURCE_DIR}/third_party/mikktspace
+    ${PROJECT_SOURCE_DIR}/third_party/flecs/include
+    ${PROJECT_SOURCE_DIR}/third_party/tracy/public
+    ${PROJECT_SOURCE_DIR}/third_party/volk
+    ${PROJECT_SOURCE_DIR}/third_party/Vulkan-Headers/include
+    ${PROJECT_SOURCE_DIR}/third_party/jolt
+)
+
 add_dependencies(engine Shaders)
 
 target_link_libraries(engine PUBLIC vma glm volk::volk Vulkan::Headers fmt::fmt stb_image SDL3::SDL3 vkbootstrap imgui imguizmo fastgltf::fastgltf renderdoc mikktspace flecs::flecs_static)

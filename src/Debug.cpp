@@ -7,14 +7,14 @@ AllocationMetrics g_allocationMetrics = {0, 0};
 // Global operator new override for CPU allocation tracking
 void* operator new(size_t size)
 {
-	g_allocationMetrics.m_totalAllocated += size;
+	g_allocationMetrics.m_totalAllocated += static_cast<uint32_t>(size);
 	return malloc(size);
 }
 
 // Global operator delete override for CPU allocation tracking
 void operator delete(void* memory, size_t size)
 {
-	g_allocationMetrics.m_totalFreed += size;
+	g_allocationMetrics.m_totalFreed += static_cast<uint32_t>(size);
 	free(memory);
 }
 

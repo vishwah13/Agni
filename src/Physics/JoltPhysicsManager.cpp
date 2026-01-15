@@ -563,5 +563,3 @@ JPH::BodyID JoltPhysicsManager::toJoltBodyID(uint32_t bodyID) const
 } // namespace physics
 } // namespace agni
 
-// Restore warnings
-JPH_SUPPRESS_WARNINGS_STD_END

@@ -108,7 +108,7 @@ void ECSInspector::renderEntityList()
 {
 	// Count total entities
 	int totalCount = 0;
-	m_world.get().each([&totalCount](flecs::entity e) { totalCount++; });
+	m_world.get().each([&totalCount]([[maybe_unused]] flecs::entity e) { totalCount++; });
 
 	ImGui::Text("Entities (%d)", totalCount);
 	ImGui::Separator();

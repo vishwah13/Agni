@@ -20,8 +20,7 @@ void PhysicsSystem::syncToPhysics(World& world, agni::physics::JoltPhysicsManage
 
 	// Query all entities with physics bodies that are kinematic
 	flecsWorld.query<const TransformComponent, const RigidBodyComponent>()
-	    .each([&physics](flecs::entity e,
-	                     const TransformComponent&  transform,
+	    .each([&physics](const TransformComponent&  transform,
 	                     const RigidBodyComponent& rigidbody) {
 		    // Only sync kinematic bodies (they are driven by animation/code)
 		    if (rigidbody.type != RigidBodyType::Kinematic)
@@ -41,8 +40,7 @@ void PhysicsSystem::syncFromPhysics(World& world, agni::physics::JoltPhysicsMana
 
 	// Query all dynamic physics bodies and sync their transforms back to ECS
 	flecsWorld.query<TransformComponent, SceneNodeComponent, RigidBodyComponent>()
-	    .each([&physics](flecs::entity e,
-	                     TransformComponent&  transform,
+	    .each([&physics](TransformComponent&  transform,
 	                     SceneNodeComponent& node,
 	                     RigidBodyComponent& rigidbody) {
 		    // Only sync dynamic bodies (static and kinematic are driven by ECS)
