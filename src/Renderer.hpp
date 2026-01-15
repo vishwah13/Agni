@@ -129,6 +129,9 @@ public:
 	float& getShadowNormalBias() { return m_shadowNormalBias; }
 	float& getShadowOrthoSize() { return m_shadowOrthoSize; }
 	bool& getShadowsEnabled() { return m_shadowsEnabled; }
+	float& getSpotShadowBias() { return m_spotShadowBias; }
+	float& getSpotShadowNormalBias() { return m_spotShadowNormalBias; }
+	bool& getSpotShadowsEnabled() { return m_spotShadowsEnabled; }
 	VkExtent2D getDrawExtent() const
 	{
 		return m_drawExtent;
@@ -244,18 +247,22 @@ private:
 	uint64_t  m_lastPickedEntityID  = 0;
 
 	// Shadow mapping resources
-	AllocatedImage   m_shadowMap;
+	AllocatedImage   m_shadowMap;              // Directional light shadow map
+	AllocatedImage   m_spotShadowMap;          // Spot light shadow map
 	VkSampler        m_shadowSampler        = VK_NULL_HANDLE;
 	VkPipeline       m_shadowPipeline       = VK_NULL_HANDLE;
 	VkPipelineLayout m_shadowPipelineLayout = VK_NULL_HANDLE;
 
 	// Shadow configuration
-	float m_shadowBias       = 0.005f;
-	float m_shadowNormalBias = 0.02f;
-	float m_shadowOrthoSize  = 50.0f;
-	float m_shadowNearPlane  = 0.1f;
-	float m_shadowFarPlane   = 200.0f;
-	bool  m_shadowsEnabled   = true;
+	float m_shadowBias          = 0.005f;
+	float m_shadowNormalBias    = 0.02f;
+	float m_shadowOrthoSize     = 50.0f;
+	float m_shadowNearPlane     = 0.1f;
+	float m_shadowFarPlane      = 200.0f;
+	bool  m_shadowsEnabled      = true;
+	float m_spotShadowBias      = 0.005f;
+	float m_spotShadowNormalBias = 0.02f;
+	bool  m_spotShadowsEnabled  = true;
 
 	// Private rendering functions
 	void drawBackground(VkCommandBuffer cmd);
@@ -274,5 +281,7 @@ private:
 	void initShadowResources();
 	void initShadowPipeline();
 	void drawShadowPass(VkCommandBuffer cmd, FrameData& currentFrame);
+	void drawSpotShadowPass(VkCommandBuffer cmd, FrameData& currentFrame);
 	glm::mat4 calculateLightSpaceMatrix(const glm::vec3& lightDir);
+	glm::mat4 calculateSpotLightSpaceMatrix(const glm::vec3& position, const glm::vec3& direction, float outerConeAngle);
 };

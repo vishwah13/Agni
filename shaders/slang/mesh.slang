@@ -9,12 +9,19 @@ ConstantBuffer<SceneData> sceneData;
 [[vk::binding(1, 0)]]
 StructuredBuffer<LightData> lightData;
 
-// Shadow map (set 0, binding 2)
+// Directional light shadow map (set 0, binding 2)
 [[vk::binding(2, 0)]]
 Texture2D<float> shadowMap;
 
 [[vk::binding(2, 0)]]
 SamplerComparisonState shadowSampler;
+
+// Spot light shadow map (set 0, binding 3)
+[[vk::binding(3, 0)]]
+Texture2D<float> spotShadowMap;
+
+[[vk::binding(3, 0)]]
+SamplerComparisonState spotShadowSampler;
 
 // Bindless texture array (set 1, binding 0)
 [[vk::binding(0, 1)]]
@@ -50,7 +57,8 @@ struct VertexOutput
     float3 worldPos : TEXCOORD1;
     float3 tangent : TEXCOORD2;
     float3 bitangent : TEXCOORD3;
-    float4 lightSpacePos : TEXCOORD4;  // Position in light space for shadow mapping
+    float4 lightSpacePos : TEXCOORD4;      // Directional light space position
+    float4 spotLightSpacePos : TEXCOORD5;  // Spot light space position
 };
 
 // Helper function to load vertex from buffer device address
@@ -89,8 +97,9 @@ VertexOutput vertexMain(uint vertexIndex : SV_VertexID)
     output.tangent = T;
     output.bitangent = B;
 
-    // Calculate light space position for shadow mapping
-    output.lightSpacePos = mul(sceneData.lightSpaceMatrix, worldPos);
+    // Calculate light space positions for shadow mapping
+    output.lightSpacePos = mul(sceneData.lightSpaceMatrix, worldPos);         // Directional
+    output.spotLightSpacePos = mul(sceneData.spotLightSpaceMatrix, worldPos); // Spot
 
     return output;
 }
@@ -151,7 +160,7 @@ float calculateAttenuation(float distance, float radius)
     return attenuation * attenuation;
 }
 
-// Shadow calculation using PCF (Percentage Closer Filtering) for soft shadows
+// Shadow calculation using PCF (Percentage Closer Filtering) for soft shadows - Directional light
 float calculateShadow(float4 lightSpacePos, float3 N, float3 L)
 {
     // Check if shadows are enabled
@@ -195,6 +204,50 @@ float calculateShadow(float4 lightSpacePos, float3 N, float3 L)
     }
 
     return shadow / 9.0;  // Average of 9 samples
+}
+
+// Spot light shadow calculation using PCF
+float calculateSpotShadow(float4 spotLightSpacePos, float3 N, float3 L)
+{
+    // Check if spot shadows are enabled
+    if (sceneData.spotShadowParams.w < 0.5)
+        return 1.0;
+
+    // Perspective divide (important for perspective projection)
+    float3 projCoords = spotLightSpacePos.xyz / spotLightSpacePos.w;
+
+    // Transform to [0,1] UV coordinates
+    float2 shadowUV = projCoords.xy * 0.5 + 0.5;
+
+    // Check if outside shadow map bounds or behind light
+    if (shadowUV.x < 0.0 || shadowUV.x > 1.0 ||
+        shadowUV.y < 0.0 || shadowUV.y > 1.0 ||
+        projCoords.z < 0.0 || projCoords.z > 1.0)
+        return 1.0;
+
+    float currentDepth = projCoords.z;
+
+    // Apply bias
+    float bias = sceneData.spotShadowParams.x;
+    float normalBias = sceneData.spotShadowParams.y;
+    float NdotL = max(dot(N, L), 0.0);
+    float slopeBias = bias * (1.0 - NdotL);
+    float biasedDepth = currentDepth + slopeBias + normalBias;
+
+    // PCF filtering - sample 3x3 grid
+    float shadow = 0.0;
+    float texelSize = 1.0 / 2048.0;  // Shadow map resolution
+
+    for (int x = -1; x <= 1; ++x)
+    {
+        for (int y = -1; y <= 1; ++y)
+        {
+            float2 offset = float2(x, y) * texelSize;
+            shadow += spotShadowMap.SampleCmpLevelZero(spotShadowSampler, shadowUV + offset, biasedDepth);
+        }
+    }
+
+    return shadow / 9.0;
 }
 
 [shader("fragment")]
@@ -332,7 +385,15 @@ float4 fragmentMain(VertexOutput input) : SV_Target
         sKd *= 1.0 - metallic;
 
         float sNdotL = max(dot(N, sL), 0.0);
-        Lo += (sKd * albedo / PI + sSpecular) * sRadiance * sNdotL;
+
+        // Apply shadow to first spot light only (index matches spotShadowParams.z)
+        float spotShadow = 1.0;
+        if (i == uint(sceneData.spotShadowParams.z) && sceneData.spotShadowParams.w > 0.5)
+        {
+            spotShadow = calculateSpotShadow(input.spotLightSpacePos, N, sL);
+        }
+
+        Lo += (sKd * albedo / PI + sSpecular) * sRadiance * sNdotL * spotShadow;
     }
 
     // Ambient lighting (IBL approximation)

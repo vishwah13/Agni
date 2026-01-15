@@ -143,6 +143,7 @@ void Renderer::cleanup()
 
 	// Cleanup shadow resources
 	m_resourceManager->destroyImage(m_shadowMap);
+	m_resourceManager->destroyImage(m_spotShadowMap);
 	if (m_shadowSampler != VK_NULL_HANDLE)
 		vkDestroySampler(m_device, m_shadowSampler, nullptr);
 	if (m_shadowPipeline != VK_NULL_HANDLE)
@@ -287,13 +288,21 @@ void Renderer::initShadowResources()
 	VkImageUsageFlags shadowUsages = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
 	                                 VK_IMAGE_USAGE_SAMPLED_BIT;
 
+	// Directional light shadow map
 	m_shadowMap = m_resourceManager->createImage(shadowExtent,
 	                                              VK_FORMAT_D32_SFLOAT,
 	                                              shadowUsages,
 	                                              false,
 	                                              VK_SAMPLE_COUNT_1_BIT);
 
-	// Create comparison sampler for shadow mapping
+	// Spot light shadow map
+	m_spotShadowMap = m_resourceManager->createImage(shadowExtent,
+	                                                  VK_FORMAT_D32_SFLOAT,
+	                                                  shadowUsages,
+	                                                  false,
+	                                                  VK_SAMPLE_COUNT_1_BIT);
+
+	// Create comparison sampler for shadow mapping (shared by both)
 	VkSamplerCreateInfo samplerInfo = {};
 	samplerInfo.sType            = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
 	samplerInfo.magFilter        = VK_FILTER_LINEAR;
@@ -326,12 +335,13 @@ void Renderer::initDescriptors()
 	m_drawImageDescriptors =
 	m_globalDescriptorAllocator->allocate(m_device, m_drawImageDescriptorLayout);
 
-	// Create descriptor set layout for GPU scene data + lights + shadow map (using descriptor buffer)
+	// Create descriptor set layout for GPU scene data + lights + shadow maps (using descriptor buffer)
 	{
 		DescriptorLayoutBuilder builder;
 		builder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);          // Scene data
 		builder.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);          // Light data
-		builder.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);  // Shadow map
+		builder.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);  // Directional shadow map
+		builder.addBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);  // Spot shadow map
 		m_gpuSceneDataLayoutInfo = builder.buildForDescriptorBuffer(
 		m_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 		m_gpuSceneDataDescriptorLayout = m_gpuSceneDataLayoutInfo.layout;
@@ -530,6 +540,42 @@ glm::mat4 Renderer::calculateLightSpaceMatrix(const glm::vec3& lightDir)
 	return lightProj * lightView;
 }
 
+glm::mat4 Renderer::calculateSpotLightSpaceMatrix(const glm::vec3& position,
+                                                    const glm::vec3& direction,
+                                                    float outerConeAngle)
+{
+	// Calculate light space matrix for spot light shadow mapping
+	// Spot lights use PERSPECTIVE projection (unlike directional which uses ortho)
+
+	glm::vec3 lightDir = glm::normalize(direction);
+	glm::vec3 target = position + lightDir;
+
+	// Create stable up vector
+	glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+	if (glm::abs(glm::dot(lightDir, up)) > 0.99f)
+	{
+		up = glm::vec3(1.0f, 0.0f, 0.0f);
+	}
+
+	glm::mat4 lightView = glm::lookAt(position, target, up);
+
+	// Perspective projection for spot light (reverse-Z)
+	// FOV should be at least 2x the outer cone angle to cover the entire spotlight cone
+	float fov = glm::radians(outerConeAngle) * 2.2f;  // Slightly larger for margin
+	float aspectRatio = 1.0f;  // Square shadow map
+
+	// Reverse-Z: swap near/far
+	glm::mat4 lightProj = glm::perspective(fov,
+	                                        aspectRatio,
+	                                        m_shadowFarPlane,   // Near = far value (reverse-Z)
+	                                        m_shadowNearPlane); // Far = near value (reverse-Z)
+
+	// Flip Y for Vulkan
+	lightProj[1][1] *= -1.0f;
+
+	return lightProj * lightView;
+}
+
 void Renderer::drawShadowPass(VkCommandBuffer cmd, FrameData& currentFrame)
 {
 #ifdef TRACY_ENABLE
@@ -655,6 +701,133 @@ void Renderer::drawShadowPass(VkCommandBuffer cmd, FrameData& currentFrame)
 	                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
 }
 
+void Renderer::drawSpotShadowPass(VkCommandBuffer cmd, FrameData& currentFrame)
+{
+#ifdef TRACY_ENABLE
+	ZoneScopedN("Spot Shadow Pass");
+#endif
+
+	// Transition spot shadow map for rendering
+	vkutil::transitionImage(cmd,
+	                        m_spotShadowMap.m_image,
+	                        VK_IMAGE_LAYOUT_UNDEFINED,
+	                        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
+	// Setup depth attachment for spot shadow pass
+	VkRenderingAttachmentInfo depthAttachment {};
+	depthAttachment.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+	depthAttachment.imageView   = m_spotShadowMap.m_imageView;
+	depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+	depthAttachment.loadOp      = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	depthAttachment.storeOp     = VK_ATTACHMENT_STORE_OP_STORE;
+	depthAttachment.clearValue.depthStencil.depth = 0.0f;  // Reverse-Z: far = 0
+
+	VkRenderingInfo renderInfo {};
+	renderInfo.sType                = VK_STRUCTURE_TYPE_RENDERING_INFO;
+	renderInfo.renderArea           = {{0, 0}, {SHADOW_MAP_RESOLUTION, SHADOW_MAP_RESOLUTION}};
+	renderInfo.layerCount           = 1;
+	renderInfo.colorAttachmentCount = 0;
+	renderInfo.pColorAttachments    = nullptr;
+	renderInfo.pDepthAttachment     = &depthAttachment;
+
+	vkCmdBeginRendering(cmd, &renderInfo);
+
+	// Bind shadow pipeline (reuse same pipeline as directional)
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_shadowPipeline);
+
+	// Set viewport and scissor
+	VkViewport viewport {};
+	viewport.x        = 0;
+	viewport.y        = 0;
+	viewport.width    = static_cast<float>(SHADOW_MAP_RESOLUTION);
+	viewport.height   = static_cast<float>(SHADOW_MAP_RESOLUTION);
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+	vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+	VkRect2D scissor {};
+	scissor.offset = {0, 0};
+	scissor.extent = {SHADOW_MAP_RESOLUTION, SHADOW_MAP_RESOLUTION};
+	vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+	// Allocate scene data buffer (contains spot light matrix)
+	AllocatedBuffer gpuSceneDataBuffer = m_resourceManager->createBuffer(
+	    sizeof(GPUSceneData),
+	    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+	    VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+	currentFrame.m_deletionQueue.push_function(
+	    [rm = m_resourceManager, gpuSceneDataBuffer]() {
+		    rm->destroyBuffer(gpuSceneDataBuffer);
+	    });
+
+	GPUSceneData* sceneUniformData = (GPUSceneData*) gpuSceneDataBuffer.m_info.pMappedData;
+	*sceneUniformData = m_sceneData;
+	// For spot shadow pass, copy spot matrix to lightSpaceMatrix slot (shader expects it there)
+	sceneUniformData->m_lightSpaceMatrix = m_sceneData.m_spotLightSpaceMatrix;
+
+	// Allocate descriptor buffer space
+	VkDeviceSize sceneDescriptorOffset = currentFrame.m_descriptorBuffer.allocate(m_gpuSceneDataLayoutInfo);
+
+	VkBufferDeviceAddressInfo addressInfo {};
+	addressInfo.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+	addressInfo.buffer = gpuSceneDataBuffer.m_buffer;
+	VkDeviceAddress sceneDataAddress = vkGetBufferDeviceAddress(m_device, &addressInfo);
+
+	void* sceneDescriptorPtr = currentFrame.m_descriptorBuffer.getPtrAtOffset(sceneDescriptorOffset);
+	m_descriptorBufferWriter.writeUniformBuffer(sceneDescriptorPtr,
+	                                             m_gpuSceneDataLayoutInfo.bindingOffsets[0],
+	                                             sceneDataAddress,
+	                                             sizeof(GPUSceneData));
+
+	// Bind descriptor buffer
+	VkDescriptorBufferBindingInfoEXT bufferBinding {};
+	bufferBinding.sType   = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT;
+	bufferBinding.address = currentFrame.m_descriptorBuffer.getDeviceAddress();
+	bufferBinding.usage   = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
+	                        VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT;
+	vkCmdBindDescriptorBuffersEXT(cmd, 1, &bufferBinding);
+
+	uint32_t bufferIndex = 0;
+	vkCmdSetDescriptorBufferOffsetsEXT(cmd,
+	                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+	                                    m_shadowPipelineLayout,
+	                                    0, 1, &bufferIndex, &sceneDescriptorOffset);
+
+	// Draw all opaque objects
+	VkBuffer lastIndexBuffer = VK_NULL_HANDLE;
+
+	for (const auto& obj : m_mainDrawContext.m_OpaqueSurfaces)
+	{
+		if (obj.m_indexBuffer != lastIndexBuffer)
+		{
+			lastIndexBuffer = obj.m_indexBuffer;
+			vkCmdBindIndexBuffer(cmd, obj.m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+		}
+
+		ShadowPushConstants pushConstants;
+		pushConstants.m_worldMatrix  = obj.m_transform;
+		pushConstants.m_vertexBuffer = obj.m_vertexBufferAddress;
+
+		vkCmdPushConstants(cmd,
+		                   m_shadowPipelineLayout,
+		                   VK_SHADER_STAGE_VERTEX_BIT,
+		                   0,
+		                   sizeof(ShadowPushConstants),
+		                   &pushConstants);
+
+		vkCmdDrawIndexed(cmd, obj.m_indexCount, 1, obj.m_firstIndex, 0, 0);
+	}
+
+	vkCmdEndRendering(cmd);
+
+	// Transition spot shadow map for sampling
+	vkutil::transitionImage(cmd,
+	                        m_spotShadowMap.m_image,
+	                        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+	                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+}
+
 void Renderer::renderFrame(VkCommandBuffer cmd,
                             uint32_t        swapchainImageIndex,
                             FrameData&      currentFrame)
@@ -686,10 +859,16 @@ void Renderer::renderFrame(VkCommandBuffer cmd,
 	                        VK_IMAGE_LAYOUT_UNDEFINED,
 	                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-	// Shadow pass (before main geometry)
+	// Shadow passes (before main geometry)
 	if (m_shadowsEnabled && m_mainDrawContext.m_DirectionalLight.active)
 	{
 		drawShadowPass(cmd, currentFrame);
+	}
+
+	// Spot light shadow pass
+	if (m_spotShadowsEnabled && !m_mainDrawContext.m_SpotLights.empty())
+	{
+		drawSpotShadowPass(cmd, currentFrame);
 	}
 
 	// Object ID pass for picking (only runs when picking is requested)
@@ -956,10 +1135,17 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	                                             lightDataAddress,
 	                                             sizeof(GPULightData));
 
-	// Binding 2: Shadow map combined image sampler
+	// Binding 2: Directional shadow map combined image sampler
 	m_descriptorBufferWriter.writeImageSampler(sceneDescriptorPtr,
 	                                            m_gpuSceneDataLayoutInfo.bindingOffsets[2],
 	                                            m_shadowMap.m_imageView,
+	                                            m_shadowSampler,
+	                                            VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+
+	// Binding 3: Spot shadow map combined image sampler
+	m_descriptorBufferWriter.writeImageSampler(sceneDescriptorPtr,
+	                                            m_gpuSceneDataLayoutInfo.bindingOffsets[3],
+	                                            m_spotShadowMap.m_imageView,
 	                                            m_shadowSampler,
 	                                            VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
 
@@ -1259,7 +1445,7 @@ void Renderer::updateScene(float deltaTime, VkExtent2D windowExtent)
 
 	m_sceneData.m_cameraPosition = m_camera->m_position;
 
-	// Calculate shadow mapping data
+	// Calculate shadow mapping data for directional light
 	if (m_shadowsEnabled && m_mainDrawContext.m_DirectionalLight.active)
 	{
 		glm::vec3 lightDir = glm::normalize(m_mainDrawContext.m_DirectionalLight.direction);
@@ -1274,6 +1460,26 @@ void Renderer::updateScene(float deltaTime, VkExtent2D windowExtent)
 	{
 		m_sceneData.m_lightSpaceMatrix = glm::mat4(1.0f);
 		m_sceneData.m_shadowParams = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);  // disabled
+	}
+
+	// Calculate shadow mapping data for spot light (use first spot light)
+	if (m_spotShadowsEnabled && !m_mainDrawContext.m_SpotLights.empty())
+	{
+		const GPUSpotLight& spotLight = m_mainDrawContext.m_SpotLights[0];
+		m_sceneData.m_spotLightSpaceMatrix = calculateSpotLightSpaceMatrix(
+		    spotLight.m_position,
+		    spotLight.m_direction,
+		    glm::degrees(glm::acos(spotLight.m_outerCutoff)));  // Convert back to angle
+		m_sceneData.m_spotShadowParams = glm::vec4(
+		    m_spotShadowBias,
+		    m_spotShadowNormalBias,
+		    0.0f,  // Spot light index (first one = 0)
+		    1.0f); // enabled
+	}
+	else
+	{
+		m_sceneData.m_spotLightSpaceMatrix = glm::mat4(1.0f);
+		m_sceneData.m_spotShadowParams = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);  // disabled
 	}
 
 	auto end = std::chrono::system_clock::now();

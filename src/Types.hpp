@@ -86,11 +86,13 @@ struct GPUSceneData
 	glm::mat4 m_view;
 	glm::mat4 m_proj;
 	glm::mat4 m_viewproj;
-	glm::mat4 m_lightSpaceMatrix;     // Light view-projection for shadow mapping
+	glm::mat4 m_lightSpaceMatrix;     // Directional light view-projection for shadow mapping
+	glm::mat4 m_spotLightSpaceMatrix; // Spot light view-projection for shadow mapping
 	glm::vec4 m_ambientColor;
 	glm::vec4 m_sunlightDirection;    // w for sun power
 	glm::vec4 m_sunlightColor;
-	glm::vec4 m_shadowParams;         // x=bias, y=normalBias, z=1/resolution, w=enabled
+	glm::vec4 m_shadowParams;         // x=bias, y=normalBias, z=1/resolution, w=dirEnabled
+	glm::vec4 m_spotShadowParams;     // x=bias, y=normalBias, z=spotLightIndex, w=spotEnabled
 	glm::vec3 m_cameraPosition;
 	float     m_padding;              // Alignment padding
 };
