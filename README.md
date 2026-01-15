@@ -52,7 +52,7 @@ My personal Game Engine featuring bleeding-edge Vulkan 1.4, physically-based ren
 **Easy build using Python script:**
 ```bash
 # Clone with submodules
-git clone --recursive https://github.com/yourusername/Agni.git
+git clone --recursive https://github.com/vishwah13/Agni.git
 cd Agni
 
 # Build the engine
