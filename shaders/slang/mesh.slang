@@ -151,7 +151,7 @@ float calculateAttenuation(float distance, float radius)
     return attenuation * attenuation;
 }
 
-// Shadow calculation using comparison sampler
+// Shadow calculation using PCF (Percentage Closer Filtering) for soft shadows
 float calculateShadow(float4 lightSpacePos, float3 N, float3 L)
 {
     // Check if shadows are enabled
@@ -180,11 +180,21 @@ float calculateShadow(float4 lightSpacePos, float3 N, float3 L)
     // Reverse-Z: add bias (toward 1.0 = nearer)
     float biasedDepth = currentDepth + slopeBias + normalBias;
 
-    // Hardware PCF comparison (sampler does the comparison)
-    // Returns 1.0 if currentDepth > shadowDepth (lit), 0.0 if in shadow
-    float shadow = shadowMap.SampleCmpLevelZero(shadowSampler, shadowUV, biasedDepth);
+    // PCF filtering - sample 3x3 grid for soft shadows
+    float shadow = 0.0;
+    float texelSize = sceneData.shadowParams.z;  // 1.0 / SHADOW_MAP_RESOLUTION
 
-    return shadow;
+    // 3x3 PCF kernel
+    for (int x = -1; x <= 1; ++x)
+    {
+        for (int y = -1; y <= 1; ++y)
+        {
+            float2 offset = float2(x, y) * texelSize;
+            shadow += shadowMap.SampleCmpLevelZero(shadowSampler, shadowUV + offset, biasedDepth);
+        }
+    }
+
+    return shadow / 9.0;  // Average of 9 samples
 }
 
 [shader("fragment")]

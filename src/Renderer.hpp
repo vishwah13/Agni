@@ -123,6 +123,12 @@ public:
 	{
 		return m_stats;
 	}
+
+	// Shadow parameter accessors
+	float& getShadowBias() { return m_shadowBias; }
+	float& getShadowNormalBias() { return m_shadowNormalBias; }
+	float& getShadowOrthoSize() { return m_shadowOrthoSize; }
+	bool& getShadowsEnabled() { return m_shadowsEnabled; }
 	VkExtent2D getDrawExtent() const
 	{
 		return m_drawExtent;

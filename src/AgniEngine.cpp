@@ -468,6 +468,13 @@ void AgniEngine::run()
 					m_swapchainManager.requestResize();
 				}
 			}
+
+			ImGui::Separator();
+			ImGui::Text("Shadow Mapping");
+			ImGui::Checkbox("Enable Shadows", &m_renderer.getShadowsEnabled());
+			ImGui::SliderFloat("Shadow Bias", &m_renderer.getShadowBias(), 0.0f, 0.05f, "%.4f");
+			ImGui::SliderFloat("Normal Bias", &m_renderer.getShadowNormalBias(), 0.0f, 0.1f, "%.4f");
+			ImGui::SliderFloat("Shadow Ortho Size", &m_renderer.getShadowOrthoSize(), 10.0f, 200.0f, "%.1f");
 		}
 		ImGui::End();
 
