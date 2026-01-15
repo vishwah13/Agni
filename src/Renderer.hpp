@@ -237,6 +237,20 @@ private:
 	glm::vec2 m_pickingScreenPos    = {0.0f, 0.0f};
 	uint64_t  m_lastPickedEntityID  = 0;
 
+	// Shadow mapping resources
+	AllocatedImage   m_shadowMap;
+	VkSampler        m_shadowSampler        = VK_NULL_HANDLE;
+	VkPipeline       m_shadowPipeline       = VK_NULL_HANDLE;
+	VkPipelineLayout m_shadowPipelineLayout = VK_NULL_HANDLE;
+
+	// Shadow configuration
+	float m_shadowBias       = 0.005f;
+	float m_shadowNormalBias = 0.02f;
+	float m_shadowOrthoSize  = 50.0f;
+	float m_shadowNearPlane  = 0.1f;
+	float m_shadowFarPlane   = 200.0f;
+	bool  m_shadowsEnabled   = true;
+
 	// Private rendering functions
 	void drawBackground(VkCommandBuffer cmd);
 	void drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame);
@@ -249,4 +263,10 @@ private:
 	void initBackgroundPipelines();
 	void initPickingResources(VkExtent2D windowExtent);
 	void initObjectIDPipeline();
+
+	// Shadow mapping helpers
+	void initShadowResources();
+	void initShadowPipeline();
+	void drawShadowPass(VkCommandBuffer cmd, FrameData& currentFrame);
+	glm::mat4 calculateLightSpaceMatrix(const glm::vec3& lightDir);
 };

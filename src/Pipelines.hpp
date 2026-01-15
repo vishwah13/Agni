@@ -56,4 +56,5 @@ public:
 	void enableDepthtest(bool depthWriteEnable, VkCompareOp op);
 	void enableBlendingAdditive();
 	void enableBlendingAlphablend();
+	void enableDepthBias(float constantFactor, float slopeFactor, float clamp = 0.0f);
 };

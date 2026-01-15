@@ -86,10 +86,23 @@ struct GPUSceneData
 	glm::mat4 m_view;
 	glm::mat4 m_proj;
 	glm::mat4 m_viewproj;
+	glm::mat4 m_lightSpaceMatrix;     // Light view-projection for shadow mapping
 	glm::vec4 m_ambientColor;
-	glm::vec4 m_sunlightDirection; // w for sun power
+	glm::vec4 m_sunlightDirection;    // w for sun power
 	glm::vec4 m_sunlightColor;
+	glm::vec4 m_shadowParams;         // x=bias, y=normalBias, z=1/resolution, w=enabled
 	glm::vec3 m_cameraPosition;
+	float     m_padding;              // Alignment padding
+};
+
+// Shadow mapping constants
+constexpr uint32_t SHADOW_MAP_RESOLUTION = 2048;
+
+// Push constants for shadow pass (minimal - depth only)
+struct ShadowPushConstants
+{
+	glm::mat4       m_worldMatrix;
+	VkDeviceAddress m_vertexBuffer;
 };
 
 // Maximum number of lights supported

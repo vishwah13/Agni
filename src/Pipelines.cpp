@@ -333,3 +333,13 @@ void PipelineBuilder::enableBlendingAlphablend()
 	m_colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
 	m_colorBlendAttachment.alphaBlendOp        = VK_BLEND_OP_ADD;
 }
+
+void PipelineBuilder::enableDepthBias(float constantFactor,
+                                      float slopeFactor,
+                                      float clamp)
+{
+	m_rasterizer.depthBiasEnable         = VK_TRUE;
+	m_rasterizer.depthBiasConstantFactor = constantFactor;
+	m_rasterizer.depthBiasSlopeFactor    = slopeFactor;
+	m_rasterizer.depthBiasClamp          = clamp;
+}

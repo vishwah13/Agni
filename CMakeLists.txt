@@ -74,6 +74,10 @@ if(AGNI_COMPILE_SHADERS)
         "${PROJECT_SOURCE_DIR}/shaders/slang/tex_image.slang"
     )
 
+    set(SLANG_VERTEX_ONLY_SHADERS
+        "${PROJECT_SOURCE_DIR}/shaders/slang/shadow.slang"
+    )
+
     set(SLANG_COMPUTE_SHADERS
         "${PROJECT_SOURCE_DIR}/shaders/slang/gradient.slang"
         "${PROJECT_SOURCE_DIR}/shaders/slang/gradient_color.slang"
@@ -127,6 +131,25 @@ if(AGNI_COMPILE_SHADERS)
         )
 
         list(APPEND SPIRV_BINARY_FILES ${SPIRV_FRAG})
+    endforeach()
+
+    # Compile vertex-only shaders (e.g., shadow pass depth-only)
+    foreach(SLANG_FILE ${SLANG_VERTEX_ONLY_SHADERS})
+        get_filename_component(FILE_NAME_WE ${SLANG_FILE} NAME_WE)
+        message(STATUS "Configuring Slang vertex-only shader: ${FILE_NAME_WE}")
+
+        set(SPIRV_VERT "${PROJECT_SOURCE_DIR}/shaders/slang/${FILE_NAME_WE}.vert.spv")
+
+        # Compile vertex shader
+        add_custom_command(
+            OUTPUT ${SPIRV_VERT}
+            COMMAND $<TARGET_FILE:slangc> -target spirv -profile glsl_450 -entry vertexMain -stage vertex -I "${PROJECT_SOURCE_DIR}/shaders/slang" -o ${SPIRV_VERT} ${SLANG_FILE}
+            DEPENDS ${SLANG_FILE} "${PROJECT_SOURCE_DIR}/shaders/slang/input_structures.slang" slangc
+            COMMENT "Compiling Slang vertex shader ${FILE_NAME_WE}"
+            VERBATIM
+        )
+
+        list(APPEND SPIRV_BINARY_FILES ${SPIRV_VERT})
     endforeach()
 
     # Compile compute shaders

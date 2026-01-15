@@ -6,10 +6,13 @@ struct SceneData
     float4x4 view;
     float4x4 proj;
     float4x4 viewproj;
+    float4x4 lightSpaceMatrix;    // Light view-projection for shadow mapping
     float4 ambientColor;
-    float4 sunlightDirection; // w for sun power
+    float4 sunlightDirection;     // w for sun power
     float4 sunlightColor;
-    float3 camPos; // camera position for view vector
+    float4 shadowParams;          // x=bias, y=normalBias, z=1/resolution, w=enabled
+    float3 camPos;                // camera position for view vector
+    float  padding;               // alignment padding
 };
 
 // Legacy material data uniform buffer (unused with bindless)

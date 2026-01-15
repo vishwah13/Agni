@@ -9,6 +9,13 @@ ConstantBuffer<SceneData> sceneData;
 [[vk::binding(1, 0)]]
 StructuredBuffer<LightData> lightData;
 
+// Shadow map (set 0, binding 2)
+[[vk::binding(2, 0)]]
+Texture2D<float> shadowMap;
+
+[[vk::binding(2, 0)]]
+SamplerComparisonState shadowSampler;
+
 // Bindless texture array (set 1, binding 0)
 [[vk::binding(0, 1)]]
 Texture2D textures[];
@@ -43,6 +50,7 @@ struct VertexOutput
     float3 worldPos : TEXCOORD1;
     float3 tangent : TEXCOORD2;
     float3 bitangent : TEXCOORD3;
+    float4 lightSpacePos : TEXCOORD4;  // Position in light space for shadow mapping
 };
 
 // Helper function to load vertex from buffer device address
@@ -80,6 +88,9 @@ VertexOutput vertexMain(uint vertexIndex : SV_VertexID)
 
     output.tangent = T;
     output.bitangent = B;
+
+    // Calculate light space position for shadow mapping
+    output.lightSpacePos = mul(sceneData.lightSpaceMatrix, worldPos);
 
     return output;
 }
@@ -140,6 +151,42 @@ float calculateAttenuation(float distance, float radius)
     return attenuation * attenuation;
 }
 
+// Shadow calculation using comparison sampler
+float calculateShadow(float4 lightSpacePos, float3 N, float3 L)
+{
+    // Check if shadows are enabled
+    if (sceneData.shadowParams.w < 0.5)
+        return 1.0;
+
+    // Perspective divide (for orthographic this is effectively a no-op)
+    float3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
+
+    // Transform to [0,1] UV coordinates
+    float2 shadowUV = projCoords.xy * 0.5 + 0.5;
+
+    // Check if outside shadow map bounds
+    if (shadowUV.x < 0.0 || shadowUV.x > 1.0 ||
+        shadowUV.y < 0.0 || shadowUV.y > 1.0)
+        return 1.0;
+
+    float currentDepth = projCoords.z;
+
+    // Apply bias based on surface angle to reduce shadow acne
+    float bias = sceneData.shadowParams.x;
+    float normalBias = sceneData.shadowParams.y;
+    float NdotL = max(dot(N, L), 0.0);
+    float slopeBias = bias * (1.0 - NdotL);
+
+    // Reverse-Z: add bias (toward 1.0 = nearer)
+    float biasedDepth = currentDepth + slopeBias + normalBias;
+
+    // Hardware PCF comparison (sampler does the comparison)
+    // Returns 1.0 if currentDepth > shadowDepth (lit), 0.0 if in shadow
+    float shadow = shadowMap.SampleCmpLevelZero(shadowSampler, shadowUV, biasedDepth);
+
+    return shadow;
+}
+
 [shader("fragment")]
 float4 fragmentMain(VertexOutput input) : SV_Target
 {
@@ -187,6 +234,9 @@ float4 fragmentMain(VertexOutput input) : SV_Target
     float3 H = normalize(V + L);
     float3 radiance = sceneData.sunlightColor.rgb * sceneData.sunlightColor.w;
 
+    // Calculate shadow factor
+    float shadow = calculateShadow(input.lightSpacePos, N, L);
+
     // Cook-Torrance BRDF
     float NDF = DistributionGGX(N, H, roughness);
     float G = GeometrySmith(N, V, L, roughness);
@@ -202,7 +252,7 @@ float4 fragmentMain(VertexOutput input) : SV_Target
     kD *= 1.0 - metallic; // metals have no diffuse
 
     float NdotL = max(dot(N, L), 0.0);
-    Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+    Lo += (kD * albedo / PI + specular) * radiance * NdotL * shadow;  // Apply shadow
 
     // Point lights
     uint numPointLights = lightData[0].numPointLights;

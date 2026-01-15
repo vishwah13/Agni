@@ -103,8 +103,10 @@ void Renderer::init(VkDevice                          device,
 	// after AssetLoader creates the samplers
 
 	initRenderTargets(windowExtent);
+	initShadowResources();
 	initDescriptors();
 	initBackgroundPipelines();
+	initShadowPipeline();
 	initPickingResources(windowExtent);
 	initObjectIDPipeline();
 }
@@ -138,6 +140,15 @@ void Renderer::cleanup()
 		vkDestroyPipeline(m_device, m_objectIDPipeline, nullptr);
 	if (m_objectIDPipelineLayout != VK_NULL_HANDLE)
 		vkDestroyPipelineLayout(m_device, m_objectIDPipelineLayout, nullptr);
+
+	// Cleanup shadow resources
+	m_resourceManager->destroyImage(m_shadowMap);
+	if (m_shadowSampler != VK_NULL_HANDLE)
+		vkDestroySampler(m_device, m_shadowSampler, nullptr);
+	if (m_shadowPipeline != VK_NULL_HANDLE)
+		vkDestroyPipeline(m_device, m_shadowPipeline, nullptr);
+	if (m_shadowPipelineLayout != VK_NULL_HANDLE)
+		vkDestroyPipelineLayout(m_device, m_shadowPipelineLayout, nullptr);
 
 	// Cleanup pipelines
 	vkDestroyPipelineLayout(m_device, m_gradientPipelineLayout, nullptr);
@@ -268,6 +279,40 @@ void Renderer::initRenderTargets(VkExtent2D windowExtent)
 	                                             m_msaaSamples);
 }
 
+void Renderer::initShadowResources()
+{
+	// Create shadow map depth image
+	VkExtent3D shadowExtent = {SHADOW_MAP_RESOLUTION, SHADOW_MAP_RESOLUTION, 1};
+
+	VkImageUsageFlags shadowUsages = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+	                                 VK_IMAGE_USAGE_SAMPLED_BIT;
+
+	m_shadowMap = m_resourceManager->createImage(shadowExtent,
+	                                              VK_FORMAT_D32_SFLOAT,
+	                                              shadowUsages,
+	                                              false,
+	                                              VK_SAMPLE_COUNT_1_BIT);
+
+	// Create comparison sampler for shadow mapping
+	VkSamplerCreateInfo samplerInfo = {};
+	samplerInfo.sType            = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	samplerInfo.magFilter        = VK_FILTER_LINEAR;
+	samplerInfo.minFilter        = VK_FILTER_LINEAR;
+	samplerInfo.mipmapMode       = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+	samplerInfo.addressModeU     = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+	samplerInfo.addressModeV     = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+	samplerInfo.addressModeW     = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+	samplerInfo.borderColor      = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;  // 0.0 = no shadow (reverse-Z far)
+	samplerInfo.compareEnable    = VK_TRUE;
+	samplerInfo.compareOp        = VK_COMPARE_OP_GREATER;  // Reverse-Z: lit if fragment > shadow
+	samplerInfo.maxLod           = 0.0f;
+	samplerInfo.minLod           = 0.0f;
+	samplerInfo.mipLodBias       = 0.0f;
+	samplerInfo.anisotropyEnable = VK_FALSE;
+
+	VK_CHECK(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_shadowSampler));
+}
+
 void Renderer::initDescriptors()
 {
 	// Create descriptor set layout for draw image (compute shader)
@@ -281,11 +326,12 @@ void Renderer::initDescriptors()
 	m_drawImageDescriptors =
 	m_globalDescriptorAllocator->allocate(m_device, m_drawImageDescriptorLayout);
 
-	// Create descriptor set layout for GPU scene data + lights (using descriptor buffer)
+	// Create descriptor set layout for GPU scene data + lights + shadow map (using descriptor buffer)
 	{
 		DescriptorLayoutBuilder builder;
-		builder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);   // Scene data
-		builder.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);   // Light data
+		builder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);          // Scene data
+		builder.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);          // Light data
+		builder.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);  // Shadow map
 		m_gpuSceneDataLayoutInfo = builder.buildForDescriptorBuffer(
 		m_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 		m_gpuSceneDataDescriptorLayout = m_gpuSceneDataLayoutInfo.layout;
@@ -393,6 +439,222 @@ void Renderer::initBackgroundPipelines()
 	vkDestroyShaderModule(m_device, skyShader, nullptr);
 }
 
+void Renderer::initShadowPipeline()
+{
+	// Load shadow pass shader (vertex only, no fragment for depth-only pass)
+	VkShaderModule shadowVertShader;
+	if (!vkutil::loadShaderModule("../../shaders/slang/shadow.vert.spv",
+	                              m_device, &shadowVertShader))
+	{
+		AGNI_PRINT("Failed to load shadow vertex shader\n");
+		return;
+	}
+
+	// Create pipeline layout with push constants for shadow pass
+	VkPushConstantRange pushConstantRange {};
+	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	pushConstantRange.offset     = 0;
+	pushConstantRange.size       = sizeof(ShadowPushConstants);
+
+	VkPipelineLayoutCreateInfo layoutInfo {};
+	layoutInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	layoutInfo.setLayoutCount         = 1;
+	layoutInfo.pSetLayouts            = &m_gpuSceneDataDescriptorLayout;
+	layoutInfo.pushConstantRangeCount = 1;
+	layoutInfo.pPushConstantRanges    = &pushConstantRange;
+
+	VK_CHECK(vkCreatePipelineLayout(m_device, &layoutInfo, nullptr, &m_shadowPipelineLayout));
+
+	// Build shadow pipeline
+	PipelineBuilder builder;
+	builder.m_shaderStages.push_back(
+	    vkinit::pipelineShaderStageCreateInfo(VK_SHADER_STAGE_VERTEX_BIT, shadowVertShader));
+
+	builder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	builder.setPolygonMode(VK_POLYGON_MODE_FILL);
+
+	// Cull front faces to reduce shadow acne
+	builder.setCullMode(VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_CLOCKWISE);
+
+	builder.setMultisamplingNone();
+
+	// Reverse-Z depth test
+	builder.enableDepthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
+
+	// Depth bias to prevent shadow acne (negative for reverse-Z)
+	builder.enableDepthBias(-1.25f, -1.75f, 0.0f);
+
+	// No color attachment for depth-only pass
+	builder.m_renderInfo.colorAttachmentCount    = 0;
+	builder.m_renderInfo.pColorAttachmentFormats = nullptr;
+	builder.setDepthFormat(VK_FORMAT_D32_SFLOAT);
+
+	builder.m_pipelineLayout = m_shadowPipelineLayout;
+	builder.enableDescriptorBuffer();
+
+	m_shadowPipeline = builder.buildPipeline(m_device);
+
+	vkDestroyShaderModule(m_device, shadowVertShader, nullptr);
+
+	AGNI_PRINT("Shadow pipeline created successfully\n");
+}
+
+glm::mat4 Renderer::calculateLightSpaceMatrix(const glm::vec3& lightDir)
+{
+	// Calculate light space matrix for directional shadow mapping
+	// Use camera position as the scene center to follow the camera
+	glm::vec3 sceneCenter = m_camera->m_position;
+
+	// Position the light "camera" backing away from scene along light direction
+	glm::vec3 lightPos = sceneCenter - lightDir * 100.0f;
+
+	// Create stable up vector (avoid parallel with light direction)
+	glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+	if (glm::abs(glm::dot(lightDir, up)) > 0.99f)
+	{
+		up = glm::vec3(1.0f, 0.0f, 0.0f);
+	}
+
+	glm::mat4 lightView = glm::lookAt(lightPos, sceneCenter, up);
+
+	// Orthographic projection for directional light (reverse-Z)
+	// In reverse-Z, swap near/far: near maps to 1.0, far maps to 0.0
+	glm::mat4 lightProj = glm::ortho(-m_shadowOrthoSize, m_shadowOrthoSize,
+	                                  -m_shadowOrthoSize, m_shadowOrthoSize,
+	                                  m_shadowFarPlane,   // Near = far value (reverse-Z)
+	                                  m_shadowNearPlane); // Far = near value (reverse-Z)
+
+	// Flip Y for Vulkan
+	lightProj[1][1] *= -1.0f;
+
+	return lightProj * lightView;
+}
+
+void Renderer::drawShadowPass(VkCommandBuffer cmd, FrameData& currentFrame)
+{
+#ifdef TRACY_ENABLE
+	ZoneScopedN("Shadow Pass");
+#endif
+
+	// Transition shadow map for rendering
+	vkutil::transitionImage(cmd,
+	                        m_shadowMap.m_image,
+	                        VK_IMAGE_LAYOUT_UNDEFINED,
+	                        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
+	// Setup depth attachment for shadow pass
+	VkRenderingAttachmentInfo depthAttachment {};
+	depthAttachment.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+	depthAttachment.imageView   = m_shadowMap.m_imageView;
+	depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+	depthAttachment.loadOp      = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	depthAttachment.storeOp     = VK_ATTACHMENT_STORE_OP_STORE;
+	depthAttachment.clearValue.depthStencil.depth = 0.0f;  // Reverse-Z: far = 0
+
+	VkRenderingInfo renderInfo {};
+	renderInfo.sType                = VK_STRUCTURE_TYPE_RENDERING_INFO;
+	renderInfo.renderArea           = {{0, 0}, {SHADOW_MAP_RESOLUTION, SHADOW_MAP_RESOLUTION}};
+	renderInfo.layerCount           = 1;
+	renderInfo.colorAttachmentCount = 0;
+	renderInfo.pColorAttachments    = nullptr;
+	renderInfo.pDepthAttachment     = &depthAttachment;
+
+	vkCmdBeginRendering(cmd, &renderInfo);
+
+	// Bind shadow pipeline
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_shadowPipeline);
+
+	// Set viewport and scissor for shadow map resolution
+	VkViewport viewport {};
+	viewport.x        = 0;
+	viewport.y        = 0;
+	viewport.width    = static_cast<float>(SHADOW_MAP_RESOLUTION);
+	viewport.height   = static_cast<float>(SHADOW_MAP_RESOLUTION);
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+	vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+	VkRect2D scissor {};
+	scissor.offset = {0, 0};
+	scissor.extent = {SHADOW_MAP_RESOLUTION, SHADOW_MAP_RESOLUTION};
+	vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+	// Allocate scene data buffer for light matrix
+	AllocatedBuffer gpuSceneDataBuffer = m_resourceManager->createBuffer(
+	    sizeof(GPUSceneData),
+	    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+	    VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+	currentFrame.m_deletionQueue.push_function(
+	    [rm = m_resourceManager, gpuSceneDataBuffer]() {
+		    rm->destroyBuffer(gpuSceneDataBuffer);
+	    });
+
+	GPUSceneData* sceneUniformData = (GPUSceneData*) gpuSceneDataBuffer.m_info.pMappedData;
+	*sceneUniformData = m_sceneData;
+
+	// Allocate descriptor buffer space
+	VkDeviceSize sceneDescriptorOffset = currentFrame.m_descriptorBuffer.allocate(m_gpuSceneDataLayoutInfo);
+
+	VkBufferDeviceAddressInfo addressInfo {};
+	addressInfo.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+	addressInfo.buffer = gpuSceneDataBuffer.m_buffer;
+	VkDeviceAddress sceneDataAddress = vkGetBufferDeviceAddress(m_device, &addressInfo);
+
+	void* sceneDescriptorPtr = currentFrame.m_descriptorBuffer.getPtrAtOffset(sceneDescriptorOffset);
+	m_descriptorBufferWriter.writeUniformBuffer(sceneDescriptorPtr,
+	                                             m_gpuSceneDataLayoutInfo.bindingOffsets[0],
+	                                             sceneDataAddress,
+	                                             sizeof(GPUSceneData));
+
+	// Bind descriptor buffer
+	VkDescriptorBufferBindingInfoEXT bufferBinding {};
+	bufferBinding.sType   = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT;
+	bufferBinding.address = currentFrame.m_descriptorBuffer.getDeviceAddress();
+	bufferBinding.usage   = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
+	                        VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT;
+	vkCmdBindDescriptorBuffersEXT(cmd, 1, &bufferBinding);
+
+	uint32_t bufferIndex = 0;
+	vkCmdSetDescriptorBufferOffsetsEXT(cmd,
+	                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+	                                    m_shadowPipelineLayout,
+	                                    0, 1, &bufferIndex, &sceneDescriptorOffset);
+
+	// Draw all opaque objects (no transparent for shadow mapping)
+	VkBuffer lastIndexBuffer = VK_NULL_HANDLE;
+
+	for (const auto& obj : m_mainDrawContext.m_OpaqueSurfaces)
+	{
+		if (obj.m_indexBuffer != lastIndexBuffer)
+		{
+			lastIndexBuffer = obj.m_indexBuffer;
+			vkCmdBindIndexBuffer(cmd, obj.m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+		}
+
+		ShadowPushConstants pushConstants;
+		pushConstants.m_worldMatrix  = obj.m_transform;
+		pushConstants.m_vertexBuffer = obj.m_vertexBufferAddress;
+
+		vkCmdPushConstants(cmd,
+		                   m_shadowPipelineLayout,
+		                   VK_SHADER_STAGE_VERTEX_BIT,
+		                   0,
+		                   sizeof(ShadowPushConstants),
+		                   &pushConstants);
+
+		vkCmdDrawIndexed(cmd, obj.m_indexCount, 1, obj.m_firstIndex, 0, 0);
+	}
+
+	vkCmdEndRendering(cmd);
+
+	// Transition shadow map for sampling in fragment shader
+	vkutil::transitionImage(cmd,
+	                        m_shadowMap.m_image,
+	                        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+	                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+}
+
 void Renderer::renderFrame(VkCommandBuffer cmd,
                             uint32_t        swapchainImageIndex,
                             FrameData&      currentFrame)
@@ -423,6 +685,12 @@ void Renderer::renderFrame(VkCommandBuffer cmd,
 	                        m_drawImage.m_image,
 	                        VK_IMAGE_LAYOUT_UNDEFINED,
 	                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+	// Shadow pass (before main geometry)
+	if (m_shadowsEnabled && m_mainDrawContext.m_DirectionalLight.active)
+	{
+		drawShadowPass(cmd, currentFrame);
+	}
 
 	// Object ID pass for picking (only runs when picking is requested)
 	drawObjectIDPass(cmd, currentFrame);
@@ -687,6 +955,13 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	                                             m_gpuSceneDataLayoutInfo.bindingOffsets[1],
 	                                             lightDataAddress,
 	                                             sizeof(GPULightData));
+
+	// Binding 2: Shadow map combined image sampler
+	m_descriptorBufferWriter.writeImageSampler(sceneDescriptorPtr,
+	                                            m_gpuSceneDataLayoutInfo.bindingOffsets[2],
+	                                            m_shadowMap.m_imageView,
+	                                            m_shadowSampler,
+	                                            VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
 
 	// Bind descriptor buffers once before any draws (bindless architecture)
 	VkDescriptorBufferBindingInfoEXT bufferBindings[4] = {};
@@ -983,6 +1258,23 @@ void Renderer::updateScene(float deltaTime, VkExtent2D windowExtent)
 	}
 
 	m_sceneData.m_cameraPosition = m_camera->m_position;
+
+	// Calculate shadow mapping data
+	if (m_shadowsEnabled && m_mainDrawContext.m_DirectionalLight.active)
+	{
+		glm::vec3 lightDir = glm::normalize(m_mainDrawContext.m_DirectionalLight.direction);
+		m_sceneData.m_lightSpaceMatrix = calculateLightSpaceMatrix(lightDir);
+		m_sceneData.m_shadowParams = glm::vec4(
+		    m_shadowBias,
+		    m_shadowNormalBias,
+		    1.0f / static_cast<float>(SHADOW_MAP_RESOLUTION),
+		    1.0f);  // enabled
+	}
+	else
+	{
+		m_sceneData.m_lightSpaceMatrix = glm::mat4(1.0f);
+		m_sceneData.m_shadowParams = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);  // disabled
+	}
 
 	auto end = std::chrono::system_clock::now();
 
