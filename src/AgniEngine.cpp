@@ -401,11 +401,13 @@ void AgniEngine::run()
 
 		if (ImGui::Begin("Stats"))
 		{
-			ImGui::Text("frametime %f ms", m_renderer.getStats().m_frametime);
-			ImGui::Text("draw time %f ms",
-			            m_renderer.getStats().m_meshDrawTime);
-			ImGui::Text("update time %f ms",
-			            m_renderer.getStats().m_sceneUpdateTime);
+			float frametime = m_renderer.getStats().m_frametime;
+			float fps = (frametime > 0.0f) ? 1000.0f / frametime : 0.0f;
+			ImGui::Text("FPS: %.1f", fps);
+			ImGui::Text("frametime %.2f ms", frametime);
+			ImGui::Separator();
+			ImGui::Text("draw time %.2f ms", m_renderer.getStats().m_meshDrawTime);
+			ImGui::Text("update time %.2f ms", m_renderer.getStats().m_sceneUpdateTime);
 			ImGui::Text("triangles %i", m_renderer.getStats().m_triangleCount);
 			ImGui::Text("draws %i", m_renderer.getStats().m_drawcallCount);
 		}
