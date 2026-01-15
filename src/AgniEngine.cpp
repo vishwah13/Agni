@@ -25,8 +25,13 @@
 #include <tracy/Tracy.hpp>
 #endif
 
-#define NOMINMAX
-#include <windows.h>
+// Platform-specific includes for dynamic library loading
+#ifdef _WIN32
+	#define NOMINMAX
+	#include <windows.h>
+#else
+	#include <dlfcn.h>
+#endif
 
 
 #ifdef NDEBUG
@@ -668,14 +673,26 @@ void AgniEngine::initSyncStructures()
 
 void AgniEngine::initRenderDocAPI()
 {
+#ifdef _WIN32
 	if (HMODULE mod = GetModuleHandleA("renderdoc.dll"))
 	{
 		pRENDERDOC_GetAPI RENDERDOC_GetAPI =
-		(pRENDERDOC_GetAPI) GetProcAddress(mod, "RENDERDOC_GetAPI");
+		    (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
 		int ret =
-		RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void**) &m_rdocAPI);
+		    RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void**)&m_rdocAPI);
 		assert(ret == 1);
 	}
+#else
+	// Linux: Check if RenderDoc is loaded (when launched from RenderDoc)
+	if (void* mod = dlopen("librenderdoc.so", RTLD_NOW | RTLD_NOLOAD))
+	{
+		pRENDERDOC_GetAPI RENDERDOC_GetAPI =
+		    (pRENDERDOC_GetAPI)dlsym(mod, "RENDERDOC_GetAPI");
+		int ret =
+		    RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void**)&m_rdocAPI);
+		assert(ret == 1);
+	}
+#endif
 }
 
 void AgniEngine::captureRenderDocFrame()

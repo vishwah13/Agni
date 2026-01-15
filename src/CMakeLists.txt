@@ -130,6 +130,11 @@ if(AGNI_ENABLE_TRACY)
     target_link_libraries(engine PUBLIC tracy)
 endif()
 
+# Link dl library on Unix for dynamic loading (RenderDoc API)
+if(UNIX)
+    target_link_libraries(engine PUBLIC ${CMAKE_DL_LIBS})
+endif()
+
 target_precompile_headers(engine PUBLIC <optional> <vector> <memory> <string> <vector> <unordered_map> <glm/mat4x4.hpp>  <glm/vec4.hpp> <volk.h>)
 
 if(WIN32)
