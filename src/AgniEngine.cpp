@@ -977,144 +977,90 @@ void AgniEngine::initDefaultData()
 	m_ecsInspector->setMeshResources(*meshPrimitivesFile);
 
 	// ============================================================================
-	// ECS Mode Test: Convert loaded scene to ECS entities
+	// Convert loaded glTF scene to ECS entities
 	// ============================================================================
-	constexpr bool USE_ECS_MODE = true;
 
-	if (USE_ECS_MODE)
-	{
-		// IMPORTANT: Store the LoadedGLTF to keep GPU resources alive
-		// Even though we're using ECS entities, they reference the mesh/material data
-		m_renderer.getLoadedScenes()["helmet"] = *helmetPathFile;
+	// IMPORTANT: Store the LoadedGLTF to keep GPU resources alive
+	// Even though we're using ECS entities, they reference the mesh/material data
+	m_renderer.getLoadedScenes()["helmet"] = *helmetPathFile;
 
-		// Convert the loaded glTF to ECS entities
-		auto rootEntity = m_entityFactory->createFromGltf(*helmetPathFile.value(), "LightTestScene");
-		AGNI_PRINT("Created ECS scene with root entity ID: {}\n", rootEntity.id());
+	// Convert the loaded glTF to ECS entities
+	auto rootEntity = m_entityFactory->createFromGltf(*helmetPathFile.value(), "LightTestScene");
+	AGNI_PRINT("Created ECS scene with root entity ID: {}\n", rootEntity.id());
 
 #ifdef AGNI_HAS_JOLT
-		// ========================================================================
-		// Physics Test Scene: Falling Box
-		// ========================================================================
-		AGNI_PRINT("\n=== Creating Physics Test Scene ===\n");
+	// ========================================================================
+	// Physics Test Scene: Falling Box
+	// ========================================================================
+	AGNI_PRINT("\n=== Creating Physics Test Scene ===\n");
 
-		// 1. Create static ground plane
-		glm::mat4 groundTransform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -2.0f, 0.0f))
-		                          * glm::scale(glm::mat4(1.0f), glm::vec3(10.0f, 1.0f, 10.0f));
+	// 1. Create static ground plane
+	glm::mat4 groundTransform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -2.0f, 0.0f))
+	                          * glm::scale(glm::mat4(1.0f), glm::vec3(10.0f, 1.0f, 10.0f));
 
-		auto groundEntity = m_entityFactory->createMeshEntity(planeMesh, groundTransform, "GroundPlane");
+	auto groundEntity = m_entityFactory->createMeshEntity(planeMesh, groundTransform, "GroundPlane");
 
-		// Add physics components to ground
-		m_ecsWorld->addComponent(groundEntity.id(), RigidBodyComponent{
-		    .type = RigidBodyType::Static,
-		    .friction = 0.8f,
+	// Add physics components to ground
+	m_ecsWorld->addComponent(groundEntity.id(), RigidBodyComponent{
+	    .type = RigidBodyType::Static,
+	    .friction = 0.8f,
+	    .restitution = 0.3f
+	});
+
+	m_ecsWorld->addComponent(groundEntity.id(), ColliderComponent{
+	    .type = ColliderType::Box,
+	    .boxHalfExtents = glm::vec3(10.0f, 0.1f, 10.0f)
+	});
+
+	AGNI_PRINT("Created ground plane (static physics body)\n");
+
+	// 2. Create dynamic falling box
+	glm::mat4 boxTransform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 5.0f, 0.0f))
+	                       * glm::scale(glm::mat4(1.0f), glm::vec3(0.5f));
+
+	auto boxEntity = m_entityFactory->createMeshEntity(cubeMesh, boxTransform, "FallingBox");
+
+	// Add physics components to box
+	m_ecsWorld->addComponent(boxEntity.id(), RigidBodyComponent{
+	    .type = RigidBodyType::Dynamic,
+	    .mass = 1.0f,
+	    .friction = 0.5f,
+	    .restitution = 0.4f,
+	    .useGravity = true
+	});
+
+	m_ecsWorld->addComponent(boxEntity.id(), ColliderComponent{
+	    .type = ColliderType::Box,
+	    .boxHalfExtents = glm::vec3(0.5f, 0.5f, 0.5f)
+	});
+
+	AGNI_PRINT("Created falling box (dynamic physics body at y=5.0)\n");
+
+	// 3. Add some extra boxes for fun
+	for (int i = 0; i < 3; i++)
+	{
+		glm::vec3 position = glm::vec3(i * 1.5f - 1.5f, 8.0f + i * 2.0f, 0.0f);
+		glm::mat4 transform = glm::translate(glm::mat4(1.0f), position)
+		                    * glm::scale(glm::mat4(1.0f), glm::vec3(0.5f));
+
+		auto entity = m_entityFactory->createMeshEntity(cubeMesh, transform, ("Box" + std::to_string(i)).c_str());
+
+		m_ecsWorld->addComponent(entity.id(), RigidBodyComponent{
+		    .type = RigidBodyType::Dynamic,
+		    .mass = 1.0f + i * 0.5f,
+		    .friction = 0.5f,
 		    .restitution = 0.3f
 		});
 
-		m_ecsWorld->addComponent(groundEntity.id(), ColliderComponent{
+		m_ecsWorld->addComponent(entity.id(), ColliderComponent{
 		    .type = ColliderType::Box,
-		    .boxHalfExtents = glm::vec3(10.0f, 0.1f, 10.0f)
+		    .boxHalfExtents = glm::vec3(0.5f)
 		});
+	}
 
-		AGNI_PRINT("Created ground plane (static physics body)\n");
-
-		// 2. Create dynamic falling box
-		glm::mat4 boxTransform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 5.0f, 0.0f))
-		                       * glm::scale(glm::mat4(1.0f), glm::vec3(0.5f));
-
-		auto boxEntity = m_entityFactory->createMeshEntity(cubeMesh, boxTransform, "FallingBox");
-
-		// Add physics components to box
-		m_ecsWorld->addComponent(boxEntity.id(), RigidBodyComponent{
-		    .type = RigidBodyType::Dynamic,
-		    .mass = 1.0f,
-		    .friction = 0.5f,
-		    .restitution = 0.4f,
-		    .useGravity = true
-		});
-
-		m_ecsWorld->addComponent(boxEntity.id(), ColliderComponent{
-		    .type = ColliderType::Box,
-		    .boxHalfExtents = glm::vec3(0.5f, 0.5f, 0.5f)
-		});
-
-		AGNI_PRINT("Created falling box (dynamic physics body at y=5.0)\n");
-
-		// 3. Add some extra boxes for fun
-		for (int i = 0; i < 3; i++)
-		{
-			glm::vec3 position = glm::vec3(i * 1.5f - 1.5f, 8.0f + i * 2.0f, 0.0f);
-			glm::mat4 transform = glm::translate(glm::mat4(1.0f), position)
-			                    * glm::scale(glm::mat4(1.0f), glm::vec3(0.5f));
-
-			auto entity = m_entityFactory->createMeshEntity(cubeMesh, transform, ("Box" + std::to_string(i)).c_str());
-
-			m_ecsWorld->addComponent(entity.id(), RigidBodyComponent{
-			    .type = RigidBodyType::Dynamic,
-			    .mass = 1.0f + i * 0.5f,
-			    .friction = 0.5f,
-			    .restitution = 0.3f
-			});
-
-			m_ecsWorld->addComponent(entity.id(), ColliderComponent{
-			    .type = ColliderType::Box,
-			    .boxHalfExtents = glm::vec3(0.5f)
-			});
-		}
-
-		AGNI_PRINT("Created 3 additional falling boxes\n");
-		AGNI_PRINT("=== Physics Test Scene Ready ===\n\n");
+	AGNI_PRINT("Created 3 additional falling boxes\n");
+	AGNI_PRINT("=== Physics Test Scene Ready ===\n\n");
 #endif
-	}
-	else
-	{
-		// Legacy mode: use Node-based rendering
-		m_renderer.getLoadedScenes()["helmet"] = *helmetPathFile;
-		AGNI_PRINT("ECS Mode: DISABLED (using legacy Node rendering)\n");
-	}
-
-	// Add test point lights
-	//auto testLight1 = std::make_shared<LightNode>();
-	//testLight1->setColor(glm::vec3(1.0f, 0.f, 0.f)); // red light
-	//testLight1->setIntensity(5.0f);
-	//testLight1->setRadius(10.0f);
-	//testLight1->setMesh(m_assetLoader.getMeshResources().get()->meshes["Sphere"]);
-	//testLight1->getLocalTransform() =
-	//glm::translate(glm::mat4(1.0f), glm::vec3(2.0f, 2.0f, 2.0f));
-	//testLight1->setMeshScale(0.1f);
-	//helmetPathFile->get()->m_topNodes.push_back(testLight1);
-
-	//auto testLight2 = std::make_shared<LightNode>();
-	//testLight2->setColor(glm::vec3(0.0f, 1.f, 0.0f)); // Green light
-	//testLight2->setIntensity(10.0f);
-	//testLight2->setRadius(18.0f);
-	//testLight2->getLocalTransform() =
-	//glm::translate(glm::mat4(1.0f), glm::vec3(-2.0f, 1.5f, -1.0f));
-	//testLight2->setMesh(
-	//m_assetLoader.getMeshResources().get()->meshes["Cube"]);
-	//testLight2->setMeshScale(0.1f);
-	//helmetPathFile->get()->m_topNodes.push_back(testLight2);
-
-	// Add directional light (sun)
-	//auto sunLight = std::make_shared<LightNode>();
-	//sunLight->setType(LightType::Directional);
-	//sunLight->setColor(glm::vec3(1.0f, 0.95f, 0.9f)); // Warm white sunlight
-	//sunLight->setIntensity(1.0f);
-	//sunLight->setDirection(glm::vec3(0.0f, 1.0f, 0.5f)); // Direction towards light
-	//helmetPathFile->get()->m_topNodes.push_back(sunLight);
-
-	// Add spot light
-	//auto spotLight = std::make_shared<LightNode>();
-	//spotLight->setType(LightType::Spot);
-	//spotLight->setColor(glm::vec3(1.0f, 1.0f, 0.8f)); // Warm white
-	//spotLight->setIntensity(15.0f);
-	//spotLight->setRadius(20.0f);
-	//spotLight->setDirection(glm::vec3(0.0f, -1.0f, 0.0f)); // Pointing down
-	//spotLight->setConeAngles(15.0f, 25.0f); // Inner 15°, Outer 25°
-	//spotLight->getLocalTransform() =
-	//	glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 4.0f, 0.0f));
-	//spotLight->setMesh(m_assetLoader.getMeshResources().get()->meshes["Cone"]);
-	//spotLight->setMeshScale(0.15f);
-	//helmetPathFile->get()->m_topNodes.push_back(spotLight);
 
 	// Initialize m_skybox
 	// Load cubemap faces (order: right, left, top, bottom, front, back for
@@ -1130,6 +1076,10 @@ void AgniEngine::initDefaultData()
 
 	m_skybox.init(this, cubemapFaces);
 }
+
+// ============================================================================
+// LightNode Implementation (used for glTF loading intermediate representation)
+// ============================================================================
 
 void LightNode::setMesh(std::shared_ptr<MeshAsset> mesh)
 {

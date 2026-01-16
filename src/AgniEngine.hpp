@@ -46,6 +46,14 @@ struct FrameData
 	DescriptorBufferAllocator m_descriptorBuffer;
 };
 
+// ============================================================================
+// Node Classes - Intermediate Representation for glTF Loading
+// ============================================================================
+// These classes are used during glTF file loading to build a scene graph,
+// which is then converted to ECS entities. They are NOT used for rendering.
+// See EntityFactory::convertNodeRecursive() for the conversion logic.
+// ============================================================================
+
 class MeshNode : public Node
 {
 public:
