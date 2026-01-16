@@ -279,8 +279,9 @@ float calculatePointShadow(float3 worldPos, float3 lightPos, float3 N)
     float bias = sceneData.pointShadowParams.x;
     float biasedDepth = normalizedDepth + bias;
 
-    // Base sample direction (negate Z for Vulkan cube map coordinate system)
-    float3 sampleDir = normalize(float3(lightToFrag.x, lightToFrag.y, -lightToFrag.z));
+    // Sample direction - direct world-space vector from light to fragment
+    // Rotation-based view matrices work correctly with direct sampling
+    float3 sampleDir = normalize(lightToFrag);
 
     // Get PCF radius from scene data (y component)
     float pcfRadius = sceneData.pointShadowParams.y;

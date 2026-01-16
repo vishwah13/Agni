@@ -744,18 +744,48 @@ std::array<glm::mat4, 6> Renderer::calculatePointLightMatrices(const glm::vec3& 
 {
 	// 90 degree FOV perspective projection for cube face
 	// Reverse-Z: swap near/far (farPlane as near, nearPlane as far)
+	// Note: NO Y-flip (proj[1][1] *= -1) for cube maps!
+	// The rotation matrices already handle all orientation including Y-axis.
+	// Adding Y-flip here would cause a double-flip and require negating Y when sampling.
 	glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, farPlane, nearPlane);
-	proj[1][1] *= -1.0f;  // Vulkan Y-flip
 
-	// 6 view matrices for cube faces
-	// Order: +X, -X, +Y, -Y, +Z, -Z
+	// Translate to light position
+	glm::mat4 lightTranslate = glm::translate(glm::mat4(1.0f), -lightPos);
+
+	// 6 view matrices for cube faces using rotation-based approach (Sascha Willems style)
 	std::array<glm::mat4, 6> matrices;
-	matrices[0] = proj * glm::lookAt(lightPos, lightPos + glm::vec3( 1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)); // +X
-	matrices[1] = proj * glm::lookAt(lightPos, lightPos + glm::vec3(-1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)); // -X
-	matrices[2] = proj * glm::lookAt(lightPos, lightPos + glm::vec3( 0.0f,  1.0f,  0.0f), glm::vec3(0.0f,  0.0f,  1.0f)); // +Y
-	matrices[3] = proj * glm::lookAt(lightPos, lightPos + glm::vec3( 0.0f, -1.0f,  0.0f), glm::vec3(0.0f,  0.0f, -1.0f)); // -Y
-	matrices[4] = proj * glm::lookAt(lightPos, lightPos + glm::vec3( 0.0f,  0.0f,  1.0f), glm::vec3(0.0f, -1.0f,  0.0f)); // +Z
-	matrices[5] = proj * glm::lookAt(lightPos, lightPos + glm::vec3( 0.0f,  0.0f, -1.0f), glm::vec3(0.0f, -1.0f,  0.0f)); // -Z
+
+	// Face 0: POSITIVE_X
+	glm::mat4 view = glm::mat4(1.0f);
+	view = glm::rotate(view, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	view = glm::rotate(view, glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+	matrices[0] = proj * view * lightTranslate;
+
+	// Face 1: NEGATIVE_X
+	view = glm::mat4(1.0f);
+	view = glm::rotate(view, glm::radians(-90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	view = glm::rotate(view, glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+	matrices[1] = proj * view * lightTranslate;
+
+	// Face 2: POSITIVE_Y
+	view = glm::mat4(1.0f);
+	view = glm::rotate(view, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+	matrices[2] = proj * view * lightTranslate;
+
+	// Face 3: NEGATIVE_Y
+	view = glm::mat4(1.0f);
+	view = glm::rotate(view, glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+	matrices[3] = proj * view * lightTranslate;
+
+	// Face 4: POSITIVE_Z
+	view = glm::mat4(1.0f);
+	view = glm::rotate(view, glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+	matrices[4] = proj * view * lightTranslate;
+
+	// Face 5: NEGATIVE_Z
+	view = glm::mat4(1.0f);
+	view = glm::rotate(view, glm::radians(180.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	matrices[5] = proj * view * lightTranslate;
 
 	return matrices;
 }
@@ -1024,14 +1054,6 @@ void Renderer::drawPointShadowPass(VkCommandBuffer cmd)
 
 	const GPUPointLight& shadowLight = m_mainDrawContext.m_PointLights[m_pointShadowLightIndex];
 	glm::vec3 lightPos = shadowLight.m_position;
-
-	// DEBUG: Uncomment to print shadow info once per frame
-	// static int frameCount = 0;
-	// if (frameCount++ % 60 == 0) {
-	//     AGNI_PRINT("Point Shadow - Light: {} at ({}, {}, {}), Objects: {}\n",
-	//                m_pointShadowLightIndex, lightPos.x, lightPos.y, lightPos.z,
-	//                m_mainDrawContext.m_OpaqueSurfaces.size());
-	// }
 
 	// Calculate 6 view-projection matrices for cube faces
 	std::array<glm::mat4, 6> faceMatrices = calculatePointLightMatrices(

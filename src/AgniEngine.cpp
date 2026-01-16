@@ -496,6 +496,7 @@ void AgniEngine::run()
 				ImGui::Text("(20 samples per pixel)");
 			}
 
+			ImGui::Separator();
 			// Debug info
 			auto& pointLights = m_renderer.getMainDrawContext().m_PointLights;
 			ImGui::Text("Point Lights: %zu", pointLights.size());
@@ -575,13 +576,6 @@ void AgniEngine::run()
 				if (foundEntityID != 0)
 				{
 					m_ecsInspector->setSelectedEntity(foundEntityID);
-					// DEBUG: Uncomment to see entity selection
-					// AGNI_PRINT("Picked entity: 32-bit ID={}, Full 64-bit ID={}\n", pickedEntityID, foundEntityID);
-				}
-				else
-				{
-					// DEBUG: Uncomment to debug picking failures
-					// AGNI_PRINT("Warning: Picked ID {} does not match any alive entity\n", pickedEntityID);
 				}
 			}
 			m_renderer.clearPickingResult();
