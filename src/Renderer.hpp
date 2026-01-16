@@ -86,6 +86,10 @@ class Renderer
 public:
 	Renderer()  = default;
 	~Renderer() = default;
+	Renderer(const Renderer& other)            = delete;
+	Renderer(Renderer&& other)                 = delete;
+	Renderer& operator=(const Renderer& other) = delete;
+	Renderer& operator=(Renderer&& other)      = delete;
 
 	void init(VkDevice                          device,
 	          ResourceManager*                resourceManager,

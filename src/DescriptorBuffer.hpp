@@ -32,6 +32,10 @@ class DescriptorBufferAllocator
 public:
 	DescriptorBufferAllocator()  = default;
 	~DescriptorBufferAllocator() = default;
+	DescriptorBufferAllocator(const DescriptorBufferAllocator& other)            = delete;
+	DescriptorBufferAllocator(DescriptorBufferAllocator&& other)                 = delete;
+	DescriptorBufferAllocator& operator=(const DescriptorBufferAllocator& other) = delete;
+	DescriptorBufferAllocator& operator=(DescriptorBufferAllocator&& other)      = delete;
 
 	// Query properties from physical device (call once at engine init)
 	static void queryProperties(VkPhysicalDevice           physicalDevice,

@@ -42,6 +42,10 @@ class JoltPhysicsManager
 public:
 	JoltPhysicsManager();
 	~JoltPhysicsManager();
+	JoltPhysicsManager(const JoltPhysicsManager& other)            = delete;
+	JoltPhysicsManager(JoltPhysicsManager&& other)                 = delete;
+	JoltPhysicsManager& operator=(const JoltPhysicsManager& other) = delete;
+	JoltPhysicsManager& operator=(JoltPhysicsManager&& other)      = delete;
 
 	// Initialization
 	bool initialize(const PhysicsSettings& settings = PhysicsSettings{});

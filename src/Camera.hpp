@@ -12,8 +12,8 @@ public:
 	~Camera()                               = default;
 	Camera(const Camera& other)             = delete;
 	Camera(Camera&& other)                  = delete;
-	Camera&  operator=(const Camera& other) = delete;
-	Camera&& operator=(Camera&& other)      = delete;
+	Camera& operator=(const Camera& other)  = delete;
+	Camera& operator=(Camera&& other)       = delete;
 
 	// Component data (ECS-ready)
 	CameraComponent m_component;

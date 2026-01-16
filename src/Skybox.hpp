@@ -19,8 +19,8 @@ public:
 	~Skybox()                               = default;
 	Skybox(const Skybox& other)             = delete;
 	Skybox(Skybox&& other)                  = delete;
-	Skybox&  operator=(const Skybox& other) = delete;
-	Skybox&& operator=(Skybox&& other)      = delete;
+	Skybox& operator=(const Skybox& other)  = delete;
+	Skybox& operator=(Skybox&& other)       = delete;
 
 	// Initialize the skybox with cubemap faces
 	void init(AgniEngine*                       engine,

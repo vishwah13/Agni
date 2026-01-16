@@ -10,7 +10,12 @@
 class Node
 {
 public:
-	virtual ~Node() = default;
+	Node()                             = default;
+	virtual ~Node()                    = default;
+	Node(const Node& other)            = delete;
+	Node(Node&& other)                 = delete;
+	Node& operator=(const Node& other) = delete;
+	Node& operator=(Node&& other)      = delete;
 
 	// The Node class will hold the object matrix for the transforms. Both local
 	// and world transform. The world transform needs to be updated, so whenever

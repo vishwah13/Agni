@@ -44,6 +44,10 @@ class World : public IWorld
 public:
 	World();
 	~World() override;
+	World(const World& other)            = delete;
+	World(World&& other)                 = delete;
+	World& operator=(const World& other) = delete;
+	World& operator=(World&& other)      = delete;
 
 	// Access the underlying flecs world
 	flecs::world&       get() { return m_world; }

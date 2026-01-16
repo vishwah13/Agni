@@ -50,6 +50,10 @@ class TextureRegistry
 public:
 	TextureRegistry()  = default;
 	~TextureRegistry() = default;
+	TextureRegistry(const TextureRegistry& other)            = delete;
+	TextureRegistry(TextureRegistry&& other)                 = delete;
+	TextureRegistry& operator=(const TextureRegistry& other) = delete;
+	TextureRegistry& operator=(TextureRegistry&& other)      = delete;
 
 	void init(VkDevice                          device,
 	          ResourceManager*                  resourceManager,
@@ -104,6 +108,10 @@ class SamplerRegistry
 public:
 	SamplerRegistry()  = default;
 	~SamplerRegistry() = default;
+	SamplerRegistry(const SamplerRegistry& other)            = delete;
+	SamplerRegistry(SamplerRegistry&& other)                 = delete;
+	SamplerRegistry& operator=(const SamplerRegistry& other) = delete;
+	SamplerRegistry& operator=(SamplerRegistry&& other)      = delete;
 
 	void init(VkDevice                          device,
 	          ResourceManager*                  resourceManager,
@@ -140,6 +148,10 @@ class MaterialRegistry
 public:
 	MaterialRegistry()  = default;
 	~MaterialRegistry() = default;
+	MaterialRegistry(const MaterialRegistry& other)            = delete;
+	MaterialRegistry(MaterialRegistry&& other)                 = delete;
+	MaterialRegistry& operator=(const MaterialRegistry& other) = delete;
+	MaterialRegistry& operator=(MaterialRegistry&& other)      = delete;
 
 	void init(VkDevice                          device,
 	          ResourceManager*                  resourceManager,
