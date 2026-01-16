@@ -6,6 +6,7 @@
 #include <Scene.hpp>
 #include <Types.hpp>
 
+#include <array>
 #include <unordered_map>
 #include <vector>
 
@@ -132,6 +133,11 @@ public:
 	float& getSpotShadowBias() { return m_spotShadowBias; }
 	float& getSpotShadowNormalBias() { return m_spotShadowNormalBias; }
 	bool& getSpotShadowsEnabled() { return m_spotShadowsEnabled; }
+	float& getPointShadowBias() { return m_pointShadowBias; }
+	float& getPointShadowNormalBias() { return m_pointShadowNormalBias; }
+	float& getPointShadowFarPlane() { return m_pointShadowFarPlane; }
+	bool& getPointShadowsEnabled() { return m_pointShadowsEnabled; }
+	int& getPointShadowLightIndex() { return m_pointShadowLightIndex; }
 	VkExtent2D getDrawExtent() const
 	{
 		return m_drawExtent;
@@ -264,6 +270,20 @@ private:
 	float m_spotShadowNormalBias = 0.02f;
 	bool  m_spotShadowsEnabled  = true;
 
+	// Point light shadow mapping resources
+	AllocatedImage   m_pointShadowCubeMap;           // Depth cube map (6 faces)
+	VkImageView      m_pointShadowFaceViews[6] = {}; // Individual face views for rendering
+	VkSampler        m_pointShadowSampler       = VK_NULL_HANDLE;
+	VkPipeline       m_pointShadowPipeline      = VK_NULL_HANDLE;
+	VkPipelineLayout m_pointShadowPipelineLayout = VK_NULL_HANDLE;
+
+	// Point shadow configuration
+	float m_pointShadowBias       = 0.05f;
+	float m_pointShadowNormalBias = 0.02f;
+	float m_pointShadowFarPlane   = 50.0f;
+	bool  m_pointShadowsEnabled   = true;
+	int   m_pointShadowLightIndex = 0;  // Which point light casts shadows
+
 	// Private rendering functions
 	void drawBackground(VkCommandBuffer cmd);
 	void drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame);
@@ -284,4 +304,10 @@ private:
 	void drawSpotShadowPass(VkCommandBuffer cmd, FrameData& currentFrame);
 	glm::mat4 calculateLightSpaceMatrix(const glm::vec3& lightDir);
 	glm::mat4 calculateSpotLightSpaceMatrix(const glm::vec3& position, const glm::vec3& direction, float outerConeAngle);
+
+	// Point light shadow mapping helpers
+	void initPointShadowResources();
+	void initPointShadowPipeline();
+	void drawPointShadowPass(VkCommandBuffer cmd);
+	std::array<glm::mat4, 6> calculatePointLightMatrices(const glm::vec3& lightPos, float nearPlane, float farPlane);
 };

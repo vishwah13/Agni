@@ -66,6 +66,7 @@ if(AGNI_COMPILE_SHADERS)
         "${PROJECT_SOURCE_DIR}/shaders/slang/mesh.slang"
         "${PROJECT_SOURCE_DIR}/shaders/slang/skybox.slang"
         "${PROJECT_SOURCE_DIR}/shaders/slang/objectid.slang"
+        "${PROJECT_SOURCE_DIR}/shaders/slang/point_shadow.slang"
         "${PROJECT_SOURCE_DIR}/shaders/slang/MeshFallback.slang"
         "${PROJECT_SOURCE_DIR}/shaders/slang/SkyboxFallback.slang"
     )

@@ -23,6 +23,13 @@ Texture2D<float> spotShadowMap;
 [[vk::binding(3, 0)]]
 SamplerComparisonState spotShadowSampler;
 
+// Point light shadow cube map (set 0, binding 4)
+[[vk::binding(4, 0)]]
+TextureCube<float> pointShadowCubeMap;
+
+[[vk::binding(4, 0)]]
+SamplerComparisonState pointShadowSampler;
+
 // Bindless texture array (set 1, binding 0)
 [[vk::binding(0, 1)]]
 Texture2D textures[];
@@ -250,6 +257,37 @@ float calculateSpotShadow(float4 spotLightSpacePos, float3 N, float3 L)
     return shadow / 9.0;
 }
 
+// Point light shadow calculation (omnidirectional cube map)
+float calculatePointShadow(float3 worldPos, float3 lightPos, float3 N)
+{
+    // Check if point shadows are enabled (w > 0 means enabled, w-1 is the light index)
+    if (sceneData.pointShadowParams.w < 0.5)
+        return 1.0;
+
+    // Direction from light to fragment (used for cube map sampling)
+    float3 lightToFrag = worldPos - lightPos;
+    float currentDistance = length(lightToFrag);
+
+    // Normalize distance for comparison
+    // Reverse-Z: depth 0 = far, depth 1 = near
+    // closer objects have higher depth values
+    float farPlane = sceneData.pointShadowParams.z;
+    float normalizedDepth = 1.0 - saturate(currentDistance / farPlane);
+
+    // Apply bias - in reverse-Z, we ADD bias to move toward near (1.0)
+    // This makes the comparison more lenient for the fragment
+    float bias = sceneData.pointShadowParams.x;
+    float biasedDepth = normalizedDepth + bias;
+
+    // Sample cube map with direction vector and compare (hard shadows - single sample)
+    // Sampler uses VK_COMPARE_OP_GREATER: lit if fragment depth > shadow depth
+    // (fragment is closer than shadow caster)
+    float3 sampleDir = normalize(lightToFrag);
+    float shadow = pointShadowCubeMap.SampleCmpLevelZero(pointShadowSampler, sampleDir, biasedDepth);
+
+    return shadow;
+}
+
 [shader("fragment")]
 float4 fragmentMain(VertexOutput input) : SV_Target
 {
@@ -347,7 +385,16 @@ float4 fragmentMain(VertexOutput input) : SV_Target
         pKd *= 1.0 - metallic;
 
         float pNdotL = max(dot(N, pL), 0.0);
-        Lo += (pKd * albedo / PI + pSpecular) * pRadiance * pNdotL;
+
+        // Apply point shadow if this is the shadow-casting light
+        // pointShadowParams.w stores lightIndex+1 (0 means disabled)
+        float pointShadow = 1.0;
+        if (i == uint(sceneData.pointShadowParams.w - 1) && sceneData.pointShadowParams.w > 0.5)
+        {
+            pointShadow = calculatePointShadow(input.worldPos, sceneData.pointLightShadowPos, N);
+        }
+
+        Lo += (pKd * albedo / PI + pSpecular) * pRadiance * pNdotL * pointShadow;
     }
 
     // Spot lights

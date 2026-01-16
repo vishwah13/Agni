@@ -93,12 +93,16 @@ struct GPUSceneData
 	glm::vec4 m_sunlightColor;
 	glm::vec4 m_shadowParams;         // x=bias, y=normalBias, z=1/resolution, w=dirEnabled
 	glm::vec4 m_spotShadowParams;     // x=bias, y=normalBias, z=spotLightIndex, w=spotEnabled
+	glm::vec4 m_pointShadowParams;    // x=bias, y=normalBias, z=farPlane, w=pointLightIndex+1 (0=disabled)
+	glm::vec3 m_pointLightShadowPos;  // Position of the shadow-casting point light
+	float     m_pointShadowPadding;   // Alignment padding
 	glm::vec3 m_cameraPosition;
 	float     m_padding;              // Alignment padding
 };
 
 // Shadow mapping constants
 constexpr uint32_t SHADOW_MAP_RESOLUTION = 2048;
+constexpr uint32_t POINT_SHADOW_MAP_RESOLUTION = 2048;
 
 // Push constants for shadow pass (minimal - depth only)
 struct ShadowPushConstants
@@ -106,6 +110,18 @@ struct ShadowPushConstants
 	glm::mat4       m_worldMatrix;
 	VkDeviceAddress m_vertexBuffer;
 };
+
+// Push constants for point light shadow pass (includes light position for distance calculation)
+// Must match shader layout (std430 alignment: mat4 requires 16-byte alignment)
+struct PointShadowPushConstants
+{
+	glm::mat4       m_worldMatrix;    // 64 bytes, offset 0
+	VkDeviceAddress m_vertexBuffer;   // 8 bytes, offset 64
+	uint64_t        m_padding;        // 8 bytes padding to align m_lightViewProj to 16 bytes
+	glm::mat4       m_lightViewProj;  // 64 bytes, offset 80 (View-proj matrix for current cube face)
+	glm::vec3       m_lightPos;       // 12 bytes, offset 144 (Light position for distance calculation)
+	float           m_farPlane;       // 4 bytes, offset 156 (Far plane for depth normalization)
+};                                    // Total: 160 bytes
 
 // Maximum number of lights supported
 constexpr uint32_t MAX_POINT_LIGHTS = 256;

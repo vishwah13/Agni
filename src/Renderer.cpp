@@ -104,9 +104,11 @@ void Renderer::init(VkDevice                          device,
 
 	initRenderTargets(windowExtent);
 	initShadowResources();
+	initPointShadowResources();
 	initDescriptors();
 	initBackgroundPipelines();
 	initShadowPipeline();
+	initPointShadowPipeline();
 	initPickingResources(windowExtent);
 	initObjectIDPipeline();
 }
@@ -150,6 +152,22 @@ void Renderer::cleanup()
 		vkDestroyPipeline(m_device, m_shadowPipeline, nullptr);
 	if (m_shadowPipelineLayout != VK_NULL_HANDLE)
 		vkDestroyPipelineLayout(m_device, m_shadowPipelineLayout, nullptr);
+
+	// Cleanup point shadow resources
+	// Destroy face views first (they're separate from the cube map image view)
+	for (int i = 0; i < 6; i++)
+	{
+		if (m_pointShadowFaceViews[i] != VK_NULL_HANDLE)
+			vkDestroyImageView(m_device, m_pointShadowFaceViews[i], nullptr);
+	}
+	// destroyImage will destroy the cube map image view and the image itself
+	m_resourceManager->destroyImage(m_pointShadowCubeMap);
+	if (m_pointShadowSampler != VK_NULL_HANDLE)
+		vkDestroySampler(m_device, m_pointShadowSampler, nullptr);
+	if (m_pointShadowPipeline != VK_NULL_HANDLE)
+		vkDestroyPipeline(m_device, m_pointShadowPipeline, nullptr);
+	if (m_pointShadowPipelineLayout != VK_NULL_HANDLE)
+		vkDestroyPipelineLayout(m_device, m_pointShadowPipelineLayout, nullptr);
 
 	// Cleanup pipelines
 	vkDestroyPipelineLayout(m_device, m_gradientPipelineLayout, nullptr);
@@ -322,6 +340,80 @@ void Renderer::initShadowResources()
 	VK_CHECK(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_shadowSampler));
 }
 
+void Renderer::initPointShadowResources()
+{
+	// Create depth cube map for point light shadow mapping
+	VkExtent3D cubeExtent = {POINT_SHADOW_MAP_RESOLUTION, POINT_SHADOW_MAP_RESOLUTION, 1};
+
+	// Create image with cube-compatible flag
+	VkImageCreateInfo imgInfo = vkinit::imageCreateInfo(
+	    VK_FORMAT_D32_SFLOAT,
+	    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+	    cubeExtent);
+	imgInfo.arrayLayers = 6;
+	imgInfo.flags       = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+
+	VmaAllocationCreateInfo allocInfo = {};
+	allocInfo.usage                   = VMA_MEMORY_USAGE_GPU_ONLY;
+	allocInfo.requiredFlags           = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+	m_pointShadowCubeMap.m_imageFormat = VK_FORMAT_D32_SFLOAT;
+	m_pointShadowCubeMap.m_imageExtent = cubeExtent;
+
+	VK_CHECK(vmaCreateImage(m_resourceManager->getAllocator(),
+	                        &imgInfo,
+	                        &allocInfo,
+	                        &m_pointShadowCubeMap.m_image,
+	                        &m_pointShadowCubeMap.m_allocation,
+	                        nullptr));
+
+	// Create cube map view for sampling (all 6 faces)
+	VkImageViewCreateInfo cubeViewInfo = vkinit::imageViewCreateInfo(
+	    VK_FORMAT_D32_SFLOAT,
+	    m_pointShadowCubeMap.m_image,
+	    VK_IMAGE_ASPECT_DEPTH_BIT);
+	cubeViewInfo.viewType                    = VK_IMAGE_VIEW_TYPE_CUBE;
+	cubeViewInfo.subresourceRange.layerCount = 6;
+
+	VK_CHECK(vkCreateImageView(m_device, &cubeViewInfo, nullptr, &m_pointShadowCubeMap.m_imageView));
+
+	// Create individual face views for rendering (each face is a 2D attachment)
+	for (uint32_t face = 0; face < 6; face++)
+	{
+		VkImageViewCreateInfo faceViewInfo = vkinit::imageViewCreateInfo(
+		    VK_FORMAT_D32_SFLOAT,
+		    m_pointShadowCubeMap.m_image,
+		    VK_IMAGE_ASPECT_DEPTH_BIT);
+		faceViewInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
+		faceViewInfo.subresourceRange.baseArrayLayer = face;
+		faceViewInfo.subresourceRange.layerCount     = 1;
+
+		VK_CHECK(vkCreateImageView(m_device, &faceViewInfo, nullptr, &m_pointShadowFaceViews[face]));
+	}
+
+	// Create comparison sampler for point shadow cube map (same as other shadow maps)
+	VkSamplerCreateInfo samplerInfo = {};
+	samplerInfo.sType            = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	samplerInfo.magFilter        = VK_FILTER_LINEAR;
+	samplerInfo.minFilter        = VK_FILTER_LINEAR;
+	samplerInfo.mipmapMode       = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+	samplerInfo.addressModeU     = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeV     = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeW     = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.borderColor      = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+	samplerInfo.compareEnable    = VK_TRUE;
+	samplerInfo.compareOp        = VK_COMPARE_OP_GREATER;  // Reverse-Z: lit if fragment > shadow
+	samplerInfo.maxLod           = 0.0f;
+	samplerInfo.minLod           = 0.0f;
+	samplerInfo.mipLodBias       = 0.0f;
+	samplerInfo.anisotropyEnable = VK_FALSE;
+
+	VK_CHECK(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_pointShadowSampler));
+
+	AGNI_PRINT("Point shadow cube map created ({}x{} per face)\n",
+	           POINT_SHADOW_MAP_RESOLUTION, POINT_SHADOW_MAP_RESOLUTION);
+}
+
 void Renderer::initDescriptors()
 {
 	// Create descriptor set layout for draw image (compute shader)
@@ -342,6 +434,7 @@ void Renderer::initDescriptors()
 		builder.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);          // Light data
 		builder.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);  // Directional shadow map
 		builder.addBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);  // Spot shadow map
+		builder.addBinding(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);  // Point shadow cube map
 		m_gpuSceneDataLayoutInfo = builder.buildForDescriptorBuffer(
 		m_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 		m_gpuSceneDataDescriptorLayout = m_gpuSceneDataLayoutInfo.layout;
@@ -509,6 +602,75 @@ void Renderer::initShadowPipeline()
 	AGNI_PRINT("Shadow pipeline created successfully\n");
 }
 
+void Renderer::initPointShadowPipeline()
+{
+	// Load point shadow pass shaders (vertex + fragment for linear depth output)
+	VkShaderModule pointShadowVertShader;
+	if (!vkutil::loadShaderModule("../../shaders/slang/point_shadow.vert.spv",
+	                              m_device, &pointShadowVertShader))
+	{
+		AGNI_PRINT("Failed to load point shadow vertex shader\n");
+		return;
+	}
+
+	VkShaderModule pointShadowFragShader;
+	if (!vkutil::loadShaderModule("../../shaders/slang/point_shadow.frag.spv",
+	                              m_device, &pointShadowFragShader))
+	{
+		AGNI_PRINT("Failed to load point shadow fragment shader\n");
+		vkDestroyShaderModule(m_device, pointShadowVertShader, nullptr);
+		return;
+	}
+
+	// Create pipeline layout with push constants for point shadow pass
+	VkPushConstantRange pushConstantRange {};
+	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+	pushConstantRange.offset     = 0;
+	pushConstantRange.size       = sizeof(PointShadowPushConstants);
+
+	VkPipelineLayoutCreateInfo layoutInfo {};
+	layoutInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	layoutInfo.setLayoutCount         = 0;  // No descriptor sets needed - all data via push constants
+	layoutInfo.pSetLayouts            = nullptr;
+	layoutInfo.pushConstantRangeCount = 1;
+	layoutInfo.pPushConstantRanges    = &pushConstantRange;
+
+	VK_CHECK(vkCreatePipelineLayout(m_device, &layoutInfo, nullptr, &m_pointShadowPipelineLayout));
+
+	// Build point shadow pipeline
+	PipelineBuilder builder;
+	builder.setShaders(pointShadowVertShader, pointShadowFragShader);
+
+	builder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	builder.setPolygonMode(VK_POLYGON_MODE_FILL);
+
+	// Cull front faces to reduce shadow acne
+	builder.setCullMode(VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_CLOCKWISE);
+
+	builder.setMultisamplingNone();
+
+	// Reverse-Z depth test
+	builder.enableDepthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
+
+	// Depth bias to prevent shadow acne
+	builder.enableDepthBias(-1.25f, -1.75f, 0.0f);
+
+	// No color attachment - fragment shader writes to depth
+	builder.m_renderInfo.colorAttachmentCount    = 0;
+	builder.m_renderInfo.pColorAttachmentFormats = nullptr;
+	builder.setDepthFormat(VK_FORMAT_D32_SFLOAT);
+
+	builder.m_pipelineLayout = m_pointShadowPipelineLayout;
+	builder.enableDescriptorBuffer();
+
+	m_pointShadowPipeline = builder.buildPipeline(m_device);
+
+	vkDestroyShaderModule(m_device, pointShadowVertShader, nullptr);
+	vkDestroyShaderModule(m_device, pointShadowFragShader, nullptr);
+
+	AGNI_PRINT("Point shadow pipeline created successfully\n");
+}
+
 glm::mat4 Renderer::calculateLightSpaceMatrix(const glm::vec3& lightDir)
 {
 	// Calculate light space matrix for directional shadow mapping
@@ -574,6 +736,28 @@ glm::mat4 Renderer::calculateSpotLightSpaceMatrix(const glm::vec3& position,
 	lightProj[1][1] *= -1.0f;
 
 	return lightProj * lightView;
+}
+
+std::array<glm::mat4, 6> Renderer::calculatePointLightMatrices(const glm::vec3& lightPos,
+                                                                 float nearPlane,
+                                                                 float farPlane)
+{
+	// 90 degree FOV perspective projection for cube face
+	// Reverse-Z: swap near/far (farPlane as near, nearPlane as far)
+	glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, farPlane, nearPlane);
+	proj[1][1] *= -1.0f;  // Vulkan Y-flip
+
+	// 6 view matrices for cube faces
+	// Order: +X, -X, +Y, -Y, +Z, -Z
+	std::array<glm::mat4, 6> matrices;
+	matrices[0] = proj * glm::lookAt(lightPos, lightPos + glm::vec3( 1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)); // +X
+	matrices[1] = proj * glm::lookAt(lightPos, lightPos + glm::vec3(-1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)); // -X
+	matrices[2] = proj * glm::lookAt(lightPos, lightPos + glm::vec3( 0.0f,  1.0f,  0.0f), glm::vec3(0.0f,  0.0f,  1.0f)); // +Y
+	matrices[3] = proj * glm::lookAt(lightPos, lightPos + glm::vec3( 0.0f, -1.0f,  0.0f), glm::vec3(0.0f,  0.0f, -1.0f)); // -Y
+	matrices[4] = proj * glm::lookAt(lightPos, lightPos + glm::vec3( 0.0f,  0.0f,  1.0f), glm::vec3(0.0f, -1.0f,  0.0f)); // +Z
+	matrices[5] = proj * glm::lookAt(lightPos, lightPos + glm::vec3( 0.0f,  0.0f, -1.0f), glm::vec3(0.0f, -1.0f,  0.0f)); // -Z
+
+	return matrices;
 }
 
 void Renderer::drawShadowPass(VkCommandBuffer cmd, FrameData& currentFrame)
@@ -828,6 +1012,141 @@ void Renderer::drawSpotShadowPass(VkCommandBuffer cmd, FrameData& currentFrame)
 	                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
 }
 
+void Renderer::drawPointShadowPass(VkCommandBuffer cmd)
+{
+#ifdef TRACY_ENABLE
+	ZoneScopedN("Point Shadow Pass");
+#endif
+
+	// Get the shadow-casting point light
+	if (m_pointShadowLightIndex >= static_cast<int>(m_mainDrawContext.m_PointLights.size()))
+		return;
+
+	const GPUPointLight& shadowLight = m_mainDrawContext.m_PointLights[m_pointShadowLightIndex];
+	glm::vec3 lightPos = shadowLight.m_position;
+
+	// Calculate 6 view-projection matrices for cube faces
+	std::array<glm::mat4, 6> faceMatrices = calculatePointLightMatrices(
+	    lightPos, 0.1f, m_pointShadowFarPlane);
+
+	// Setup viewport and scissor (same for all faces)
+	VkViewport viewport {};
+	viewport.x        = 0;
+	viewport.y        = 0;
+	viewport.width    = static_cast<float>(POINT_SHADOW_MAP_RESOLUTION);
+	viewport.height   = static_cast<float>(POINT_SHADOW_MAP_RESOLUTION);
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+
+	VkRect2D scissor {};
+	scissor.offset = {0, 0};
+	scissor.extent = {POINT_SHADOW_MAP_RESOLUTION, POINT_SHADOW_MAP_RESOLUTION};
+
+	// Render each cube face
+	for (uint32_t face = 0; face < 6; face++)
+	{
+		// Transition this cube face to depth attachment
+		VkImageMemoryBarrier2 barrier {};
+		barrier.sType                           = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+		barrier.srcStageMask                    = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+		barrier.srcAccessMask                   = 0;
+		barrier.dstStageMask                    = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT;
+		barrier.dstAccessMask                   = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+		barrier.oldLayout                       = VK_IMAGE_LAYOUT_UNDEFINED;
+		barrier.newLayout                       = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+		barrier.image                           = m_pointShadowCubeMap.m_image;
+		barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT;
+		barrier.subresourceRange.baseMipLevel   = 0;
+		barrier.subresourceRange.levelCount     = 1;
+		barrier.subresourceRange.baseArrayLayer = face;
+		barrier.subresourceRange.layerCount     = 1;
+
+		VkDependencyInfo depInfo {};
+		depInfo.sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+		depInfo.imageMemoryBarrierCount = 1;
+		depInfo.pImageMemoryBarriers    = &barrier;
+		vkCmdPipelineBarrier2(cmd, &depInfo);
+
+		// Setup depth attachment for this face
+		VkRenderingAttachmentInfo depthAttachment {};
+		depthAttachment.sType                       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+		depthAttachment.imageView                   = m_pointShadowFaceViews[face];
+		depthAttachment.imageLayout                 = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+		depthAttachment.loadOp                      = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		depthAttachment.storeOp                     = VK_ATTACHMENT_STORE_OP_STORE;
+		depthAttachment.clearValue.depthStencil.depth = 0.0f;  // Reverse-Z: far = 0
+
+		VkRenderingInfo renderInfo {};
+		renderInfo.sType                = VK_STRUCTURE_TYPE_RENDERING_INFO;
+		renderInfo.renderArea           = {{0, 0}, {POINT_SHADOW_MAP_RESOLUTION, POINT_SHADOW_MAP_RESOLUTION}};
+		renderInfo.layerCount           = 1;
+		renderInfo.colorAttachmentCount = 0;
+		renderInfo.pColorAttachments    = nullptr;
+		renderInfo.pDepthAttachment     = &depthAttachment;
+
+		vkCmdBeginRendering(cmd, &renderInfo);
+
+		// Bind point shadow pipeline
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pointShadowPipeline);
+
+		// Set viewport and scissor
+		vkCmdSetViewport(cmd, 0, 1, &viewport);
+		vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+		// Draw all opaque objects
+		VkBuffer lastIndexBuffer = VK_NULL_HANDLE;
+
+		for (const auto& obj : m_mainDrawContext.m_OpaqueSurfaces)
+		{
+			if (obj.m_indexBuffer != lastIndexBuffer)
+			{
+				lastIndexBuffer = obj.m_indexBuffer;
+				vkCmdBindIndexBuffer(cmd, obj.m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+			}
+
+			PointShadowPushConstants pushConstants;
+			pushConstants.m_worldMatrix   = obj.m_transform;
+			pushConstants.m_vertexBuffer  = obj.m_vertexBufferAddress;
+			pushConstants.m_lightViewProj = faceMatrices[face];
+			pushConstants.m_lightPos      = lightPos;
+			pushConstants.m_farPlane      = m_pointShadowFarPlane;
+
+			vkCmdPushConstants(cmd,
+			                   m_pointShadowPipelineLayout,
+			                   VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+			                   0,
+			                   sizeof(PointShadowPushConstants),
+			                   &pushConstants);
+
+			vkCmdDrawIndexed(cmd, obj.m_indexCount, 1, obj.m_firstIndex, 0, 0);
+		}
+
+		vkCmdEndRendering(cmd);
+	}
+
+	// Transition entire cube map to shader read optimal for sampling
+	VkImageMemoryBarrier2 finalBarrier {};
+	finalBarrier.sType                           = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+	finalBarrier.srcStageMask                    = VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+	finalBarrier.srcAccessMask                   = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+	finalBarrier.dstStageMask                    = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+	finalBarrier.dstAccessMask                   = VK_ACCESS_2_SHADER_READ_BIT;
+	finalBarrier.oldLayout                       = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+	finalBarrier.newLayout                       = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+	finalBarrier.image                           = m_pointShadowCubeMap.m_image;
+	finalBarrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT;
+	finalBarrier.subresourceRange.baseMipLevel   = 0;
+	finalBarrier.subresourceRange.levelCount     = 1;
+	finalBarrier.subresourceRange.baseArrayLayer = 0;
+	finalBarrier.subresourceRange.layerCount     = 6;  // All 6 faces
+
+	VkDependencyInfo finalDepInfo {};
+	finalDepInfo.sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	finalDepInfo.imageMemoryBarrierCount = 1;
+	finalDepInfo.pImageMemoryBarriers    = &finalBarrier;
+	vkCmdPipelineBarrier2(cmd, &finalDepInfo);
+}
+
 void Renderer::renderFrame(VkCommandBuffer cmd,
                             uint32_t        swapchainImageIndex,
                             FrameData&      currentFrame)
@@ -869,6 +1188,13 @@ void Renderer::renderFrame(VkCommandBuffer cmd,
 	if (m_spotShadowsEnabled && !m_mainDrawContext.m_SpotLights.empty())
 	{
 		drawSpotShadowPass(cmd, currentFrame);
+	}
+
+	// Point light shadow pass
+	if (m_pointShadowsEnabled && !m_mainDrawContext.m_PointLights.empty() &&
+	    m_pointShadowLightIndex < static_cast<int>(m_mainDrawContext.m_PointLights.size()))
+	{
+		drawPointShadowPass(cmd);
 	}
 
 	// Object ID pass for picking (only runs when picking is requested)
@@ -1147,6 +1473,13 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	                                            m_gpuSceneDataLayoutInfo.bindingOffsets[3],
 	                                            m_spotShadowMap.m_imageView,
 	                                            m_shadowSampler,
+	                                            VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+
+	// Binding 4: Point shadow cube map combined image sampler
+	m_descriptorBufferWriter.writeImageSampler(sceneDescriptorPtr,
+	                                            m_gpuSceneDataLayoutInfo.bindingOffsets[4],
+	                                            m_pointShadowCubeMap.m_imageView,
+	                                            m_pointShadowSampler,
 	                                            VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
 
 	// Bind descriptor buffers once before any draws (bindless architecture)
@@ -1480,6 +1813,24 @@ void Renderer::updateScene(float deltaTime, VkExtent2D windowExtent)
 	{
 		m_sceneData.m_spotLightSpaceMatrix = glm::mat4(1.0f);
 		m_sceneData.m_spotShadowParams = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);  // disabled
+	}
+
+	// Calculate shadow mapping data for point light
+	if (m_pointShadowsEnabled && !m_mainDrawContext.m_PointLights.empty() &&
+	    m_pointShadowLightIndex < static_cast<int>(m_mainDrawContext.m_PointLights.size()))
+	{
+		const GPUPointLight& pointLight = m_mainDrawContext.m_PointLights[m_pointShadowLightIndex];
+		m_sceneData.m_pointLightShadowPos = pointLight.m_position;
+		m_sceneData.m_pointShadowParams = glm::vec4(
+		    m_pointShadowBias,
+		    m_pointShadowNormalBias,
+		    m_pointShadowFarPlane,
+		    static_cast<float>(m_pointShadowLightIndex + 1));  // +1 so 0 means disabled
+	}
+	else
+	{
+		m_sceneData.m_pointLightShadowPos = glm::vec3(0.0f);
+		m_sceneData.m_pointShadowParams = glm::vec4(0.0f);  // disabled
 	}
 
 	auto end = std::chrono::system_clock::now();
