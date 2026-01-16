@@ -128,6 +128,10 @@ public:
 	{
 		return m_stats;
 	}
+	const EngineStats& getStats() const
+	{
+		return m_stats;
+	}
 
 	// Shadow parameter accessors
 	float& getShadowBias() { return m_shadowBias; }
@@ -145,6 +149,7 @@ public:
 	bool& getPointShadowPCFEnabled() { return m_pointShadowPCFEnabled; }
 	int& getPointShadowLightIndex() { return m_pointShadowLightIndex; }
 	DrawContext& getMainDrawContext() { return m_mainDrawContext; }
+	const DrawContext& getMainDrawContext() const { return m_mainDrawContext; }
 	VkExtent2D getDrawExtent() const
 	{
 		return m_drawExtent;
@@ -157,8 +162,11 @@ public:
 
 	// Bindless resource accessors
 	TextureRegistry& getTextureRegistry() { return m_textureRegistry; }
+	const TextureRegistry& getTextureRegistry() const { return m_textureRegistry; }
 	SamplerRegistry& getSamplerRegistry() { return m_samplerRegistry; }
+	const SamplerRegistry& getSamplerRegistry() const { return m_samplerRegistry; }
 	MaterialRegistry& getMaterialRegistry() { return m_materialRegistry; }
+	const MaterialRegistry& getMaterialRegistry() const { return m_materialRegistry; }
 
 	const AllocatedImage& getMsaaColorImage() const
 	{
@@ -172,6 +180,10 @@ public:
 
 	// Scene management
 	std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>>& getLoadedScenes()
+	{
+		return m_loadedScenes;
+	}
+	const std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>>& getLoadedScenes() const
 	{
 		return m_loadedScenes;
 	}

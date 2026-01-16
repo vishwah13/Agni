@@ -203,11 +203,23 @@ public:
 	{
 		return *m_ecsWorld;
 	}
+	const agni::ecs::World& getECSWorld() const
+	{
+		return *m_ecsWorld;
+	}
 	agni::IWorld& getWorld()
 	{
 		return *m_ecsWorld;
 	}
+	const agni::IWorld& getWorld() const
+	{
+		return *m_ecsWorld;
+	}
 	agni::ecs::EntityFactory& getEntityFactory()
+	{
+		return *m_entityFactory;
+	}
+	const agni::ecs::EntityFactory& getEntityFactory() const
 	{
 		return *m_entityFactory;
 	}
@@ -217,6 +229,10 @@ public:
 	std::unique_ptr<agni::physics::JoltPhysicsManager> m_physicsManager;
 
 	agni::physics::JoltPhysicsManager& getPhysicsManager()
+	{
+		return *m_physicsManager;
+	}
+	const agni::physics::JoltPhysicsManager& getPhysicsManager() const
 	{
 		return *m_physicsManager;
 	}
