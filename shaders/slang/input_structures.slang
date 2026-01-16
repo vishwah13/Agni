@@ -13,7 +13,7 @@ struct SceneData
     float4 sunlightColor;
     float4 shadowParams;             // x=bias, y=normalBias, z=1/resolution, w=dirEnabled
     float4 spotShadowParams;         // x=bias, y=normalBias, z=spotLightIndex, w=spotEnabled
-    float4 pointShadowParams;        // x=bias, y=normalBias, z=farPlane, w=pointLightIndex+1 (0=disabled)
+    float4 pointShadowParams;        // x=bias, y=PCFRadius (0=hard shadows), z=farPlane, w=pointLightIndex+1 (0=disabled)
     float3 pointLightShadowPos;      // Position of the shadow-casting point light
     float  pointShadowPadding;       // Alignment padding
     float3 camPos;                   // camera position for view vector

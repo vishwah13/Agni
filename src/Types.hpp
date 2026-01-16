@@ -93,7 +93,7 @@ struct GPUSceneData
 	glm::vec4 m_sunlightColor;
 	glm::vec4 m_shadowParams;         // x=bias, y=normalBias, z=1/resolution, w=dirEnabled
 	glm::vec4 m_spotShadowParams;     // x=bias, y=normalBias, z=spotLightIndex, w=spotEnabled
-	glm::vec4 m_pointShadowParams;    // x=bias, y=normalBias, z=farPlane, w=pointLightIndex+1 (0=disabled)
+	glm::vec4 m_pointShadowParams;    // x=bias, y=PCFRadius, z=farPlane, w=pointLightIndex+1 (0=disabled)
 	glm::vec3 m_pointLightShadowPos;  // Position of the shadow-casting point light
 	float     m_pointShadowPadding;   // Alignment padding
 	glm::vec3 m_cameraPosition;

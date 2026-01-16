@@ -257,7 +257,7 @@ float calculateSpotShadow(float4 spotLightSpacePos, float3 N, float3 L)
     return shadow / 9.0;
 }
 
-// Point light shadow calculation (omnidirectional cube map)
+// Point light shadow calculation (omnidirectional cube map with PCF)
 float calculatePointShadow(float3 worldPos, float3 lightPos, float3 N)
 {
     // Check if point shadows are enabled (w > 0 means enabled, w-1 is the light index)
@@ -279,13 +279,40 @@ float calculatePointShadow(float3 worldPos, float3 lightPos, float3 N)
     float bias = sceneData.pointShadowParams.x;
     float biasedDepth = normalizedDepth + bias;
 
-    // Sample cube map with direction vector and compare (hard shadows - single sample)
-    // Sampler uses VK_COMPARE_OP_GREATER: lit if fragment depth > shadow depth
-    // (fragment is closer than shadow caster)
-    float3 sampleDir = normalize(lightToFrag);
-    float shadow = pointShadowCubeMap.SampleCmpLevelZero(pointShadowSampler, sampleDir, biasedDepth);
+    // Base sample direction (negate Z for Vulkan cube map coordinate system)
+    float3 sampleDir = normalize(float3(lightToFrag.x, lightToFrag.y, -lightToFrag.z));
 
-    return shadow;
+    // Get PCF radius from scene data (y component)
+    float pcfRadius = sceneData.pointShadowParams.y;
+
+    // Hard shadows (single sample) if PCF disabled (radius <= 0)
+    if (pcfRadius <= 0.0)
+    {
+        return pointShadowCubeMap.SampleCmpLevelZero(pointShadowSampler, sampleDir, biasedDepth);
+    }
+
+    // PCF soft shadows - sample with disk-based pattern
+    // Disk radius scales with distance for perspective-correct softness
+    float diskRadius = pcfRadius * (1.0 + currentDistance * 0.01);
+
+    // 20-sample Poisson disk pattern for soft shadows
+    float3 sampleOffsets[20] = {
+        float3(1, 1, 1), float3(1, -1, 1), float3(-1, -1, 1), float3(-1, 1, 1),
+        float3(1, 1, -1), float3(1, -1, -1), float3(-1, -1, -1), float3(-1, 1, -1),
+        float3(1, 1, 0), float3(1, -1, 0), float3(-1, -1, 0), float3(-1, 1, 0),
+        float3(1, 0, 1), float3(-1, 0, 1), float3(1, 0, -1), float3(-1, 0, -1),
+        float3(0, 1, 1), float3(0, -1, 1), float3(0, -1, -1), float3(0, 1, -1)
+    };
+
+    float shadow = 0.0;
+    for (int i = 0; i < 20; ++i)
+    {
+        float3 offset = sampleOffsets[i] * diskRadius;
+        float3 sampleDirection = normalize(sampleDir + offset);
+        shadow += pointShadowCubeMap.SampleCmpLevelZero(pointShadowSampler, sampleDirection, biasedDepth);
+    }
+
+    return shadow / 20.0;  // Average of 20 samples
 }
 
 [shader("fragment")]

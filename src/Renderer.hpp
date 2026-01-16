@@ -136,8 +136,11 @@ public:
 	float& getPointShadowBias() { return m_pointShadowBias; }
 	float& getPointShadowNormalBias() { return m_pointShadowNormalBias; }
 	float& getPointShadowFarPlane() { return m_pointShadowFarPlane; }
+	float& getPointShadowPCFRadius() { return m_pointShadowPCFRadius; }
 	bool& getPointShadowsEnabled() { return m_pointShadowsEnabled; }
+	bool& getPointShadowPCFEnabled() { return m_pointShadowPCFEnabled; }
 	int& getPointShadowLightIndex() { return m_pointShadowLightIndex; }
+	DrawContext& getMainDrawContext() { return m_mainDrawContext; }
 	VkExtent2D getDrawExtent() const
 	{
 		return m_drawExtent;
@@ -281,8 +284,10 @@ private:
 	float m_pointShadowBias       = 0.05f;
 	float m_pointShadowNormalBias = 0.02f;
 	float m_pointShadowFarPlane   = 50.0f;
+	float m_pointShadowPCFRadius  = 0.01f;  // PCF disk radius
 	bool  m_pointShadowsEnabled   = true;
-	int   m_pointShadowLightIndex = 0;  // Which point light casts shadows
+	bool  m_pointShadowPCFEnabled = true;   // Toggle soft shadows
+	int   m_pointShadowLightIndex = 0;      // Which point light casts shadows
 
 	// Private rendering functions
 	void drawBackground(VkCommandBuffer cmd);

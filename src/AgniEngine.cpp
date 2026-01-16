@@ -481,6 +481,34 @@ void AgniEngine::run()
 			ImGui::Checkbox("Enable Spot Shadows", &m_renderer.getSpotShadowsEnabled());
 			ImGui::SliderFloat("Spot Shadow Bias", &m_renderer.getSpotShadowBias(), 0.0f, 0.05f, "%.4f");
 			ImGui::SliderFloat("Spot Normal Bias", &m_renderer.getSpotShadowNormalBias(), 0.0f, 0.1f, "%.4f");
+
+			ImGui::Separator();
+			ImGui::Text("Point Light Shadows");
+			ImGui::Checkbox("Enable Point Shadows", &m_renderer.getPointShadowsEnabled());
+			ImGui::SliderFloat("Point Shadow Bias", &m_renderer.getPointShadowBias(), 0.0f, 0.2f, "%.4f");
+			ImGui::SliderFloat("Point Far Plane", &m_renderer.getPointShadowFarPlane(), 10.0f, 200.0f, "%.1f");
+			ImGui::SliderInt("Point Shadow Light", &m_renderer.getPointShadowLightIndex(), 0, 10);
+
+			// PCF soft shadows
+			ImGui::Checkbox("PCF Soft Shadows", &m_renderer.getPointShadowPCFEnabled());
+			if (m_renderer.getPointShadowPCFEnabled()) {
+				ImGui::SliderFloat("PCF Radius", &m_renderer.getPointShadowPCFRadius(), 0.01f, 0.5f, "%.3f");
+				ImGui::Text("(20 samples per pixel)");
+			}
+
+			// Debug info
+			auto& pointLights = m_renderer.getMainDrawContext().m_PointLights;
+			ImGui::Text("Point Lights: %zu", pointLights.size());
+			int idx = m_renderer.getPointShadowLightIndex();
+			if (idx < (int)pointLights.size()) {
+				auto& light = pointLights[idx];
+				ImGui::Text("Shadow Light Pos: (%.1f, %.1f, %.1f)", light.m_position.x, light.m_position.y, light.m_position.z);
+			}
+
+			ImGui::Separator();
+			ImGui::Text("Camera");
+			ImGui::SliderFloat("Move Speed", &m_mainCamera.m_speed, 0.01f, 1.0f, "%.3f");
+			ImGui::SliderFloat("Mouse Sensitivity", &m_mainCamera.m_mouseSensitivity, 0.1f, 1.0f, "%.2f");
 		}
 		ImGui::End();
 

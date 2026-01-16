@@ -1025,6 +1025,14 @@ void Renderer::drawPointShadowPass(VkCommandBuffer cmd)
 	const GPUPointLight& shadowLight = m_mainDrawContext.m_PointLights[m_pointShadowLightIndex];
 	glm::vec3 lightPos = shadowLight.m_position;
 
+	// DEBUG: Uncomment to print shadow info once per frame
+	// static int frameCount = 0;
+	// if (frameCount++ % 60 == 0) {
+	//     AGNI_PRINT("Point Shadow - Light: {} at ({}, {}, {}), Objects: {}\n",
+	//                m_pointShadowLightIndex, lightPos.x, lightPos.y, lightPos.z,
+	//                m_mainDrawContext.m_OpaqueSurfaces.size());
+	// }
+
 	// Calculate 6 view-projection matrices for cube faces
 	std::array<glm::mat4, 6> faceMatrices = calculatePointLightMatrices(
 	    lightPos, 0.1f, m_pointShadowFarPlane);
@@ -1823,7 +1831,7 @@ void Renderer::updateScene(float deltaTime, VkExtent2D windowExtent)
 		m_sceneData.m_pointLightShadowPos = pointLight.m_position;
 		m_sceneData.m_pointShadowParams = glm::vec4(
 		    m_pointShadowBias,
-		    m_pointShadowNormalBias,
+		    m_pointShadowPCFEnabled ? m_pointShadowPCFRadius : 0.0f,  // PCF radius (0 = hard shadows)
 		    m_pointShadowFarPlane,
 		    static_cast<float>(m_pointShadowLightIndex + 1));  // +1 so 0 means disabled
 	}
