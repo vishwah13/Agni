@@ -16,8 +16,9 @@ flecs::entity EntityFactory::createMeshEntity(std::shared_ptr<MeshAsset> mesh,
                                               const glm::mat4&           transform,
                                               const char*                name)
 {
-	const char*   entityName = name ? name : (mesh ? mesh->m_name.c_str() : nullptr);
-	flecs::entity entity     = m_world.createMeshEntity(entityName);
+	// Only use explicit name - don't fall back to mesh name
+	// (mesh name fallback causes multiple entities to share the same name)
+	flecs::entity entity = m_world.createMeshEntity(name);
 
 	// Set transform
 	TransformComponent& tc = entity.ensure<TransformComponent>();

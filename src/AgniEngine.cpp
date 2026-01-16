@@ -549,10 +549,40 @@ void AgniEngine::run()
 		// Check for picking result and update selection
 		if (m_renderer.hasPickingResult() && m_ecsInspector)
 		{
-			uint64_t pickedEntity = m_renderer.getPickedEntityID();
-			if (pickedEntity != 0)
+			uint64_t pickedEntityID = m_renderer.getPickedEntityID();
+			if (pickedEntityID != 0)
 			{
-				m_ecsInspector->setSelectedEntity(pickedEntity);
+				// The picked ID is only 32 bits (lower bits of the Flecs entity ID)
+				// We need to find the actual entity that matches these lower bits
+				// and is still valid (Flecs uses upper 32 bits for generation counter)
+				uint64_t foundEntityID = 0;
+
+				// Query only renderable entities (same filter as rendering)
+				m_ecsWorld->get().query<const TransformComponent,
+				                         const agni::ecs::RenderMeshComponent,
+				                         const RenderableTag>()
+				    .each([&](flecs::entity e,
+				              const TransformComponent&,
+				              const agni::ecs::RenderMeshComponent&,
+				              const RenderableTag&) {
+					    // Match lower 32 bits of renderable entities only
+					    if ((e.id() & 0xFFFFFFFF) == pickedEntityID && e.is_alive())
+					    {
+						    foundEntityID = e.id();
+					    }
+				    });
+
+				if (foundEntityID != 0)
+				{
+					m_ecsInspector->setSelectedEntity(foundEntityID);
+					// DEBUG: Uncomment to see entity selection
+					// AGNI_PRINT("Picked entity: 32-bit ID={}, Full 64-bit ID={}\n", pickedEntityID, foundEntityID);
+				}
+				else
+				{
+					// DEBUG: Uncomment to debug picking failures
+					// AGNI_PRINT("Warning: Picked ID {} does not match any alive entity\n", pickedEntityID);
+				}
 			}
 			m_renderer.clearPickingResult();
 		}
