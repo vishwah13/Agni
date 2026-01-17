@@ -13,6 +13,7 @@
 
 #include <Initializers.hpp>
 #include <Types.hpp>
+#include <Components.hpp>
 #include <VulkanTools.hpp>
 
 #define VMA_IMPLEMENTATION
@@ -399,6 +400,89 @@ void AgniEngine::run()
 		ImGui_ImplVulkan_NewFrame();
 		ImGui_ImplSDL3_NewFrame();
 		ImGui::NewFrame();
+
+		// ====================================================================
+		// Main Menu Bar
+		// ====================================================================
+		if (ImGui::BeginMainMenuBar())
+		{
+			if (ImGui::BeginMenu("File"))
+			{
+				if (ImGui::MenuItem("New Scene", "Ctrl+N")) { /* TODO */ }
+				if (ImGui::MenuItem("Open Scene...", "Ctrl+O")) { /* TODO */ }
+				if (ImGui::MenuItem("Save Scene", "Ctrl+S")) { /* TODO */ }
+				if (ImGui::MenuItem("Save Scene As...", "Ctrl+Shift+S")) { /* TODO */ }
+				ImGui::Separator();
+				if (ImGui::MenuItem("Exit", "Alt+F4"))
+				{
+					bQuit = true;
+				}
+				ImGui::EndMenu();
+			}
+
+			if (ImGui::BeginMenu("Edit"))
+			{
+				if (ImGui::MenuItem("Undo", "Ctrl+Z")) { /* TODO */ }
+				if (ImGui::MenuItem("Redo", "Ctrl+Y")) { /* TODO */ }
+				ImGui::Separator();
+				if (ImGui::MenuItem("Copy", "Ctrl+C")) { /* TODO */ }
+				if (ImGui::MenuItem("Paste", "Ctrl+V")) { /* TODO */ }
+				if (ImGui::MenuItem("Duplicate", "Ctrl+D")) { /* TODO */ }
+				ImGui::Separator();
+				if (ImGui::MenuItem("Delete", "Delete"))
+				{
+					if (m_ecsInspector && m_ecsInspector->getSelectedEntity() != NULL_ENTITY)
+					{
+						m_ecsWorld->destroyEntity(m_ecsInspector->getSelectedEntity());
+						m_ecsInspector->setSelectedEntity(NULL_ENTITY);
+					}
+				}
+				ImGui::EndMenu();
+			}
+
+			if (ImGui::BeginMenu("Entity"))
+			{
+				if (ImGui::MenuItem("Create Empty", "Ctrl+Shift+N")) { /* TODO */ }
+				ImGui::Separator();
+				if (ImGui::BeginMenu("3D Object"))
+				{
+					if (ImGui::MenuItem("Cube")) { /* TODO */ }
+					if (ImGui::MenuItem("Sphere")) { /* TODO */ }
+					if (ImGui::MenuItem("Plane")) { /* TODO */ }
+					ImGui::EndMenu();
+				}
+				if (ImGui::BeginMenu("Light"))
+				{
+					if (ImGui::MenuItem("Point Light")) { /* TODO */ }
+					if (ImGui::MenuItem("Directional Light")) { /* TODO */ }
+					if (ImGui::MenuItem("Spot Light")) { /* TODO */ }
+					ImGui::EndMenu();
+				}
+				ImGui::EndMenu();
+			}
+
+			if (ImGui::BeginMenu("Window"))
+			{
+				if (ImGui::MenuItem("Hierarchy")) { /* TODO: Focus/show window */ }
+				if (ImGui::MenuItem("Inspector")) { /* TODO: Focus/show window */ }
+				if (ImGui::MenuItem("Performance")) { /* TODO: Focus/show window */ }
+				if (ImGui::MenuItem("Rendering")) { /* TODO: Focus/show window */ }
+				ImGui::Separator();
+				if (ImGui::MenuItem("Reset Layout")) { /* TODO */ }
+				ImGui::EndMenu();
+			}
+
+			if (ImGui::BeginMenu("Help"))
+			{
+				if (ImGui::MenuItem("About Agni")) { /* TODO */ }
+				if (ImGui::MenuItem("Documentation")) { /* TODO */ }
+				ImGui::Separator();
+				if (ImGui::MenuItem("GitHub Repository")) { /* TODO */ }
+				ImGui::EndMenu();
+			}
+
+			ImGui::EndMainMenuBar();
+		}
 
 		ImGui::DockSpaceOverViewport(
 		0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);

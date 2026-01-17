@@ -29,97 +29,101 @@ ECSInspector::ECSInspector(agni::ecs::World& world, agni::ecs::EntityFactory& en
 
 void ECSInspector::render()
 {
-	ImGui::Begin("Scene Hierarchy");
-
-	// Top toolbar with styled buttons
-	if (widgets::ButtonPrimary("+ Create"))
+	// ========================================================================
+	// Hierarchy Window
+	// ========================================================================
+	if (ImGui::Begin("Hierarchy"))
 	{
-		m_showCreateEntityPopup = true;
-	}
+		// Top toolbar with styled buttons
+		if (widgets::ButtonPrimary("+ Create"))
+		{
+			m_showCreateEntityPopup = true;
+		}
 
-	ImGui::SameLine();
-	ImGui::BeginDisabled(m_selectedEntity == NULL_ENTITY);
-	if (widgets::ButtonDanger("Delete"))
-	{
-		m_world.destroyEntity(m_selectedEntity);
-		m_selectedEntity = NULL_ENTITY;
-	}
-	ImGui::EndDisabled();
-
-	ImGui::Separator();
-
-	// Gizmo controls with toggle buttons
-	ImGui::PushStyleColor(ImGuiCol_Text, colors::TextDim);
-	ImGui::Text("Gizmo:");
-	ImGui::PopStyleColor();
-	ImGui::SameLine();
-
-	ImGui::PushID("GizmoOp");
-	if (widgets::ButtonToggle("T##translate", m_gizmoOperation == 0, ImVec2(24, 0)))
-		m_gizmoOperation = 0;
-	widgets::TooltipOnHover("Translate (W)");
-
-	ImGui::SameLine();
-	if (widgets::ButtonToggle("R##rotate", m_gizmoOperation == 1, ImVec2(24, 0)))
-		m_gizmoOperation = 1;
-	widgets::TooltipOnHover("Rotate (E)");
-
-	ImGui::SameLine();
-	if (widgets::ButtonToggle("S##scale", m_gizmoOperation == 2, ImVec2(24, 0)))
-		m_gizmoOperation = 2;
-	widgets::TooltipOnHover("Scale (R)");
-	ImGui::PopID();
-
-	ImGui::SameLine();
-	ImGui::PushStyleColor(ImGuiCol_Text, colors::TextDim);
-	ImGui::Text("|");
-	ImGui::PopStyleColor();
-	ImGui::SameLine();
-
-	ImGui::PushID("GizmoMode");
-	if (widgets::ButtonToggle("L##local", m_gizmoMode == 0, ImVec2(24, 0)))
-		m_gizmoMode = 0;
-	widgets::TooltipOnHover("Local Space");
-
-	ImGui::SameLine();
-	if (widgets::ButtonToggle("W##world", m_gizmoMode == 1, ImVec2(24, 0)))
-		m_gizmoMode = 1;
-	widgets::TooltipOnHover("World Space");
-	ImGui::PopID();
-
-	ImGui::SameLine();
-	ImGui::Checkbox("Snap", &m_useSnap);
-
-	if (m_useSnap)
-	{
 		ImGui::SameLine();
-		ImGui::SetNextItemWidth(80);
-		if (m_gizmoOperation == 0)
-			ImGui::DragFloat("##snap", &m_snapValues[0], 0.1f, 0.1f, 10.0f, "%.1f");
-		else if (m_gizmoOperation == 1)
-			ImGui::DragFloat("##snap", &m_snapValues[1], 1.0f, 1.0f, 90.0f, "%.0f");
-		else
-			ImGui::DragFloat("##snap", &m_snapValues[2], 0.05f, 0.05f, 2.0f, "%.2f");
+		ImGui::BeginDisabled(m_selectedEntity == NULL_ENTITY);
+		if (widgets::ButtonDanger("Delete"))
+		{
+			m_world.destroyEntity(m_selectedEntity);
+			m_selectedEntity = NULL_ENTITY;
+		}
+		ImGui::EndDisabled();
+
+		ImGui::Separator();
+
+		// Gizmo controls with toggle buttons
+		ImGui::PushStyleColor(ImGuiCol_Text, colors::TextDim);
+		ImGui::Text("Gizmo:");
+		ImGui::PopStyleColor();
+		ImGui::SameLine();
+
+		ImGui::PushID("GizmoOp");
+		if (widgets::ButtonToggle("T##translate", m_gizmoOperation == 0, ImVec2(24, 0)))
+			m_gizmoOperation = 0;
+		widgets::TooltipOnHover("Translate (W)");
+
+		ImGui::SameLine();
+		if (widgets::ButtonToggle("R##rotate", m_gizmoOperation == 1, ImVec2(24, 0)))
+			m_gizmoOperation = 1;
+		widgets::TooltipOnHover("Rotate (E)");
+
+		ImGui::SameLine();
+		if (widgets::ButtonToggle("S##scale", m_gizmoOperation == 2, ImVec2(24, 0)))
+			m_gizmoOperation = 2;
+		widgets::TooltipOnHover("Scale (R)");
+		ImGui::PopID();
+
+		ImGui::SameLine();
+		ImGui::PushStyleColor(ImGuiCol_Text, colors::TextDim);
+		ImGui::Text("|");
+		ImGui::PopStyleColor();
+		ImGui::SameLine();
+
+		ImGui::PushID("GizmoMode");
+		if (widgets::ButtonToggle("L##local", m_gizmoMode == 0, ImVec2(24, 0)))
+			m_gizmoMode = 0;
+		widgets::TooltipOnHover("Local Space");
+
+		ImGui::SameLine();
+		if (widgets::ButtonToggle("W##world", m_gizmoMode == 1, ImVec2(24, 0)))
+			m_gizmoMode = 1;
+		widgets::TooltipOnHover("World Space");
+		ImGui::PopID();
+
+		ImGui::SameLine();
+		ImGui::Checkbox("Snap", &m_useSnap);
+
+		if (m_useSnap)
+		{
+			ImGui::SameLine();
+			ImGui::SetNextItemWidth(80);
+			if (m_gizmoOperation == 0)
+				ImGui::DragFloat("##snap", &m_snapValues[0], 0.1f, 0.1f, 10.0f, "%.1f");
+			else if (m_gizmoOperation == 1)
+				ImGui::DragFloat("##snap", &m_snapValues[1], 1.0f, 1.0f, 90.0f, "%.0f");
+			else
+				ImGui::DragFloat("##snap", &m_snapValues[2], 0.05f, 0.05f, 2.0f, "%.2f");
+		}
+
+		ImGui::Separator();
+
+		// Entity list
+		renderEntityList();
 	}
-
-	ImGui::Separator();
-
-	// Two-column layout
-	ImGui::Columns(2, "InspectorColumns");
-
-	// Left column: Entity list
-	renderEntityList();
-
-	ImGui::NextColumn();
-
-	// Right column: Component inspector
-	renderComponentInspector();
-
-	ImGui::Columns(1);
-
 	ImGui::End();
 
+	// ========================================================================
+	// Inspector Window
+	// ========================================================================
+	if (ImGui::Begin("Inspector"))
+	{
+		renderComponentInspector();
+	}
+	ImGui::End();
+
+	// ========================================================================
 	// Create entity popup
+	// ========================================================================
 	if (m_showCreateEntityPopup)
 	{
 		renderCreateEntityPopup();
