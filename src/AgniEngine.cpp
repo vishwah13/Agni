@@ -7,13 +7,18 @@
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_vulkan.h>
 
-#include <Editor/EditorTheme.hpp>
-#include <Editor/EditorWidgets.hpp>
+#include <Editor/ContextMenus.hpp>
+#include <Editor/ECSInspector.hpp>
 #include <Editor/EditorIcons.hpp>
+#include <Editor/EditorManager.hpp>
+#include <Editor/EditorTheme.hpp>
+#include <Editor/EditorUI.hpp>
+#include <Editor/EditorWidgets.hpp>
+#include <Editor/InputManager.hpp>
 
+#include <Components.hpp>
 #include <Initializers.hpp>
 #include <Types.hpp>
-#include <Components.hpp>
 #include <VulkanTools.hpp>
 
 #define VMA_IMPLEMENTATION
@@ -32,12 +37,13 @@
 
 // Platform-specific includes for dynamic library loading
 #ifdef _WIN32
-	#define NOMINMAX
-	#include <windows.h>
+#define NOMINMAX
+#include <windows.h>
 #else
-	#include <dlfcn.h>
+#include <dlfcn.h>
 #endif
 
+using namespace agni::editor;
 
 #ifdef NDEBUG
 constexpr bool bUseValidationLayers = false;
@@ -46,6 +52,10 @@ constexpr bool bUseValidationLayers = true;
 #endif
 
 AgniEngine* loadedEngine = nullptr;
+
+AgniEngine::AgniEngine() {}
+
+AgniEngine::~AgniEngine() {}
 
 AgniEngine& AgniEngine::Get()
 {
@@ -97,11 +107,10 @@ void AgniEngine::init()
 	m_assetLoader.registerDefaultTextures(m_renderer.getTextureRegistry());
 
 	// Initialize bindless samplers (must be after AssetLoader creates samplers)
-	m_renderer.initBindlessSamplers(
-	    m_assetLoader.getLinearSampler(),
-	    m_assetLoader.getNearestSampler(),
-	    m_assetLoader.getLinearMipmapSampler(),
-	    m_assetLoader.getNearestMipmapSampler());
+	m_renderer.initBindlessSamplers(m_assetLoader.getLinearSampler(),
+	                                m_assetLoader.getNearestSampler(),
+	                                m_assetLoader.getLinearMipmapSampler(),
+	                                m_assetLoader.getNearestMipmapSampler());
 
 	initPipelines();
 
@@ -110,7 +119,9 @@ void AgniEngine::init()
 	// Initialize ECS World and related systems
 	m_ecsWorld      = std::make_unique<agni::ecs::World>();
 	m_entityFactory = std::make_unique<agni::ecs::EntityFactory>(*m_ecsWorld);
-	m_ecsInspector  = std::make_unique<agni::editor::ECSInspector>(*m_ecsWorld, *m_entityFactory);
+
+	// Create EditorManager (will be initialized after assets are loaded)
+	m_editorManager = std::make_unique<agni::editor::EditorManager>(*this);
 
 	// Give Renderer direct access to ECS World for queries
 	m_renderer.setWorld(m_ecsWorld.get());
@@ -119,17 +130,14 @@ void AgniEngine::init()
 	// Initialize Jolt Physics
 	m_physicsManager = std::make_unique<agni::physics::JoltPhysicsManager>();
 	agni::physics::PhysicsSettings physicsSettings;
-	physicsSettings.gravity = glm::vec3(0.0f, -9.81f, 0.0f);
-	physicsSettings.maxBodies = 1024;
+	physicsSettings.gravity        = glm::vec3(0.0f, -9.81f, 0.0f);
+	physicsSettings.maxBodies      = 1024;
 	physicsSettings.collisionSteps = 1;
 
 	if (!m_physicsManager->initialize(physicsSettings))
 	{
 		fmt::print("[AgniEngine] Failed to initialize Jolt physics\n");
 	}
-
-	// Give physics manager to editor for gizmo-physics sync
-	m_ecsInspector->setPhysicsManager(m_physicsManager.get());
 #endif
 
 	initDefaultData();
@@ -179,12 +187,14 @@ void AgniEngine::cleanup()
 #endif
 
 		// Cleanup ECS (destroys all entities and releases mesh references)
-		// IMPORTANT: Do this BEFORE renderer cleanup so entities release their mesh asset references
+		// IMPORTANT: Do this BEFORE renderer cleanup so entities release their
+		// mesh asset references
 		if (m_ecsWorld)
 		{
-			m_ecsWorld->clearAllEntities(); // Explicitly destroy all entities first
+			m_ecsWorld
+			->clearAllEntities(); // Explicitly destroy all entities first
 		}
-		m_ecsInspector.reset();
+		m_editorManager.reset();
 		m_entityFactory.reset();
 		m_ecsWorld.reset();
 
@@ -234,7 +244,8 @@ void AgniEngine::draw()
 	m_renderer.processPickingResult();
 
 	getCurrentFrame().m_deletionQueue.flush();
-	getCurrentFrame().m_descriptorBuffer.reset();  // Reset descriptor buffer allocator
+	getCurrentFrame()
+	.m_descriptorBuffer.reset(); // Reset descriptor buffer allocator
 	VK_CHECK(vkResetFences(m_device, 1, &getCurrentFrame().m_renderFence));
 
 	// request image from the swapchain
@@ -326,13 +337,12 @@ void AgniEngine::draw()
 void AgniEngine::run()
 {
 	SDL_Event e;
-	bool      bQuit = false;
 
 	// Initialize last frame time
 	m_lastFrameTime = std::chrono::high_resolution_clock::now();
 
 	// main loop
-	while (!bQuit)
+	while (!m_shouldQuit)
 	{
 		// Calculate delta time
 		auto currentTime = std::chrono::high_resolution_clock::now();
@@ -348,7 +358,13 @@ void AgniEngine::run()
 		{
 			// close the window when user alt-f4s or clicks the X button
 			if (e.type == SDL_EVENT_QUIT)
-				bQuit = true;
+				m_shouldQuit = true;
+
+			// Process editor input first (handles shortcuts like Delete key)
+			if (m_editorManager)
+			{
+				m_editorManager->processInput(e);
+			}
 
 			// give SDL event to camera object to process keyboard/mouse
 			// movement for camera
@@ -361,15 +377,6 @@ void AgniEngine::run()
 			if (e.type == SDL_EVENT_WINDOW_RESTORED)
 			{
 				m_stopRendering = false;
-			}
-
-			if (e.type == SDL_EVENT_KEY_DOWN)
-			{
-				if (e.key.key == SDLK_ESCAPE)
-				{
-					bQuit = true;
-				}
-				// fmt::print("Key down: {}\n", SDL_GetKeyName(e.key.key));
 			}
 
 			// Handle viewport picking on left mouse click
@@ -396,242 +403,29 @@ void AgniEngine::run()
 			resizeSwapchain();
 		}
 
-		// imgui new frame
+		// ====================================================================
+		// ImGui Frame and Editor Rendering
+		// ====================================================================
 		ImGui_ImplVulkan_NewFrame();
 		ImGui_ImplSDL3_NewFrame();
 		ImGui::NewFrame();
 
-		// ====================================================================
-		// Main Menu Bar
-		// ====================================================================
-		if (ImGui::BeginMainMenuBar())
-		{
-			if (ImGui::BeginMenu("File"))
-			{
-				if (ImGui::MenuItem("New Scene", "Ctrl+N")) { /* TODO */ }
-				if (ImGui::MenuItem("Open Scene...", "Ctrl+O")) { /* TODO */ }
-				if (ImGui::MenuItem("Save Scene", "Ctrl+S")) { /* TODO */ }
-				if (ImGui::MenuItem("Save Scene As...", "Ctrl+Shift+S")) { /* TODO */ }
-				ImGui::Separator();
-				if (ImGui::MenuItem("Exit", "Alt+F4"))
-				{
-					bQuit = true;
-				}
-				ImGui::EndMenu();
-			}
-
-			if (ImGui::BeginMenu("Edit"))
-			{
-				if (ImGui::MenuItem("Undo", "Ctrl+Z")) { /* TODO */ }
-				if (ImGui::MenuItem("Redo", "Ctrl+Y")) { /* TODO */ }
-				ImGui::Separator();
-				if (ImGui::MenuItem("Copy", "Ctrl+C")) { /* TODO */ }
-				if (ImGui::MenuItem("Paste", "Ctrl+V")) { /* TODO */ }
-				if (ImGui::MenuItem("Duplicate", "Ctrl+D")) { /* TODO */ }
-				ImGui::Separator();
-				if (ImGui::MenuItem("Delete", "Delete"))
-				{
-					if (m_ecsInspector && m_ecsInspector->getSelectedEntity() != NULL_ENTITY)
-					{
-						m_ecsWorld->destroyEntity(m_ecsInspector->getSelectedEntity());
-						m_ecsInspector->setSelectedEntity(NULL_ENTITY);
-					}
-				}
-				ImGui::EndMenu();
-			}
-
-			if (ImGui::BeginMenu("Entity"))
-			{
-				if (ImGui::MenuItem("Create Empty", "Ctrl+Shift+N")) { /* TODO */ }
-				ImGui::Separator();
-				if (ImGui::BeginMenu("3D Object"))
-				{
-					if (ImGui::MenuItem("Cube")) { /* TODO */ }
-					if (ImGui::MenuItem("Sphere")) { /* TODO */ }
-					if (ImGui::MenuItem("Plane")) { /* TODO */ }
-					ImGui::EndMenu();
-				}
-				if (ImGui::BeginMenu("Light"))
-				{
-					if (ImGui::MenuItem("Point Light")) { /* TODO */ }
-					if (ImGui::MenuItem("Directional Light")) { /* TODO */ }
-					if (ImGui::MenuItem("Spot Light")) { /* TODO */ }
-					ImGui::EndMenu();
-				}
-				ImGui::EndMenu();
-			}
-
-			if (ImGui::BeginMenu("Window"))
-			{
-				if (ImGui::MenuItem("Hierarchy")) { /* TODO: Focus/show window */ }
-				if (ImGui::MenuItem("Inspector")) { /* TODO: Focus/show window */ }
-				if (ImGui::MenuItem("Performance")) { /* TODO: Focus/show window */ }
-				if (ImGui::MenuItem("Rendering")) { /* TODO: Focus/show window */ }
-				ImGui::Separator();
-				if (ImGui::MenuItem("Reset Layout")) { /* TODO */ }
-				ImGui::EndMenu();
-			}
-
-			if (ImGui::BeginMenu("Help"))
-			{
-				if (ImGui::MenuItem("About Agni")) { /* TODO */ }
-				if (ImGui::MenuItem("Documentation")) { /* TODO */ }
-				ImGui::Separator();
-				if (ImGui::MenuItem("GitHub Repository")) { /* TODO */ }
-				ImGui::EndMenu();
-			}
-
-			ImGui::EndMainMenuBar();
-		}
-
+		// Dockspace for window docking
 		ImGui::DockSpaceOverViewport(
 		0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 
-		// Performance Stats Window
-		if (ImGui::Begin("Performance"))
+		// Render all editor UI (menu bar, windows, inspector, gizmos)
+		if (m_editorManager)
 		{
-			using namespace agni::editor;
-
-			if (widgets::CollapsibleSection("Frame Statistics"))
-			{
-				float frametime = m_renderer.getStats().m_frametime;
-				float fps = (frametime > 0.0f) ? 1000.0f / frametime : 0.0f;
-
-				char fpsStr[32], frametimeStr[32];
-				snprintf(fpsStr, sizeof(fpsStr), "%.1f", fps);
-				snprintf(frametimeStr, sizeof(frametimeStr), "%.2f ms", frametime);
-
-				widgets::StatDisplay("FPS", fpsStr);
-				widgets::StatDisplay("Frame Time", frametimeStr);
-			}
-
-			widgets::Spacing(4.0f);
-
-			if (widgets::CollapsibleSection("Render Statistics"))
-			{
-				char drawTimeStr[32], updateTimeStr[32], trisStr[32], drawsStr[32];
-				snprintf(drawTimeStr, sizeof(drawTimeStr), "%.2f ms", m_renderer.getStats().m_meshDrawTime);
-				snprintf(updateTimeStr, sizeof(updateTimeStr), "%.2f ms", m_renderer.getStats().m_sceneUpdateTime);
-				snprintf(trisStr, sizeof(trisStr), "%d", m_renderer.getStats().m_triangleCount);
-				snprintf(drawsStr, sizeof(drawsStr), "%d", m_renderer.getStats().m_drawcallCount);
-
-				widgets::StatDisplay("Draw Time", drawTimeStr);
-				widgets::StatDisplay("Update Time", updateTimeStr);
-				widgets::StatDisplay("Triangles", trisStr);
-				widgets::StatDisplay("Draw Calls", drawsStr);
-			}
-		}
-		ImGui::End();
-
-		// Rendering Settings Window
-		if (ImGui::Begin("Rendering"))
-		{
-			using namespace agni::editor;
-
-			// Quality Settings
-			if (widgets::CollapsibleSection("Quality", icons::Quality))
-			{
-				ImGui::PushID("Quality");
-				widgets::PropertyFloat("Render Scale", &m_renderer.getRenderScale(), 0.3f, 1.0f, "%.1f");
-
-				// MSAA selector
-				const char* msaaOptions[] = {"1x (Off)", "2x", "4x", "8x"};
-				int currentMsaa = 0;
-				switch (m_renderer.getMsaaSamples())
-				{
-					case VK_SAMPLE_COUNT_1_BIT: currentMsaa = 0; break;
-					case VK_SAMPLE_COUNT_2_BIT: currentMsaa = 1; break;
-					case VK_SAMPLE_COUNT_4_BIT: currentMsaa = 2; break;
-					case VK_SAMPLE_COUNT_8_BIT: currentMsaa = 3; break;
-					default: currentMsaa = 2; break;
-				}
-
-				if (widgets::PropertyCombo("MSAA", &currentMsaa, msaaOptions, 4))
-				{
-					VkSampleCountFlagBits samples[] = {
-						VK_SAMPLE_COUNT_1_BIT, VK_SAMPLE_COUNT_2_BIT,
-						VK_SAMPLE_COUNT_4_BIT, VK_SAMPLE_COUNT_8_BIT
-					};
-					if (samples[currentMsaa] != m_renderer.getMsaaSamples())
-					{
-						m_renderer.getMsaaSamples() = samples[currentMsaa];
-						m_swapchainManager.requestResize();
-					}
-				}
-				ImGui::PopID();
-			}
-
-			// Directional Light Shadows
-			if (widgets::CollapsibleSection("Directional Shadows", icons::Shadows))
-			{
-				ImGui::PushID("DirShadow");
-				widgets::PropertyCheckbox("Enable", &m_renderer.getShadowsEnabled());
-				widgets::PropertyFloat("Bias", &m_renderer.getShadowBias(), 0.0f, 0.05f, "%.4f");
-				widgets::PropertyFloat("Normal Bias", &m_renderer.getShadowNormalBias(), 0.0f, 0.1f, "%.4f");
-				widgets::PropertyFloat("Ortho Size", &m_renderer.getShadowOrthoSize(), 10.0f, 200.0f, "%.1f");
-				ImGui::PopID();
-			}
-
-			// Spot Light Shadows
-			if (widgets::CollapsibleSection("Spot Shadows", icons::Shadows))
-			{
-				ImGui::PushID("SpotShadow");
-				widgets::PropertyCheckbox("Enable", &m_renderer.getSpotShadowsEnabled());
-				widgets::PropertyFloat("Bias", &m_renderer.getSpotShadowBias(), 0.0f, 0.05f, "%.4f");
-				widgets::PropertyFloat("Normal Bias", &m_renderer.getSpotShadowNormalBias(), 0.0f, 0.1f, "%.4f");
-				ImGui::PopID();
-			}
-
-			// Point Light Shadows
-			if (widgets::CollapsibleSection("Point Shadows", icons::Shadows))
-			{
-				ImGui::PushID("PointShadow");
-				widgets::PropertyCheckbox("Enable", &m_renderer.getPointShadowsEnabled());
-				widgets::PropertyFloat("Bias", &m_renderer.getPointShadowBias(), 0.0f, 0.2f, "%.4f");
-				widgets::PropertyFloat("Far Plane", &m_renderer.getPointShadowFarPlane(), 10.0f, 200.0f, "%.1f");
-				widgets::PropertyInt("Shadow Light", &m_renderer.getPointShadowLightIndex(), 0, 10);
-
-				widgets::PropertyCheckbox("PCF Soft Shadows", &m_renderer.getPointShadowPCFEnabled());
-				if (m_renderer.getPointShadowPCFEnabled())
-				{
-					widgets::PropertyFloat("PCF Radius", &m_renderer.getPointShadowPCFRadius(), 0.01f, 0.5f, "%.3f");
-					ImGui::TextDisabled("  (20 samples per pixel)");
-				}
-				ImGui::PopID();
-
-				widgets::SeparatorText("Debug");
-				auto& pointLights = m_renderer.getMainDrawContext().m_PointLights;
-				widgets::InfoRow("Point Lights", "%zu", pointLights.size());
-				int idx = m_renderer.getPointShadowLightIndex();
-				if (idx < (int)pointLights.size())
-				{
-					auto& light = pointLights[idx];
-					widgets::InfoRow("Position", "(%.1f, %.1f, %.1f)",
-						light.m_position.x, light.m_position.y, light.m_position.z);
-				}
-			}
-
-			// Camera Settings
-			if (widgets::CollapsibleSection("Camera", icons::Camera))
-			{
-				ImGui::PushID("Camera");
-				widgets::PropertyFloat("Move Speed", &m_mainCamera.m_speed, 0.01f, 1.0f, "%.3f");
-				widgets::PropertyFloat("Sensitivity", &m_mainCamera.m_mouseSensitivity, 0.1f, 1.0f, "%.2f");
-				ImGui::PopID();
-			}
-		}
-		ImGui::End();
-
-		// ECS Inspector
-		if (m_ecsInspector)
-		{
-			m_ecsInspector->render();
-			// Render gizmo overlay (must be after inspector UI, before ImGui::Render())
-			m_ecsInspector->renderGizmo(&m_mainCamera, m_windowExtent);
+			m_editorManager->render();
 		}
 
 		// make imgui calculate internal draw structures
 		ImGui::Render();
+
+		// ====================================================================
+		// Game Systems Update
+		// ====================================================================
 
 		// Progress ECS systems (transform hierarchy, etc.)
 		m_ecsWorld->progress(m_deltaTime);
@@ -641,50 +435,57 @@ void AgniEngine::run()
 		if (m_physicsManager)
 		{
 			// 1. Initialize any new physics bodies
-			agni::ecs::PhysicsSystem::initializePhysicsBodies(*m_ecsWorld, *m_physicsManager);
+			agni::ecs::PhysicsSystem::initializePhysicsBodies(
+			*m_ecsWorld, *m_physicsManager);
 
 			// 2. Sync kinematic bodies from ECS to Jolt
-			agni::ecs::PhysicsSystem::syncToPhysics(*m_ecsWorld, *m_physicsManager);
+			agni::ecs::PhysicsSystem::syncToPhysics(*m_ecsWorld,
+			                                        *m_physicsManager);
 
 			// 3. Run physics simulation
 			m_physicsManager->update(m_deltaTime);
 
 			// 4. Sync dynamic bodies from Jolt back to ECS
-			agni::ecs::PhysicsSystem::syncFromPhysics(*m_ecsWorld, *m_physicsManager);
+			agni::ecs::PhysicsSystem::syncFromPhysics(*m_ecsWorld,
+			                                          *m_physicsManager);
 		}
 #endif
 
 		draw();
 
 		// Check for picking result and update selection
-		if (m_renderer.hasPickingResult() && m_ecsInspector)
+		if (m_renderer.hasPickingResult() && m_editorManager)
 		{
 			uint64_t pickedEntityID = m_renderer.getPickedEntityID();
 			if (pickedEntityID != 0)
 			{
-				// The picked ID is only 32 bits (lower bits of the Flecs entity ID)
-				// We need to find the actual entity that matches these lower bits
-				// and is still valid (Flecs uses upper 32 bits for generation counter)
+				// The picked ID is only 32 bits (lower bits of the Flecs entity
+				// ID) We need to find the actual entity that matches these
+				// lower bits and is still valid (Flecs uses upper 32 bits for
+				// generation counter)
 				uint64_t foundEntityID = 0;
 
 				// Query only renderable entities (same filter as rendering)
-				m_ecsWorld->get().query<const TransformComponent,
-				                         const agni::ecs::RenderMeshComponent,
-				                         const RenderableTag>()
-				    .each([&](flecs::entity e,
-				              const TransformComponent&,
-				              const agni::ecs::RenderMeshComponent&,
-				              const RenderableTag&) {
-					    // Match lower 32 bits of renderable entities only
-					    if ((e.id() & 0xFFFFFFFF) == pickedEntityID && e.is_alive())
-					    {
-						    foundEntityID = e.id();
-					    }
-				    });
+				m_ecsWorld->get()
+				.query<const TransformComponent,
+				       const agni::ecs::RenderMeshComponent,
+				       const RenderableTag>()
+				.each(
+				[&](flecs::entity e,
+				    const TransformComponent&,
+				    const agni::ecs::RenderMeshComponent&,
+				    const RenderableTag&)
+				{
+					// Match lower 32 bits of renderable entities only
+					if ((e.id() & 0xFFFFFFFF) == pickedEntityID && e.is_alive())
+					{
+						foundEntityID = e.id();
+					}
+				});
 
 				if (foundEntityID != 0)
 				{
-					m_ecsInspector->setSelectedEntity(foundEntityID);
+					m_editorManager->setSelectedEntity(foundEntityID);
 				}
 			}
 			m_renderer.clearPickingResult();
@@ -723,8 +524,9 @@ void AgniEngine::initVulkan()
 	SDL_Vulkan_CreateSurface(m_window, m_instance, nullptr, &m_surface);
 
 	VkPhysicalDeviceFeatures deviceFeatures {
-		.sampleRateShading = VK_TRUE,
-		.shaderInt64 = VK_TRUE  // Required for uint64_t buffer device addresses in shaders
+	.sampleRateShading = VK_TRUE,
+	.shaderInt64 =
+	VK_TRUE // Required for uint64_t buffer device addresses in shaders
 	};
 
 	// vulkan 1.3 features
@@ -736,17 +538,19 @@ void AgniEngine::initVulkan()
 	// vulkan 1.2 features
 	VkPhysicalDeviceVulkan12Features features12 {
 	.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
-	features12.bufferDeviceAddress                       = true;
-	features12.descriptorIndexing                        = true;
-	features12.shaderInt8                                = true;
-	// Bindless texture indexing features (shader-side only, layout flags implicit with descriptor buffers)
+	features12.bufferDeviceAddress = true;
+	features12.descriptorIndexing  = true;
+	features12.shaderInt8          = true;
+	// Bindless texture indexing features (shader-side only, layout flags
+	// implicit with descriptor buffers)
 	features12.shaderSampledImageArrayNonUniformIndexing = true;
 	features12.runtimeDescriptorArray                    = true;
 
 	// vulkan 1.1 features
 	VkPhysicalDeviceVulkan11Features features11 {
 	.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES};
-	features11.shaderDrawParameters = true;  // Required for SV_VertexID in Slang shaders
+	features11.shaderDrawParameters =
+	true; // Required for SV_VertexID in Slang shaders
 
 	// VK_EXT_descriptor_buffer features
 	VkPhysicalDeviceDescriptorBufferFeaturesEXT descriptorBufferFeatures {
@@ -755,15 +559,16 @@ void AgniEngine::initVulkan()
 
 	// use vkbootstrap to select a gpu.
 	vkb::PhysicalDeviceSelector selector {vkbInstance};
-	vkb::PhysicalDevice physicalDevice = selector.set_minimum_version(1, 3)
-	                                     .set_required_features(deviceFeatures)
-	                                     .set_required_features_13(features13)
-	                                     .set_required_features_12(features12)
-	                                     .set_required_features_11(features11)
-	                                     .add_required_extension(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME)
-	                                     .set_surface(m_surface)
-	                                     .select()
-	                                     .value();
+	vkb::PhysicalDevice         physicalDevice =
+	selector.set_minimum_version(1, 3)
+	.set_required_features(deviceFeatures)
+	.set_required_features_13(features13)
+	.set_required_features_12(features12)
+	.set_required_features_11(features11)
+	.add_required_extension(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME)
+	.set_surface(m_surface)
+	.select()
+	.value();
 
 	// create the final vulkan device
 	vkb::DeviceBuilder deviceBuilder {physicalDevice};
@@ -778,7 +583,8 @@ void AgniEngine::initVulkan()
 	volkLoadDevice(m_device);
 
 	// Query descriptor buffer properties
-	DescriptorBufferAllocator::queryProperties(m_chosenGPU, m_descriptorBufferProps);
+	DescriptorBufferAllocator::queryProperties(m_chosenGPU,
+	                                           m_descriptorBufferProps);
 
 	// use vkbootstrap to get a Graphics queue
 	m_graphicsQueue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
@@ -853,9 +659,9 @@ void AgniEngine::initRenderDocAPI()
 	if (HMODULE mod = GetModuleHandleA("renderdoc.dll"))
 	{
 		pRENDERDOC_GetAPI RENDERDOC_GetAPI =
-		    (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
+		(pRENDERDOC_GetAPI) GetProcAddress(mod, "RENDERDOC_GetAPI");
 		[[maybe_unused]] int ret =
-		    RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void**)&m_rdocAPI);
+		RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void**) &m_rdocAPI);
 		assert(ret == 1);
 	}
 #else
@@ -863,9 +669,9 @@ void AgniEngine::initRenderDocAPI()
 	if (void* mod = dlopen("librenderdoc.so", RTLD_NOW | RTLD_NOLOAD))
 	{
 		pRENDERDOC_GetAPI RENDERDOC_GetAPI =
-		    (pRENDERDOC_GetAPI)dlsym(mod, "RENDERDOC_GetAPI");
+		(pRENDERDOC_GetAPI) dlsym(mod, "RENDERDOC_GetAPI");
 		[[maybe_unused]] int ret =
-		    RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void**)&m_rdocAPI);
+		RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void**) &m_rdocAPI);
 		assert(ret == 1);
 	}
 #endif
@@ -891,7 +697,8 @@ void AgniEngine::resizeSwapchain()
 {
 	vkDeviceWaitIdle(m_device);
 
-	// Flush all frame deletion queues to clean up pending resources (e.g., light buffers)
+	// Flush all frame deletion queues to clean up pending resources (e.g.,
+	// light buffers)
 	for (int i = 0; i < FRAME_OVERLAP; i++)
 	{
 		m_frames[i].m_deletionQueue.flush();
@@ -926,11 +733,13 @@ void AgniEngine::resizeSwapchain()
 		{
 			if (material->m_data.m_passType == MaterialPass::Transparent)
 			{
-				material->m_data.m_pipeline = &m_assetLoader.getMaterialSystem().m_transparentPipeline;
+				material->m_data.m_pipeline =
+				&m_assetLoader.getMaterialSystem().m_transparentPipeline;
 			}
 			else
 			{
-				material->m_data.m_pipeline = &m_assetLoader.getMaterialSystem().m_opaquePipeline;
+				material->m_data.m_pipeline =
+				&m_assetLoader.getMaterialSystem().m_opaquePipeline;
 			}
 		}
 	}
@@ -950,15 +759,13 @@ void AgniEngine::initDescriptors()
 	{
 		// Initialize descriptor buffer allocator
 		m_frames[i].m_descriptorBuffer.init(m_device,
-		                                     &m_resourceManager,
-		                                     m_descriptorBufferProps,
-		                                     1024 * 1024,  // 1MB per frame
-		                                     true);         // Include samplers
+		                                    &m_resourceManager,
+		                                    m_descriptorBufferProps,
+		                                    1024 * 1024, // 1MB per frame
+		                                    true);       // Include samplers
 
 		m_resourceManager.getMainDeletionQueue().push_function(
-		[&, i]() {
-			m_frames[i].m_descriptorBuffer.destroy();
-		});
+		[&, i]() { m_frames[i].m_descriptorBuffer.destroy(); });
 	}
 
 	// adding vkDestroyDescriptorPool to the deletion queue
@@ -1045,7 +852,8 @@ void AgniEngine::initImgui()
 
 	ImGui_ImplVulkan_Init(&initInfo);
 
-	// Store imgui pool for explicit cleanup (not in deletion queue, so we can track VMA leaks)
+	// Store imgui pool for explicit cleanup (not in deletion queue, so we can
+	// track VMA leaks)
 	m_imguiPool = imguiPool;
 }
 
@@ -1063,10 +871,11 @@ void AgniEngine::initDefaultData()
 
 	std::string meshPrimitivesPath = {"../../assets/MeshPrimitives.glb"};
 	// std::string structurePath = {"../../assets/structure.glb"};
-	std::string helmetPath = {"../../assets/free_1975_porsche_911_930_turbo.glb"};
+	std::string helmetPath = {
+	"../../assets/free_1975_porsche_911_930_turbo.glb"};
 	// auto        structureFile = m_assetLoader.loadGltf(this, structurePath);
 	auto meshPrimitivesFile = m_assetLoader.loadGltf(this, meshPrimitivesPath);
-	auto helmetPathFile = m_assetLoader.loadGltf(this, helmetPath);
+	auto helmetPathFile     = m_assetLoader.loadGltf(this, helmetPath);
 
 	assert(meshPrimitivesFile.has_value());
 	assert(helmetPathFile.has_value());
@@ -1078,29 +887,31 @@ void AgniEngine::initDefaultData()
 		AGNI_PRINT("  - '{}'\n", name);
 	}
 
-	auto sphereMesh = meshPrimitivesFile->get()->meshes["Icosphere"];
-	auto cubeMesh   = meshPrimitivesFile->get()->meshes["Cube"];
-	auto planeMesh  = meshPrimitivesFile->get()->meshes["Plane"];
-	
-
-	
+	m_sphereMesh = meshPrimitivesFile->get()->meshes["Icosphere"];
+	m_cubeMesh   = meshPrimitivesFile->get()->meshes["Cube"];
+	m_planeMesh  = meshPrimitivesFile->get()->meshes["Plane"];
 
 	// m_renderer.getLoadedScenes()["structure"] = *structureFile;
 	m_assetLoader.getMeshResources() = *meshPrimitivesFile;
 
-	// Set mesh resources for the ECS inspector (for live entity creation)
-	m_ecsInspector->setMeshResources(*meshPrimitivesFile);
+	// Initialize EditorManager (after assets are loaded)
+	m_editorManager->init();
+	m_editorManager->getInspector()->setMeshResources(*meshPrimitivesFile);
+	m_editorManager->getInspector()->setContextMenus(
+	m_editorManager->getContextMenus());
 
 	// ============================================================================
 	// Convert loaded glTF scene to ECS entities
 	// ============================================================================
 
 	// IMPORTANT: Store the LoadedGLTF to keep GPU resources alive
-	// Even though we're using ECS entities, they reference the mesh/material data
+	// Even though we're using ECS entities, they reference the mesh/material
+	// data
 	m_renderer.getLoadedScenes()["helmet"] = *helmetPathFile;
 
 	// Convert the loaded glTF to ECS entities
-	auto rootEntity = m_entityFactory->createFromGltf(*helmetPathFile.value(), "LightTestScene");
+	auto rootEntity =
+	m_entityFactory->createFromGltf(*helmetPathFile.value(), "LightTestScene");
 	AGNI_PRINT("Created ECS scene with root entity ID: {}\n", rootEntity.id());
 
 #ifdef AGNI_HAS_JOLT
@@ -1110,67 +921,70 @@ void AgniEngine::initDefaultData()
 	AGNI_PRINT("\n=== Creating Physics Test Scene ===\n");
 
 	// 1. Create static ground plane
-	glm::mat4 groundTransform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -2.0f, 0.0f))
-	                          * glm::scale(glm::mat4(1.0f), glm::vec3(10.0f, 1.0f, 10.0f));
+	glm::mat4 groundTransform =
+	glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -2.0f, 0.0f)) *
+	glm::scale(glm::mat4(1.0f), glm::vec3(10.0f, 1.0f, 10.0f));
 
-	auto groundEntity = m_entityFactory->createMeshEntity(planeMesh, groundTransform, "GroundPlane");
+	auto groundEntity = m_entityFactory->createMeshEntity(
+	m_planeMesh, groundTransform, "GroundPlane");
 
 	// Add physics components to ground
-	m_ecsWorld->addComponent(groundEntity.id(), RigidBodyComponent{
-	    .type = RigidBodyType::Static,
-	    .friction = 0.8f,
-	    .restitution = 0.3f
-	});
+	m_ecsWorld->addComponent(groundEntity.id(),
+	                         RigidBodyComponent {.type = RigidBodyType::Static,
+	                                             .friction    = 0.8f,
+	                                             .restitution = 0.3f});
 
-	m_ecsWorld->addComponent(groundEntity.id(), ColliderComponent{
-	    .type = ColliderType::Box,
-	    .boxHalfExtents = glm::vec3(10.0f, 0.1f, 10.0f)
-	});
+	m_ecsWorld->addComponent(
+	groundEntity.id(),
+	ColliderComponent {.type           = ColliderType::Box,
+	                   .boxHalfExtents = glm::vec3(10.0f, 0.1f, 10.0f)});
 
 	AGNI_PRINT("Created ground plane (static physics body)\n");
 
 	// 2. Create dynamic falling box
-	glm::mat4 boxTransform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 5.0f, 0.0f))
-	                       * glm::scale(glm::mat4(1.0f), glm::vec3(0.5f));
+	glm::mat4 boxTransform =
+	glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 5.0f, 0.0f)) *
+	glm::scale(glm::mat4(1.0f), glm::vec3(0.5f));
 
-	auto boxEntity = m_entityFactory->createMeshEntity(cubeMesh, boxTransform, "FallingBox");
+	auto boxEntity =
+	m_entityFactory->createMeshEntity(m_cubeMesh, boxTransform, "FallingBox");
 
 	// Add physics components to box
-	m_ecsWorld->addComponent(boxEntity.id(), RigidBodyComponent{
-	    .type = RigidBodyType::Dynamic,
-	    .mass = 1.0f,
-	    .friction = 0.5f,
-	    .restitution = 0.4f,
-	    .useGravity = true
-	});
+	m_ecsWorld->addComponent(boxEntity.id(),
+	                         RigidBodyComponent {.type = RigidBodyType::Dynamic,
+	                                             .mass = 1.0f,
+	                                             .friction    = 0.5f,
+	                                             .restitution = 0.4f,
+	                                             .useGravity  = true});
 
-	m_ecsWorld->addComponent(boxEntity.id(), ColliderComponent{
-	    .type = ColliderType::Box,
-	    .boxHalfExtents = glm::vec3(0.5f, 0.5f, 0.5f)
-	});
+	m_ecsWorld->addComponent(
+	boxEntity.id(),
+	ColliderComponent {.type           = ColliderType::Box,
+	                   .boxHalfExtents = glm::vec3(0.5f, 0.5f, 0.5f)});
 
 	AGNI_PRINT("Created falling box (dynamic physics body at y=5.0)\n");
 
 	// 3. Add some extra boxes for fun
 	for (int i = 0; i < 3; i++)
 	{
-		glm::vec3 position = glm::vec3(i * 1.5f - 1.5f, 8.0f + i * 2.0f, 0.0f);
-		glm::mat4 transform = glm::translate(glm::mat4(1.0f), position)
-		                    * glm::scale(glm::mat4(1.0f), glm::vec3(0.5f));
+		glm::vec3 position  = glm::vec3(i * 1.5f - 1.5f, 8.0f + i * 2.0f, 0.0f);
+		glm::mat4 transform = glm::translate(glm::mat4(1.0f), position) *
+		                      glm::scale(glm::mat4(1.0f), glm::vec3(0.5f));
 
-		auto entity = m_entityFactory->createMeshEntity(cubeMesh, transform, ("Box" + std::to_string(i)).c_str());
+		auto entity = m_entityFactory->createMeshEntity(
+		m_cubeMesh, transform, ("Box" + std::to_string(i)).c_str());
 
-		m_ecsWorld->addComponent(entity.id(), RigidBodyComponent{
-		    .type = RigidBodyType::Dynamic,
-		    .mass = 1.0f + i * 0.5f,
-		    .friction = 0.5f,
-		    .restitution = 0.3f
-		});
+		m_ecsWorld->addComponent(
+		entity.id(),
+		RigidBodyComponent {.type        = RigidBodyType::Dynamic,
+		                    .mass        = 1.0f + i * 0.5f,
+		                    .friction    = 0.5f,
+		                    .restitution = 0.3f});
 
-		m_ecsWorld->addComponent(entity.id(), ColliderComponent{
-		    .type = ColliderType::Box,
-		    .boxHalfExtents = glm::vec3(0.5f)
-		});
+		m_ecsWorld->addComponent(
+		entity.id(),
+		ColliderComponent {.type           = ColliderType::Box,
+		                   .boxHalfExtents = glm::vec3(0.5f)});
 	}
 
 	AGNI_PRINT("Created 3 additional falling boxes\n");
@@ -1200,9 +1014,10 @@ void LightNode::setMesh(std::shared_ptr<MeshAsset> mesh)
 {
 	if (mesh)
 	{
-		m_meshNode = std::make_shared<MeshNode>();
+		m_meshNode            = std::make_shared<MeshNode>();
 		m_meshNode->getMesh() = mesh;
-		// MeshNode uses identity local transform - position comes from LightNode
+		// MeshNode uses identity local transform - position comes from
+		// LightNode
 	}
 	else
 	{

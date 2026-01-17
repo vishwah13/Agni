@@ -2,6 +2,7 @@
 #include <Editor/EditorTheme.hpp>
 #include <Editor/EditorWidgets.hpp>
 #include <Editor/EditorIcons.hpp>
+#include <Editor/ContextMenus.hpp>
 #include <ECS/EntityFactory.hpp>
 #include <Camera.hpp>
 
@@ -34,24 +35,7 @@ void ECSInspector::render()
 	// ========================================================================
 	if (ImGui::Begin("Hierarchy"))
 	{
-		// Top toolbar with styled buttons
-		if (widgets::ButtonPrimary("+ Create"))
-		{
-			m_showCreateEntityPopup = true;
-		}
-
-		ImGui::SameLine();
-		ImGui::BeginDisabled(m_selectedEntity == NULL_ENTITY);
-		if (widgets::ButtonDanger("Delete"))
-		{
-			m_world.destroyEntity(m_selectedEntity);
-			m_selectedEntity = NULL_ENTITY;
-		}
-		ImGui::EndDisabled();
-
-		ImGui::Separator();
-
-		// Gizmo controls with toggle buttons
+		// Gizmo controls toolbar
 		ImGui::PushStyleColor(ImGuiCol_Text, colors::TextDim);
 		ImGui::Text("Gizmo:");
 		ImGui::PopStyleColor();
@@ -179,12 +163,28 @@ void ECSInspector::renderEntityList()
 			m_selectedEntity = e.id();
 		}
 
+		// Right-click context menu
+		if (ImGui::IsItemClicked(ImGuiMouseButton_Right))
+		{
+			m_selectedEntity = e.id(); // Select on right-click
+			if (m_contextMenus)
+			{
+				ImGui::OpenPopup("HierarchyContextMenu");
+			}
+		}
+
 		// Show entity ID on hover
 		if (ImGui::IsItemHovered())
 		{
 			ImGui::SetTooltip("Entity ID: %llu", e.id());
 		}
 	});
+
+	// Show context menu (for right-click on empty space or entity)
+	if (m_contextMenus)
+	{
+		m_contextMenus->showHierarchyContextMenu(m_selectedEntity);
+	}
 
 	ImGui::EndChild();
 }

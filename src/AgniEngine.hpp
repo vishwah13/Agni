@@ -9,7 +9,6 @@
 #include <Descriptors.hpp>
 #include <ECS/EntityFactory.hpp>
 #include <ECS/World.hpp>
-#include <Editor/ECSInspector.hpp>
 #include <Loader.hpp>
 #include <Material.hpp>
 #include <Renderer.hpp>
@@ -21,14 +20,23 @@
 #include <Types.hpp>
 
 #ifdef AGNI_HAS_JOLT
-#include <Physics/JoltPhysicsManager.hpp>
 #include <ECS/Systems/PhysicsSystem.hpp>
+#include <Physics/JoltPhysicsManager.hpp>
 #endif
 
 #include <deque>
 #include <functional>
 #include <memory>
 #include <vector>
+
+// Forward declarations
+namespace agni
+{
+	namespace editor
+	{
+		class EditorManager;
+	}
+} // namespace agni
 
 constexpr uint32_t FRAME_OVERLAP = 2;
 
@@ -75,20 +83,50 @@ class LightNode : public Node
 {
 public:
 	// Light property accessors
-	LightComponent&       getLightComponent() { return m_light; }
-	const LightComponent& getLightComponent() const { return m_light; }
+	LightComponent& getLightComponent()
+	{
+		return m_light;
+	}
+	const LightComponent& getLightComponent() const
+	{
+		return m_light;
+	}
 
 	// Light type
-	void setType(LightType type) { m_light.type = type; }
-	LightType getType() const { return m_light.type; }
+	void setType(LightType type)
+	{
+		m_light.type = type;
+	}
+	LightType getType() const
+	{
+		return m_light.type;
+	}
 
 	// Convenience setters
-	void setColor(const glm::vec3& color) { m_light.color = color; }
-	void setIntensity(float intensity) { m_light.intensity = intensity; }
-	void setRadius(float radius) { m_light.radius = radius; }
-	void setDirection(const glm::vec3& direction) { m_light.direction = direction; }
-	void setInnerConeAngle(float degrees) { m_light.innerConeAngle = degrees; }
-	void setOuterConeAngle(float degrees) { m_light.outerConeAngle = degrees; }
+	void setColor(const glm::vec3& color)
+	{
+		m_light.color = color;
+	}
+	void setIntensity(float intensity)
+	{
+		m_light.intensity = intensity;
+	}
+	void setRadius(float radius)
+	{
+		m_light.radius = radius;
+	}
+	void setDirection(const glm::vec3& direction)
+	{
+		m_light.direction = direction;
+	}
+	void setInnerConeAngle(float degrees)
+	{
+		m_light.innerConeAngle = degrees;
+	}
+	void setOuterConeAngle(float degrees)
+	{
+		m_light.outerConeAngle = degrees;
+	}
 	void setConeAngles(float innerDegrees, float outerDegrees)
 	{
 		m_light.innerConeAngle = innerDegrees;
@@ -96,30 +134,51 @@ public:
 	}
 
 	// Convenience getters
-	glm::vec3 getColor() const { return m_light.color; }
-	float     getIntensity() const { return m_light.intensity; }
-	float     getRadius() const { return m_light.radius; }
-	glm::vec3 getDirection() const { return m_light.direction; }
-	float     getInnerConeAngle() const { return m_light.innerConeAngle; }
-	float     getOuterConeAngle() const { return m_light.outerConeAngle; }
+	glm::vec3 getColor() const
+	{
+		return m_light.color;
+	}
+	float getIntensity() const
+	{
+		return m_light.intensity;
+	}
+	float getRadius() const
+	{
+		return m_light.radius;
+	}
+	glm::vec3 getDirection() const
+	{
+		return m_light.direction;
+	}
+	float getInnerConeAngle() const
+	{
+		return m_light.innerConeAngle;
+	}
+	float getOuterConeAngle() const
+	{
+		return m_light.outerConeAngle;
+	}
 
 	// Optional visual mesh for the light (uses MeshNode internally)
-	void setMesh(std::shared_ptr<MeshAsset> mesh);
-	void setMeshScale(float scale);
-	void setMeshScale(const glm::vec3& scale);
+	void                       setMesh(std::shared_ptr<MeshAsset> mesh);
+	void                       setMeshScale(float scale);
+	void                       setMeshScale(const glm::vec3& scale);
 	std::shared_ptr<MeshAsset> getMesh() const;
-	bool hasMesh() const { return m_meshNode != nullptr; }
+	bool                       hasMesh() const
+	{
+		return m_meshNode != nullptr;
+	}
 
 protected:
-	LightComponent          m_light;
+	LightComponent            m_light;
 	std::shared_ptr<MeshNode> m_meshNode; // Optional visual representation
 };
 
 class AgniEngine
 {
 public:
-	AgniEngine()                                  = default;
-	~AgniEngine()                                 = default;
+	AgniEngine();
+	~AgniEngine();
 	AgniEngine(const AgniEngine& other)           = delete;
 	AgniEngine(AgniEngine&& other)                = delete;
 	AgniEngine operator=(const AgniEngine& other) = delete;
@@ -138,16 +197,16 @@ public:
 
 	static AgniEngine& Get();
 
-	ResourceManager   m_resourceManager;
-	SwapchainManager  m_swapchainManager;
-	Texture           m_texture;
+	ResourceManager  m_resourceManager;
+	SwapchainManager m_swapchainManager;
+	Texture          m_texture;
 
 	VkInstance               m_instance;       // Vulkan library handle
 	VkDebugUtilsMessengerEXT m_debugMessenger; // Vulkan debug output handle
 	VkPhysicalDevice         m_chosenGPU; // GPU chosen as the default device
 	VkDevice                 m_device;    // Vulkan device for commands
 	VkSurfaceKHR             m_surface;   // Vulkan window surface
-	VkDescriptorPool         m_imguiPool {VK_NULL_HANDLE}; // ImGui descriptor pool
+	VkDescriptorPool m_imguiPool {VK_NULL_HANDLE}; // ImGui descriptor pool
 
 	// Descriptor buffer extension properties
 	DescriptorBufferProperties m_descriptorBufferProps {};
@@ -194,9 +253,17 @@ public:
 	Skybox m_skybox;
 
 	// ECS World and related systems
-	std::unique_ptr<agni::ecs::World>         m_ecsWorld;
-	std::unique_ptr<agni::ecs::EntityFactory> m_entityFactory;
-	std::unique_ptr<agni::editor::ECSInspector> m_ecsInspector;
+	std::unique_ptr<agni::ecs::World>            m_ecsWorld;
+	std::unique_ptr<agni::ecs::EntityFactory>    m_entityFactory;
+	std::unique_ptr<agni::editor::EditorManager> m_editorManager;
+
+	// Primitive meshes for editor entity creation
+	std::shared_ptr<MeshAsset> m_cubeMesh;
+	std::shared_ptr<MeshAsset> m_sphereMesh;
+	std::shared_ptr<MeshAsset> m_planeMesh;
+
+	// Quit flag
+	bool m_shouldQuit = false;
 
 	// ECS accessors
 	agni::ecs::World& getECSWorld()
@@ -222,6 +289,62 @@ public:
 	const agni::ecs::EntityFactory& getEntityFactory() const
 	{
 		return *m_entityFactory;
+	}
+
+	// Renderer accessor
+	Renderer& getRenderer()
+	{
+		return m_renderer;
+	}
+	const Renderer& getRenderer() const
+	{
+		return m_renderer;
+	}
+
+	// Camera accessor
+	Camera& getCamera()
+	{
+		return m_mainCamera;
+	}
+	const Camera& getCamera() const
+	{
+		return m_mainCamera;
+	}
+
+	// Swapchain accessor
+	SwapchainManager& getSwapchainManager()
+	{
+		return m_swapchainManager;
+	}
+	const SwapchainManager& getSwapchainManager() const
+	{
+		return m_swapchainManager;
+	}
+
+	// Window extent accessor
+	VkExtent2D getWindowExtent() const
+	{
+		return m_windowExtent;
+	}
+
+	// Primitive mesh accessors
+	std::shared_ptr<MeshAsset> getCubeMesh() const
+	{
+		return m_cubeMesh;
+	}
+	std::shared_ptr<MeshAsset> getSphereMesh() const
+	{
+		return m_sphereMesh;
+	}
+	std::shared_ptr<MeshAsset> getPlaneMesh() const
+	{
+		return m_planeMesh;
+	}
+
+	// Quit method
+	void quit()
+	{
+		m_shouldQuit = true;
 	}
 
 #ifdef AGNI_HAS_JOLT

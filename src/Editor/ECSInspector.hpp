@@ -61,10 +61,17 @@ public:
 		m_physicsManager = physicsManager;
 	}
 
+	// Set context menus reference
+	void setContextMenus(class ContextMenus* contextMenus)
+	{
+		m_contextMenus = contextMenus;
+	}
+
 private:
 	agni::ecs::World&         m_world;
 	agni::ecs::EntityFactory& m_entityFactory;
 	agni::physics::JoltPhysicsManager* m_physicsManager;
+	class ContextMenus* m_contextMenus = nullptr;
 	std::shared_ptr<LoadedGLTF> m_meshResources;
 
 	// Selected entity

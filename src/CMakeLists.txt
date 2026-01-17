@@ -51,6 +51,14 @@ add_executable (engine
   ECS/EntityFactory.cpp
 
   # Editor Tools
+  Editor/EditorManager.hpp
+  Editor/EditorManager.cpp
+  Editor/EditorUI.hpp
+  Editor/EditorUI.cpp
+  Editor/InputManager.hpp
+  Editor/InputManager.cpp
+  Editor/ContextMenus.hpp
+  Editor/ContextMenus.cpp
   Editor/ECSInspector.hpp
   Editor/ECSInspector.cpp
   Editor/EditorTheme.hpp
