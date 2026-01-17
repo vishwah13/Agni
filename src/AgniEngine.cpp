@@ -7,6 +7,10 @@
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_vulkan.h>
 
+#include <Editor/EditorTheme.hpp>
+#include <Editor/EditorWidgets.hpp>
+#include <Editor/EditorIcons.hpp>
+
 #include <Initializers.hpp>
 #include <Types.hpp>
 #include <VulkanTools.hpp>
@@ -399,117 +403,138 @@ void AgniEngine::run()
 		ImGui::DockSpaceOverViewport(
 		0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 
-		if (ImGui::Begin("Stats"))
+		// Performance Stats Window
+		if (ImGui::Begin("Performance"))
 		{
-			float frametime = m_renderer.getStats().m_frametime;
-			float fps = (frametime > 0.0f) ? 1000.0f / frametime : 0.0f;
-			ImGui::Text("FPS: %.1f", fps);
-			ImGui::Text("frametime %.2f ms", frametime);
-			ImGui::Separator();
-			ImGui::Text("draw time %.2f ms", m_renderer.getStats().m_meshDrawTime);
-			ImGui::Text("update time %.2f ms", m_renderer.getStats().m_sceneUpdateTime);
-			ImGui::Text("triangles %i", m_renderer.getStats().m_triangleCount);
-			ImGui::Text("draws %i", m_renderer.getStats().m_drawcallCount);
+			using namespace agni::editor;
+
+			if (widgets::CollapsibleSection("Frame Statistics"))
+			{
+				float frametime = m_renderer.getStats().m_frametime;
+				float fps = (frametime > 0.0f) ? 1000.0f / frametime : 0.0f;
+
+				char fpsStr[32], frametimeStr[32];
+				snprintf(fpsStr, sizeof(fpsStr), "%.1f", fps);
+				snprintf(frametimeStr, sizeof(frametimeStr), "%.2f ms", frametime);
+
+				widgets::StatDisplay("FPS", fpsStr);
+				widgets::StatDisplay("Frame Time", frametimeStr);
+			}
+
+			widgets::Spacing(4.0f);
+
+			if (widgets::CollapsibleSection("Render Statistics"))
+			{
+				char drawTimeStr[32], updateTimeStr[32], trisStr[32], drawsStr[32];
+				snprintf(drawTimeStr, sizeof(drawTimeStr), "%.2f ms", m_renderer.getStats().m_meshDrawTime);
+				snprintf(updateTimeStr, sizeof(updateTimeStr), "%.2f ms", m_renderer.getStats().m_sceneUpdateTime);
+				snprintf(trisStr, sizeof(trisStr), "%d", m_renderer.getStats().m_triangleCount);
+				snprintf(drawsStr, sizeof(drawsStr), "%d", m_renderer.getStats().m_drawcallCount);
+
+				widgets::StatDisplay("Draw Time", drawTimeStr);
+				widgets::StatDisplay("Update Time", updateTimeStr);
+				widgets::StatDisplay("Triangles", trisStr);
+				widgets::StatDisplay("Draw Calls", drawsStr);
+			}
 		}
 		ImGui::End();
 
-		if (ImGui::Begin("background"))
+		// Rendering Settings Window
+		if (ImGui::Begin("Rendering"))
 		{
-			ImGui::SliderFloat(
-			"Render Scale", &m_renderer.getRenderScale(), 0.3f, 1.f);
+			using namespace agni::editor;
 
-			// MSAA sample count selector
-			const char* msaaSampleNames[] = {
-			"1x (No MSAA)", "2x MSAA", "4x MSAA", "8x MSAA"};
-			int currentMsaaIndex = 0;
-			switch (m_renderer.getMsaaSamples())
+			// Quality Settings
+			if (widgets::CollapsibleSection("Quality", icons::Quality))
 			{
-				case VK_SAMPLE_COUNT_1_BIT:
-					currentMsaaIndex = 0;
-					break;
-				case VK_SAMPLE_COUNT_2_BIT:
-					currentMsaaIndex = 1;
-					break;
-				case VK_SAMPLE_COUNT_4_BIT:
-					currentMsaaIndex = 2;
-					break;
-				case VK_SAMPLE_COUNT_8_BIT:
-					currentMsaaIndex = 3;
-					break;
-				default:
-					currentMsaaIndex = 2;
-					break;
+				ImGui::PushID("Quality");
+				widgets::PropertyFloat("Render Scale", &m_renderer.getRenderScale(), 0.3f, 1.0f, "%.1f");
+
+				// MSAA selector
+				const char* msaaOptions[] = {"1x (Off)", "2x", "4x", "8x"};
+				int currentMsaa = 0;
+				switch (m_renderer.getMsaaSamples())
+				{
+					case VK_SAMPLE_COUNT_1_BIT: currentMsaa = 0; break;
+					case VK_SAMPLE_COUNT_2_BIT: currentMsaa = 1; break;
+					case VK_SAMPLE_COUNT_4_BIT: currentMsaa = 2; break;
+					case VK_SAMPLE_COUNT_8_BIT: currentMsaa = 3; break;
+					default: currentMsaa = 2; break;
+				}
+
+				if (widgets::PropertyCombo("MSAA", &currentMsaa, msaaOptions, 4))
+				{
+					VkSampleCountFlagBits samples[] = {
+						VK_SAMPLE_COUNT_1_BIT, VK_SAMPLE_COUNT_2_BIT,
+						VK_SAMPLE_COUNT_4_BIT, VK_SAMPLE_COUNT_8_BIT
+					};
+					if (samples[currentMsaa] != m_renderer.getMsaaSamples())
+					{
+						m_renderer.getMsaaSamples() = samples[currentMsaa];
+						m_swapchainManager.requestResize();
+					}
+				}
+				ImGui::PopID();
 			}
 
-			if (ImGui::Combo(
-			    "MSAA Samples", &currentMsaaIndex, msaaSampleNames, 4))
+			// Directional Light Shadows
+			if (widgets::CollapsibleSection("Directional Shadows", icons::Shadows))
 			{
-				VkSampleCountFlagBits newSamples = VK_SAMPLE_COUNT_1_BIT;
-				switch (currentMsaaIndex)
+				ImGui::PushID("DirShadow");
+				widgets::PropertyCheckbox("Enable", &m_renderer.getShadowsEnabled());
+				widgets::PropertyFloat("Bias", &m_renderer.getShadowBias(), 0.0f, 0.05f, "%.4f");
+				widgets::PropertyFloat("Normal Bias", &m_renderer.getShadowNormalBias(), 0.0f, 0.1f, "%.4f");
+				widgets::PropertyFloat("Ortho Size", &m_renderer.getShadowOrthoSize(), 10.0f, 200.0f, "%.1f");
+				ImGui::PopID();
+			}
+
+			// Spot Light Shadows
+			if (widgets::CollapsibleSection("Spot Shadows", icons::Shadows))
+			{
+				ImGui::PushID("SpotShadow");
+				widgets::PropertyCheckbox("Enable", &m_renderer.getSpotShadowsEnabled());
+				widgets::PropertyFloat("Bias", &m_renderer.getSpotShadowBias(), 0.0f, 0.05f, "%.4f");
+				widgets::PropertyFloat("Normal Bias", &m_renderer.getSpotShadowNormalBias(), 0.0f, 0.1f, "%.4f");
+				ImGui::PopID();
+			}
+
+			// Point Light Shadows
+			if (widgets::CollapsibleSection("Point Shadows", icons::Shadows))
+			{
+				ImGui::PushID("PointShadow");
+				widgets::PropertyCheckbox("Enable", &m_renderer.getPointShadowsEnabled());
+				widgets::PropertyFloat("Bias", &m_renderer.getPointShadowBias(), 0.0f, 0.2f, "%.4f");
+				widgets::PropertyFloat("Far Plane", &m_renderer.getPointShadowFarPlane(), 10.0f, 200.0f, "%.1f");
+				widgets::PropertyInt("Shadow Light", &m_renderer.getPointShadowLightIndex(), 0, 10);
+
+				widgets::PropertyCheckbox("PCF Soft Shadows", &m_renderer.getPointShadowPCFEnabled());
+				if (m_renderer.getPointShadowPCFEnabled())
 				{
-					case 0:
-						newSamples = VK_SAMPLE_COUNT_1_BIT;
-						break;
-					case 1:
-						newSamples = VK_SAMPLE_COUNT_2_BIT;
-						break;
-					case 2:
-						newSamples = VK_SAMPLE_COUNT_4_BIT;
-						break;
-					case 3:
-						newSamples = VK_SAMPLE_COUNT_8_BIT;
-						break;
+					widgets::PropertyFloat("PCF Radius", &m_renderer.getPointShadowPCFRadius(), 0.01f, 0.5f, "%.3f");
+					ImGui::TextDisabled("  (20 samples per pixel)");
 				}
-				if (newSamples != m_renderer.getMsaaSamples())
+				ImGui::PopID();
+
+				widgets::SeparatorText("Debug");
+				auto& pointLights = m_renderer.getMainDrawContext().m_PointLights;
+				widgets::InfoRow("Point Lights", "%zu", pointLights.size());
+				int idx = m_renderer.getPointShadowLightIndex();
+				if (idx < (int)pointLights.size())
 				{
-					m_renderer.getMsaaSamples() = newSamples;
-					// Request resize to recreate images and pipelines with new
-					// sample count
-					m_swapchainManager.requestResize();
+					auto& light = pointLights[idx];
+					widgets::InfoRow("Position", "(%.1f, %.1f, %.1f)",
+						light.m_position.x, light.m_position.y, light.m_position.z);
 				}
 			}
 
-			ImGui::Separator();
-			ImGui::Text("Directional Light Shadows");
-			ImGui::Checkbox("Enable Dir Shadows", &m_renderer.getShadowsEnabled());
-			ImGui::SliderFloat("Dir Shadow Bias", &m_renderer.getShadowBias(), 0.0f, 0.05f, "%.4f");
-			ImGui::SliderFloat("Dir Normal Bias", &m_renderer.getShadowNormalBias(), 0.0f, 0.1f, "%.4f");
-			ImGui::SliderFloat("Shadow Ortho Size", &m_renderer.getShadowOrthoSize(), 10.0f, 200.0f, "%.1f");
-
-			ImGui::Separator();
-			ImGui::Text("Spot Light Shadows");
-			ImGui::Checkbox("Enable Spot Shadows", &m_renderer.getSpotShadowsEnabled());
-			ImGui::SliderFloat("Spot Shadow Bias", &m_renderer.getSpotShadowBias(), 0.0f, 0.05f, "%.4f");
-			ImGui::SliderFloat("Spot Normal Bias", &m_renderer.getSpotShadowNormalBias(), 0.0f, 0.1f, "%.4f");
-
-			ImGui::Separator();
-			ImGui::Text("Point Light Shadows");
-			ImGui::Checkbox("Enable Point Shadows", &m_renderer.getPointShadowsEnabled());
-			ImGui::SliderFloat("Point Shadow Bias", &m_renderer.getPointShadowBias(), 0.0f, 0.2f, "%.4f");
-			ImGui::SliderFloat("Point Far Plane", &m_renderer.getPointShadowFarPlane(), 10.0f, 200.0f, "%.1f");
-			ImGui::SliderInt("Point Shadow Light", &m_renderer.getPointShadowLightIndex(), 0, 10);
-
-			// PCF soft shadows
-			ImGui::Checkbox("PCF Soft Shadows", &m_renderer.getPointShadowPCFEnabled());
-			if (m_renderer.getPointShadowPCFEnabled()) {
-				ImGui::SliderFloat("PCF Radius", &m_renderer.getPointShadowPCFRadius(), 0.01f, 0.5f, "%.3f");
-				ImGui::Text("(20 samples per pixel)");
+			// Camera Settings
+			if (widgets::CollapsibleSection("Camera", icons::Camera))
+			{
+				ImGui::PushID("Camera");
+				widgets::PropertyFloat("Move Speed", &m_mainCamera.m_speed, 0.01f, 1.0f, "%.3f");
+				widgets::PropertyFloat("Sensitivity", &m_mainCamera.m_mouseSensitivity, 0.1f, 1.0f, "%.2f");
+				ImGui::PopID();
 			}
-
-			ImGui::Separator();
-			// Debug info
-			auto& pointLights = m_renderer.getMainDrawContext().m_PointLights;
-			ImGui::Text("Point Lights: %zu", pointLights.size());
-			int idx = m_renderer.getPointShadowLightIndex();
-			if (idx < (int)pointLights.size()) {
-				auto& light = pointLights[idx];
-				ImGui::Text("Shadow Light Pos: (%.1f, %.1f, %.1f)", light.m_position.x, light.m_position.y, light.m_position.z);
-			}
-
-			ImGui::Separator();
-			ImGui::Text("Camera");
-			ImGui::SliderFloat("Move Speed", &m_mainCamera.m_speed, 0.01f, 1.0f, "%.3f");
-			ImGui::SliderFloat("Mouse Sensitivity", &m_mainCamera.m_mouseSensitivity, 0.1f, 1.0f, "%.2f");
 		}
 		ImGui::End();
 
@@ -900,6 +925,12 @@ void AgniEngine::initImgui()
 	// enable docking
 	ImGuiIO& io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+	// Apply dark modern theme
+	agni::editor::ThemeConfig themeConfig;
+	themeConfig.fontSize = 15.0f;
+	agni::editor::ConfigureFonts(io, themeConfig);
+	agni::editor::ApplyDarkModernTheme(themeConfig);
 
 	// this initializes imgui for SDL
 	ImGui_ImplSDL3_InitForVulkan(m_window);

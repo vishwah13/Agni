@@ -53,6 +53,11 @@ add_executable (engine
   # Editor Tools
   Editor/ECSInspector.hpp
   Editor/ECSInspector.cpp
+  Editor/EditorTheme.hpp
+  Editor/EditorTheme.cpp
+  Editor/EditorWidgets.hpp
+  Editor/EditorWidgets.cpp
+  Editor/EditorIcons.hpp
 )
 
 # Add Physics source files conditionally

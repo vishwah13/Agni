@@ -1,4 +1,7 @@
 #include <Editor/ECSInspector.hpp>
+#include <Editor/EditorTheme.hpp>
+#include <Editor/EditorWidgets.hpp>
+#include <Editor/EditorIcons.hpp>
 #include <ECS/EntityFactory.hpp>
 #include <Camera.hpp>
 
@@ -26,44 +29,63 @@ ECSInspector::ECSInspector(agni::ecs::World& world, agni::ecs::EntityFactory& en
 
 void ECSInspector::render()
 {
-	ImGui::Begin("ECS Inspector");
+	ImGui::Begin("Scene Hierarchy");
 
-	// Top toolbar
-	if (ImGui::Button("Create Entity"))
+	// Top toolbar with styled buttons
+	if (widgets::ButtonPrimary("+ Create"))
 	{
 		m_showCreateEntityPopup = true;
 	}
 
 	ImGui::SameLine();
-	if (ImGui::Button("Delete Selected") && m_selectedEntity != NULL_ENTITY)
+	ImGui::BeginDisabled(m_selectedEntity == NULL_ENTITY);
+	if (widgets::ButtonDanger("Delete"))
 	{
 		m_world.destroyEntity(m_selectedEntity);
 		m_selectedEntity = NULL_ENTITY;
 	}
+	ImGui::EndDisabled();
 
 	ImGui::Separator();
 
-	// Gizmo controls
+	// Gizmo controls with toggle buttons
+	ImGui::PushStyleColor(ImGuiCol_Text, colors::TextDim);
 	ImGui::Text("Gizmo:");
+	ImGui::PopStyleColor();
 	ImGui::SameLine();
-	if (ImGui::RadioButton("Translate", m_gizmoOperation == 0))
+
+	ImGui::PushID("GizmoOp");
+	if (widgets::ButtonToggle("T##translate", m_gizmoOperation == 0, ImVec2(24, 0)))
 		m_gizmoOperation = 0;
+	widgets::TooltipOnHover("Translate (W)");
+
 	ImGui::SameLine();
-	if (ImGui::RadioButton("Rotate", m_gizmoOperation == 1))
+	if (widgets::ButtonToggle("R##rotate", m_gizmoOperation == 1, ImVec2(24, 0)))
 		m_gizmoOperation = 1;
+	widgets::TooltipOnHover("Rotate (E)");
+
 	ImGui::SameLine();
-	if (ImGui::RadioButton("Scale", m_gizmoOperation == 2))
+	if (widgets::ButtonToggle("S##scale", m_gizmoOperation == 2, ImVec2(24, 0)))
 		m_gizmoOperation = 2;
+	widgets::TooltipOnHover("Scale (R)");
+	ImGui::PopID();
 
 	ImGui::SameLine();
+	ImGui::PushStyleColor(ImGuiCol_Text, colors::TextDim);
 	ImGui::Text("|");
+	ImGui::PopStyleColor();
 	ImGui::SameLine();
 
-	if (ImGui::RadioButton("Local", m_gizmoMode == 0))
+	ImGui::PushID("GizmoMode");
+	if (widgets::ButtonToggle("L##local", m_gizmoMode == 0, ImVec2(24, 0)))
 		m_gizmoMode = 0;
+	widgets::TooltipOnHover("Local Space");
+
 	ImGui::SameLine();
-	if (ImGui::RadioButton("World", m_gizmoMode == 1))
+	if (widgets::ButtonToggle("W##world", m_gizmoMode == 1, ImVec2(24, 0)))
 		m_gizmoMode = 1;
+	widgets::TooltipOnHover("World Space");
+	ImGui::PopID();
 
 	ImGui::SameLine();
 	ImGui::Checkbox("Snap", &m_useSnap);
@@ -71,11 +93,11 @@ void ECSInspector::render()
 	if (m_useSnap)
 	{
 		ImGui::SameLine();
-		ImGui::SetNextItemWidth(100);
+		ImGui::SetNextItemWidth(80);
 		if (m_gizmoOperation == 0)
 			ImGui::DragFloat("##snap", &m_snapValues[0], 0.1f, 0.1f, 10.0f, "%.1f");
 		else if (m_gizmoOperation == 1)
-			ImGui::DragFloat("##snap", &m_snapValues[1], 1.0f, 1.0f, 90.0f, "%.0f°");
+			ImGui::DragFloat("##snap", &m_snapValues[1], 1.0f, 1.0f, 90.0f, "%.0f");
 		else
 			ImGui::DragFloat("##snap", &m_snapValues[2], 0.05f, 0.05f, 2.0f, "%.2f");
 	}
@@ -165,8 +187,7 @@ void ECSInspector::renderEntityList()
 
 void ECSInspector::renderComponentInspector()
 {
-	ImGui::Text("Components");
-	ImGui::Separator();
+	widgets::SectionHeader("Components");
 
 	if (m_selectedEntity == NULL_ENTITY)
 	{
@@ -182,8 +203,8 @@ void ECSInspector::renderComponentInspector()
 		return;
 	}
 
-	ImGui::Text("Entity: %s", entity.name().c_str());
-	ImGui::Text("ID: %llu", m_selectedEntity);
+	widgets::InfoRow("Entity", "%s", entity.name().c_str());
+	widgets::InfoRow("ID", "%llu", m_selectedEntity);
 	ImGui::Separator();
 
 	// Scrollable component list
@@ -192,7 +213,7 @@ void ECSInspector::renderComponentInspector()
 	// Transform Component
 	if (TransformComponent* transform = m_world.getComponent<TransformComponent>(m_selectedEntity))
 	{
-		if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen))
+		if (widgets::CollapsibleSection("Transform", icons::Transform))
 		{
 			editTransformComponent(*transform);
 		}
@@ -201,7 +222,7 @@ void ECSInspector::renderComponentInspector()
 	// RenderMesh Component
 	if (agni::ecs::RenderMeshComponent* mesh = m_world.getComponent<agni::ecs::RenderMeshComponent>(m_selectedEntity))
 	{
-		if (ImGui::CollapsingHeader("Render Mesh"))
+		if (widgets::CollapsibleSection("Render Mesh", icons::Mesh, ImGuiTreeNodeFlags_None))
 		{
 			editRenderMeshComponent(*mesh);
 		}
@@ -210,7 +231,7 @@ void ECSInspector::renderComponentInspector()
 	// Light Component
 	if (LightComponent* light = m_world.getComponent<LightComponent>(m_selectedEntity))
 	{
-		if (ImGui::CollapsingHeader("Light"))
+		if (widgets::CollapsibleSection("Light", icons::Light, ImGuiTreeNodeFlags_None))
 		{
 			editLightComponent(*light);
 		}
@@ -219,7 +240,7 @@ void ECSInspector::renderComponentInspector()
 	// RigidBody Component
 	if (RigidBodyComponent* rigidbody = m_world.getComponent<RigidBodyComponent>(m_selectedEntity))
 	{
-		if (ImGui::CollapsingHeader("Rigid Body"))
+		if (widgets::CollapsibleSection("Rigid Body", icons::Physics, ImGuiTreeNodeFlags_None))
 		{
 			editRigidBodyComponent(*rigidbody);
 		}
@@ -228,7 +249,7 @@ void ECSInspector::renderComponentInspector()
 	// Collider Component
 	if (ColliderComponent* collider = m_world.getComponent<ColliderComponent>(m_selectedEntity))
 	{
-		if (ImGui::CollapsingHeader("Collider"))
+		if (widgets::CollapsibleSection("Collider", icons::Collider, ImGuiTreeNodeFlags_None))
 		{
 			editColliderComponent(*collider);
 		}
@@ -237,12 +258,12 @@ void ECSInspector::renderComponentInspector()
 	// SceneNode Component (show hierarchy info)
 	if (const agni::ecs::SceneNodeComponent* node = m_world.getComponent<agni::ecs::SceneNodeComponent>(m_selectedEntity))
 	{
-		if (ImGui::CollapsingHeader("Scene Node"))
+		if (widgets::CollapsibleSection("Scene Node", icons::SceneNode, ImGuiTreeNodeFlags_None))
 		{
-			ImGui::Text("Depth: %u", node->depth);
-			ImGui::Text("Parent ID: %llu", node->parent);
-			ImGui::Text("Children: %zu", node->children.size());
-			ImGui::Checkbox("World Transform Dirty", const_cast<bool*>(&node->dirtyWorld));
+			widgets::InfoRow("Depth", "%u", node->depth);
+			widgets::InfoRow("Parent ID", "%llu", node->parent);
+			widgets::InfoRow("Children", "%zu", node->children.size());
+			widgets::PropertyCheckbox("Dirty", const_cast<bool*>(&node->dirtyWorld));
 		}
 	}
 
@@ -255,14 +276,16 @@ void ECSInspector::editTransformComponent(TransformComponent& transform)
 
 	// Extract position from local transform
 	glm::vec3 position = glm::vec3(transform.localTransform[3]);
-	if (ImGui::DragFloat3("Position", glm::value_ptr(position), 0.1f))
+	if (widgets::PropertyVec3("Position", glm::value_ptr(position), 0.0f, 0.1f))
 	{
 		m_world.setPosition(m_selectedEntity, position);
 	}
 
 	// Show world position (read-only)
 	glm::vec3 worldPos = glm::vec3(transform.worldTransform[3]);
-	ImGui::Text("World Position: (%.2f, %.2f, %.2f)", worldPos.x, worldPos.y, worldPos.z);
+	ImGui::PushStyleColor(ImGuiCol_Text, colors::TextDim);
+	ImGui::Text("World: (%.2f, %.2f, %.2f)", worldPos.x, worldPos.y, worldPos.z);
+	ImGui::PopStyleColor();
 
 	ImGui::PopID();
 }
@@ -274,31 +297,31 @@ void ECSInspector::editRigidBodyComponent(RigidBodyComponent& rigidbody)
 	// Body type
 	const char* bodyTypes[] = {"Static", "Dynamic", "Kinematic"};
 	int         currentType = static_cast<int>(rigidbody.type);
-	if (ImGui::Combo("Type", &currentType, bodyTypes, 3))
+	if (widgets::PropertyCombo("Type", &currentType, bodyTypes, 3))
 	{
 		rigidbody.type = static_cast<RigidBodyType>(currentType);
 	}
 
 	// Physics properties
-	ImGui::DragFloat("Mass", &rigidbody.mass, 0.1f, 0.1f, 100.0f);
-	ImGui::DragFloat("Friction", &rigidbody.friction, 0.01f, 0.0f, 1.0f);
-	ImGui::DragFloat("Restitution", &rigidbody.restitution, 0.01f, 0.0f, 1.0f);
-	ImGui::Checkbox("Use Gravity", &rigidbody.useGravity);
+	widgets::PropertyFloat("Mass", &rigidbody.mass, 0.1f, 100.0f, "%.1f");
+	widgets::PropertyFloat("Friction", &rigidbody.friction, 0.0f, 1.0f, "%.2f");
+	widgets::PropertyFloat("Restitution", &rigidbody.restitution, 0.0f, 1.0f, "%.2f");
+	widgets::PropertyCheckbox("Use Gravity", &rigidbody.useGravity);
 
 	// Velocity (read-only display)
-	ImGui::Separator();
-	ImGui::Text("Linear Velocity: (%.2f, %.2f, %.2f)",
+	widgets::SeparatorText("Velocity");
+	widgets::InfoRow("Linear", "(%.2f, %.2f, %.2f)",
 	            rigidbody.linearVelocity.x,
 	            rigidbody.linearVelocity.y,
 	            rigidbody.linearVelocity.z);
 
-	ImGui::Text("Angular Velocity: (%.2f, %.2f, %.2f)",
+	widgets::InfoRow("Angular", "(%.2f, %.2f, %.2f)",
 	            rigidbody.angularVelocity.x,
 	            rigidbody.angularVelocity.y,
 	            rigidbody.angularVelocity.z);
 
 	// Body ID
-	ImGui::Text("Jolt Body ID: %u", rigidbody.joltBodyID);
+	widgets::InfoRow("Body ID", "%u", rigidbody.joltBodyID);
 
 	ImGui::PopID();
 }
@@ -310,7 +333,7 @@ void ECSInspector::editColliderComponent(ColliderComponent& collider)
 	// Collider type
 	const char* colliderTypes[] = {"Box", "Sphere", "Capsule"};
 	int         currentType     = static_cast<int>(collider.type);
-	if (ImGui::Combo("Type", &currentType, colliderTypes, 3))
+	if (widgets::PropertyCombo("Type", &currentType, colliderTypes, 3))
 	{
 		collider.type = static_cast<ColliderType>(currentType);
 	}
@@ -319,22 +342,22 @@ void ECSInspector::editColliderComponent(ColliderComponent& collider)
 	switch (collider.type)
 	{
 	case ColliderType::Box:
-		ImGui::DragFloat3("Half Extents", glm::value_ptr(collider.boxHalfExtents), 0.05f, 0.01f, 10.0f);
+		widgets::PropertyVec3("Half Extents", glm::value_ptr(collider.boxHalfExtents), 0.5f, 0.05f);
 		break;
 	case ColliderType::Sphere:
-		ImGui::DragFloat("Radius", &collider.sphereRadius, 0.05f, 0.01f, 10.0f);
+		widgets::PropertyFloat("Radius", &collider.sphereRadius, 0.01f, 10.0f, "%.2f");
 		break;
 	case ColliderType::Capsule:
-		ImGui::DragFloat("Radius", &collider.capsuleRadius, 0.05f, 0.01f, 10.0f);
-		ImGui::DragFloat("Half Height", &collider.capsuleHalfHeight, 0.05f, 0.01f, 10.0f);
+		widgets::PropertyFloat("Radius", &collider.capsuleRadius, 0.01f, 10.0f, "%.2f");
+		widgets::PropertyFloat("Half Height", &collider.capsuleHalfHeight, 0.01f, 10.0f, "%.2f");
 		break;
 	}
 
 	// Center offset
-	ImGui::DragFloat3("Center", glm::value_ptr(collider.center), 0.05f);
+	widgets::PropertyVec3("Center", glm::value_ptr(collider.center), 0.0f, 0.05f);
 
 	// Flags
-	ImGui::Checkbox("Is Trigger", &collider.isTrigger);
+	widgets::PropertyCheckbox("Is Trigger", &collider.isTrigger);
 
 	ImGui::PopID();
 }
@@ -346,32 +369,32 @@ void ECSInspector::editLightComponent(LightComponent& light)
 	// Light type
 	const char* lightTypes[] = {"Point", "Directional", "Spot"};
 	int         currentType  = static_cast<int>(light.type);
-	if (ImGui::Combo("Type", &currentType, lightTypes, 3))
+	if (widgets::PropertyCombo("Type", &currentType, lightTypes, 3))
 	{
 		light.type = static_cast<LightType>(currentType);
 	}
 
 	// Color
-	ImGui::ColorEdit3("Color", glm::value_ptr(light.color));
+	widgets::PropertyColor3("Color", glm::value_ptr(light.color));
 
 	// Intensity
-	ImGui::DragFloat("Intensity", &light.intensity, 0.1f, 0.0f, 100.0f);
+	widgets::PropertyFloat("Intensity", &light.intensity, 0.0f, 100.0f, "%.1f");
 
 	// Type-specific properties
 	if (light.type == LightType::Point || light.type == LightType::Spot)
 	{
-		ImGui::DragFloat("Radius", &light.radius, 0.5f, 0.1f, 100.0f);
+		widgets::PropertyFloat("Radius", &light.radius, 0.1f, 100.0f, "%.1f");
 	}
 
 	if (light.type == LightType::Directional || light.type == LightType::Spot)
 	{
-		ImGui::DragFloat3("Direction", glm::value_ptr(light.direction), 0.01f, -1.0f, 1.0f);
+		widgets::PropertyVec3("Direction", glm::value_ptr(light.direction), 0.0f, 0.01f);
 	}
 
 	if (light.type == LightType::Spot)
 	{
-		ImGui::DragFloat("Inner Cone Angle", &light.innerConeAngle, 1.0f, 0.0f, 90.0f);
-		ImGui::DragFloat("Outer Cone Angle", &light.outerConeAngle, 1.0f, 0.0f, 90.0f);
+		widgets::PropertyFloat("Inner Cone", &light.innerConeAngle, 0.0f, 90.0f, "%.1f deg");
+		widgets::PropertyFloat("Outer Cone", &light.outerConeAngle, 0.0f, 90.0f, "%.1f deg");
 	}
 
 	ImGui::PopID();
