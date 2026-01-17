@@ -498,7 +498,7 @@ void ECSInspector::renderCreateEntityPopup()
 					    .boxHalfExtents = glm::vec3(0.5f)
 					});
 
-					fmt::print("[ECSInspector] Created mesh entity '{}' at ({}, {}, {})\n",
+					AGNI_PRINT("[ECSInspector] Created mesh entity '{}' at ({}, {}, {})\n",
 					           m_newEntityName, m_spawnPosition.x, m_spawnPosition.y, m_spawnPosition.z);
 				}
 			}

@@ -4,7 +4,7 @@
 #include <Editor/InputManager.hpp>
 #include <Editor/ContextMenus.hpp>
 #include <AgniEngine.hpp>
-#include <fmt/core.h>
+#include <Debug.hpp>
 
 namespace agni
 {
@@ -41,7 +41,7 @@ void EditorManager::init()
 	// Setup keyboard shortcuts
 	setupShortcuts();
 
-	fmt::print("[EditorManager] Initialized\n");
+	AGNI_PRINT("[EditorManager] Initialized\n");
 }
 
 void EditorManager::render()
@@ -96,7 +96,7 @@ void EditorManager::setupShortcuts()
 		duplicateSelectedEntity();
 	});
 
-	fmt::print("[EditorManager] Keyboard shortcuts registered\n");
+	AGNI_PRINT("[EditorManager] Keyboard shortcuts registered\n");
 }
 
 // ============================================================================
@@ -222,7 +222,7 @@ void EditorManager::duplicateSelectedEntity()
 	// - Clone all components
 	// - Offset position slightly
 	// - Select the new entity
-	fmt::print("[EditorManager] Duplicate not yet implemented\n");
+	AGNI_PRINT("[EditorManager] Duplicate not yet implemented\n");
 }
 
 void EditorManager::setSelectedEntity(EntityID entity)

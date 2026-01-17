@@ -1,5 +1,5 @@
 #include <Editor/EditorTheme.hpp>
-#include <fmt/core.h>
+#include <Debug.hpp>
 
 namespace agni
 {
@@ -164,7 +164,7 @@ void ApplyDarkModernTheme(const ThemeConfig& config)
     // Text selection
     c[ImGuiCol_TextSelectedBg]        = colors::Selection;
 
-    fmt::print("[EditorTheme] Dark modern theme applied\n");
+    AGNI_PRINT("[EditorTheme] Dark modern theme applied\n");
 }
 
 void ConfigureFonts(ImGuiIO& io, const ThemeConfig& config)
@@ -180,12 +180,12 @@ void ConfigureFonts(ImGuiIO& io, const ThemeConfig& config)
     ImFont* font = io.Fonts->AddFontFromFileTTF(fontPath, config.fontSize);
     if (font == nullptr)
     {
-        fmt::print("[EditorTheme] Could not load font '{}', using default\n", fontPath);
+        AGNI_PRINT("[EditorTheme] Could not load font '{}', using default\n", fontPath);
         io.Fonts->AddFontDefault();
     }
     else
     {
-        fmt::print("[EditorTheme] Loaded font: {} at {}px\n", fontPath, config.fontSize);
+        AGNI_PRINT("[EditorTheme] Loaded font: {} at {}px\n", fontPath, config.fontSize);
     }
 
     // Note: Don't call io.Fonts->Build() - the backend handles this automatically
