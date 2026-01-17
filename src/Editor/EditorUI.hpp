@@ -21,6 +21,12 @@ public:
 	// Render all editor UI
 	void render();
 
+	// Window visibility accessors
+	bool& getHierarchyVisible() { return m_showHierarchy; }
+	bool& getInspectorVisible() { return m_showInspector; }
+	bool& getPerformanceVisible() { return m_showPerformance; }
+	bool& getRenderingVisible() { return m_showRendering; }
+
 private:
 	void renderMainMenuBar();
 	void renderPerformanceWindow();
@@ -28,6 +34,12 @@ private:
 
 	AgniEngine& m_engine;
 	EditorManager& m_editorManager;
+
+	// Window visibility flags
+	bool m_showHierarchy = true;
+	bool m_showInspector = true;
+	bool m_showPerformance = true;
+	bool m_showRendering = true;
 };
 
 } // namespace editor

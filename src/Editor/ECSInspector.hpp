@@ -31,8 +31,8 @@ public:
 	ECSInspector(agni::ecs::World& world, agni::ecs::EntityFactory& entityFactory, agni::physics::JoltPhysicsManager* physicsManager = nullptr);
 	~ECSInspector() = default;
 
-	// Render the inspector window
-	void render();
+	// Render the inspector windows (with visibility flags)
+	void render(bool& showHierarchy, bool& showInspector);
 
 	// Render gizmo overlay (call after rendering scene, before ImGui::Render())
 	void renderGizmo(Camera* camera, VkExtent2D windowExtent);

@@ -28,18 +28,20 @@ ECSInspector::ECSInspector(agni::ecs::World& world, agni::ecs::EntityFactory& en
 {
 }
 
-void ECSInspector::render()
+void ECSInspector::render(bool& showHierarchy, bool& showInspector)
 {
 	// ========================================================================
 	// Hierarchy Window
 	// ========================================================================
-	if (ImGui::Begin("Hierarchy"))
+	if (showHierarchy)
 	{
-		// Gizmo controls toolbar
-		ImGui::PushStyleColor(ImGuiCol_Text, colors::TextDim);
-		ImGui::Text("Gizmo:");
-		ImGui::PopStyleColor();
-		ImGui::SameLine();
+		if (ImGui::Begin("Hierarchy", &showHierarchy))
+		{
+			// Gizmo controls toolbar
+			ImGui::PushStyleColor(ImGuiCol_Text, colors::TextDim);
+			ImGui::Text("Gizmo:");
+			ImGui::PopStyleColor();
+			ImGui::SameLine();
 
 		ImGui::PushID("GizmoOp");
 		if (widgets::ButtonToggle("T##translate", m_gizmoOperation == 0, ImVec2(24, 0)))
@@ -91,19 +93,23 @@ void ECSInspector::render()
 
 		ImGui::Separator();
 
-		// Entity list
-		renderEntityList();
+			// Entity list
+			renderEntityList();
+		}
+		ImGui::End();
 	}
-	ImGui::End();
 
 	// ========================================================================
 	// Inspector Window
 	// ========================================================================
-	if (ImGui::Begin("Inspector"))
+	if (showInspector)
 	{
-		renderComponentInspector();
+		if (ImGui::Begin("Inspector", &showInspector))
+		{
+			renderComponentInspector();
+		}
+		ImGui::End();
 	}
-	ImGui::End();
 
 	// ========================================================================
 	// Create entity popup

@@ -74,6 +74,7 @@ public:
 
 	ECSInspector* getInspector();
 	ContextMenus* getContextMenus();
+	EditorUI* getEditorUI();
 
 private:
 	AgniEngine& m_engine;

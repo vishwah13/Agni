@@ -46,16 +46,16 @@ void EditorManager::init()
 
 void EditorManager::render()
 {
-	// Render all editor UI
+	// Render all editor UI (menu bar and settings windows)
 	if (m_editorUI)
 	{
 		m_editorUI->render();
 	}
 
-	// Render inspector
-	if (m_inspector)
+	// Render inspector windows (controlled by EditorUI visibility flags)
+	if (m_inspector && m_editorUI)
 	{
-		m_inspector->render();
+		m_inspector->render(m_editorUI->getHierarchyVisible(), m_editorUI->getInspectorVisible());
 		m_inspector->renderGizmo(&m_engine.getCamera(), m_engine.getWindowExtent());
 	}
 }
@@ -243,6 +243,11 @@ ECSInspector* EditorManager::getInspector()
 ContextMenus* EditorManager::getContextMenus()
 {
 	return m_contextMenus.get();
+}
+
+EditorUI* EditorManager::getEditorUI()
+{
+	return m_editorUI.get();
 }
 
 } // namespace editor

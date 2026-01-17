@@ -109,12 +109,31 @@ void EditorUI::renderMainMenuBar()
 
 		if (ImGui::BeginMenu("Window"))
 		{
-			if (ImGui::MenuItem("Hierarchy")) { /* TODO: Focus/show window */ }
-			if (ImGui::MenuItem("Inspector")) { /* TODO: Focus/show window */ }
-			if (ImGui::MenuItem("Performance")) { /* TODO: Focus/show window */ }
-			if (ImGui::MenuItem("Rendering")) { /* TODO: Focus/show window */ }
+			if (ImGui::MenuItem("Hierarchy", nullptr, m_showHierarchy))
+			{
+				m_showHierarchy = !m_showHierarchy;
+			}
+			if (ImGui::MenuItem("Inspector", nullptr, m_showInspector))
+			{
+				m_showInspector = !m_showInspector;
+			}
+			if (ImGui::MenuItem("Performance", nullptr, m_showPerformance))
+			{
+				m_showPerformance = !m_showPerformance;
+			}
+			if (ImGui::MenuItem("Rendering", nullptr, m_showRendering))
+			{
+				m_showRendering = !m_showRendering;
+			}
 			ImGui::Separator();
-			if (ImGui::MenuItem("Reset Layout")) { /* TODO */ }
+			if (ImGui::MenuItem("Reset Layout"))
+			{
+				// Show all windows
+				m_showHierarchy = true;
+				m_showInspector = true;
+				m_showPerformance = true;
+				m_showRendering = true;
+			}
 			ImGui::EndMenu();
 		}
 
@@ -133,9 +152,11 @@ void EditorUI::renderMainMenuBar()
 
 void EditorUI::renderPerformanceWindow()
 {
-	if (ImGui::Begin("Performance"))
+	if (m_showPerformance)
 	{
-		if (widgets::CollapsibleSection("Frame Statistics"))
+		if (ImGui::Begin("Performance", &m_showPerformance))
+		{
+			if (widgets::CollapsibleSection("Frame Statistics"))
 		{
 			float frametime = m_engine.getRenderer().getStats().m_frametime;
 			float fps = (frametime > 0.0f) ? 1000.0f / frametime : 0.0f;
@@ -163,15 +184,18 @@ void EditorUI::renderPerformanceWindow()
 			widgets::StatDisplay("Triangles", trisStr);
 			widgets::StatDisplay("Draw Calls", drawsStr);
 		}
+		}
+		ImGui::End();
 	}
-	ImGui::End();
 }
 
 void EditorUI::renderRenderingWindow()
 {
-	if (ImGui::Begin("Rendering"))
+	if (m_showRendering)
 	{
-		// Quality Settings
+		if (ImGui::Begin("Rendering", &m_showRendering))
+		{
+			// Quality Settings
 		if (widgets::CollapsibleSection("Quality", icons::Quality))
 		{
 			ImGui::PushID("Quality");
@@ -262,8 +286,9 @@ void EditorUI::renderRenderingWindow()
 			widgets::PropertyFloat("Sensitivity", &m_engine.getCamera().m_mouseSensitivity, 0.1f, 1.0f, "%.2f");
 			ImGui::PopID();
 		}
+		}
+		ImGui::End();
 	}
-	ImGui::End();
 }
 
 } // namespace editor
