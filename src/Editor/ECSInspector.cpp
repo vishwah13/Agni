@@ -5,6 +5,7 @@
 #include <Editor/ContextMenus.hpp>
 #include <ECS/EntityFactory.hpp>
 #include <Camera.hpp>
+#include <Debug.hpp>
 
 #ifdef AGNI_HAS_JOLT
 #include <Physics/JoltPhysicsManager.hpp>

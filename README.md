@@ -4,21 +4,19 @@ My personal Game Engine featuring bleeding-edge Vulkan 1.4, physically-based ren
 
 ## Progress
 
-![Progress](docs/Progress1.png)
-
-![Progress](docs/Progress.png)
+![Progress](docs/NewProgressPic.png)
 
 ## Features
 
 ### Rendering
-- Bleeding-edge Vulkan 1.4 with dynamic rendering
+- Vulkan 1.4 with dynamic rendering and bindless resources (descriptor buffers)
 - Physically-Based Rendering (PBR) with metallic-roughness workflow
+- Shadow mapping for directional, spot, and point lights with optional PCF soft shadows
 - glTF 2.0 model loading with automatic material extraction
-- Skybox rendering with cubemaps
-- Compute shader effects (gradients, raymarching, procedural sky)
-- Frustum culling for performance optimization
-- MSAA (4x) anti-aliasing
-- Double-buffered frame overlap for GPU-CPU parallelism
+- Multi-light support (up to 256 point lights, 64 spot lights)
+- Skybox rendering and compute shader effects
+- Frustum culling and configurable MSAA (1x/2x/4x/8x)
+- Object picking for viewport entity selection
 
 ### Entity-Component-System (ECS)
 - Data-driven architecture using [Flecs](https://github.com/SanderMertens/flecs)
@@ -33,9 +31,12 @@ My personal Game Engine featuring bleeding-edge Vulkan 1.4, physically-based ren
 - Physics system syncs transforms to ECS
 
 ### Editor & Tools
-- ImGui integration with docking support
-- ECS Inspector for runtime entity/component debugging
-- [ImGuizmo](https://github.com/CedricGuillemet/ImGuizmo) for 3D transform gizmos
+- Dark modern theme with professional UI styling
+- Scene hierarchy and component inspector with real-time editing
+- Entity creation via menus and context menus (right-click)
+- Transform gizmos ([ImGuizmo](https://github.com/CedricGuillemet/ImGuizmo)) for translate/rotate/scale operations
+- Keyboard shortcuts (Delete, Escape, etc.)
+- Performance monitor and rendering settings windows
 - Tracy Profiler integration for real-time performance analysis
 - RenderDoc support for graphics debugging
 
