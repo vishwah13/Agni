@@ -63,6 +63,8 @@ add_executable (engine
   Editor/ContextMenus.cpp
   Editor/ECSInspector.hpp
   Editor/ECSInspector.cpp
+  Editor/AssetBrowser.hpp
+  Editor/AssetBrowser.cpp
   Editor/EditorTheme.hpp
   Editor/EditorTheme.cpp
   Editor/EditorWidgets.hpp

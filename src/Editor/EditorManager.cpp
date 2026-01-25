@@ -3,10 +3,12 @@
 #include <Editor/EditorUI.hpp>
 #include <Editor/InputManager.hpp>
 #include <Editor/ContextMenus.hpp>
+#include <Editor/AssetBrowser.hpp>
 #include <AgniEngine.hpp>
 #include <Debug.hpp>
 #include <Loader.hpp>
 
+#include <imgui.h>
 #include <algorithm>
 #include <cctype>
 
@@ -20,6 +22,8 @@ EditorManager::EditorManager(AgniEngine& engine)
 {
 }
 
+EditorManager::~EditorManager() = default;
+
 void EditorManager::init()
 {
 	// Create input manager first (needed by others)
@@ -27,6 +31,7 @@ void EditorManager::init()
 
 	// Create inspector
 	m_inspector = std::make_unique<ECSInspector>(
+	    *this,
 	    m_engine.getECSWorld(),
 	    m_engine.getEntityFactory(),
 #ifdef AGNI_HAS_JOLT
@@ -41,6 +46,9 @@ void EditorManager::init()
 
 	// Create editor UI (needs editor manager for callbacks)
 	m_editorUI = std::make_unique<EditorUI>(m_engine, *this);
+
+	// Create asset browser
+	m_assetBrowser = std::make_unique<AssetBrowser>(*this);
 
 	// Setup keyboard shortcuts
 	setupShortcuts();
@@ -61,6 +69,12 @@ void EditorManager::render()
 	{
 		m_inspector->render(m_editorUI->getHierarchyVisible(), m_editorUI->getInspectorVisible());
 		m_inspector->renderGizmo(&m_engine.getCamera(), m_engine.getWindowExtent());
+	}
+
+	// Render asset browser (controlled by EditorUI visibility flag)
+	if (m_assetBrowser && m_editorUI)
+	{
+		m_assetBrowser->render(m_editorUI->getAssetBrowserVisible());
 	}
 }
 
@@ -296,6 +310,11 @@ ContextMenus* EditorManager::getContextMenus()
 EditorUI* EditorManager::getEditorUI()
 {
 	return m_editorUI.get();
+}
+
+AssetBrowser* EditorManager::getAssetBrowser()
+{
+	return m_assetBrowser.get();
 }
 
 // ============================================================================

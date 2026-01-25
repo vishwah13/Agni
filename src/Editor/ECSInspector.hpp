@@ -25,10 +25,13 @@ namespace agni
 namespace editor
 {
 
+// Forward declaration
+class EditorManager;
+
 class ECSInspector
 {
 public:
-	ECSInspector(agni::ecs::World& world, agni::ecs::EntityFactory& entityFactory, agni::physics::JoltPhysicsManager* physicsManager = nullptr);
+	ECSInspector(EditorManager& editorManager, agni::ecs::World& world, agni::ecs::EntityFactory& entityFactory, agni::physics::JoltPhysicsManager* physicsManager = nullptr);
 	~ECSInspector() = default;
 
 	// Render the inspector windows (with visibility flags)
@@ -68,6 +71,7 @@ public:
 	}
 
 private:
+	EditorManager&            m_editorManager;
 	agni::ecs::World&         m_world;
 	agni::ecs::EntityFactory& m_entityFactory;
 	agni::physics::JoltPhysicsManager* m_physicsManager;

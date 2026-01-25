@@ -67,6 +67,30 @@ flecs::entity EntityFactory::createFromGltf(LoadedGLTF& gltf, const char* rootNa
 	return rootEntity;
 }
 
+flecs::entity EntityFactory::createEntitiesFromGLTF(std::shared_ptr<LoadedGLTF> gltf,
+                                                     const glm::mat4&            rootTransform)
+{
+	if (!gltf)
+		return flecs::entity::null();
+
+	// Create a root entity to hold all the converted nodes
+	flecs::entity rootEntity = m_world.get().entity();
+
+	// Set root transform
+	TransformComponent& tc = rootEntity.ensure<TransformComponent>();
+	tc.localTransform = rootTransform;
+	tc.worldTransform = rootTransform;
+	rootEntity.set<SceneNodeComponent>({});
+
+	// Convert all top-level nodes
+	for (auto& topNode : gltf->m_topNodes)
+	{
+		convertNodeRecursive(topNode, rootEntity);
+	}
+
+	return rootEntity;
+}
+
 flecs::entity EntityFactory::createFromNode(std::shared_ptr<Node> node, flecs::entity parent)
 {
 	return convertNodeRecursive(node, parent);

@@ -1,11 +1,14 @@
 #include <Editor/ECSInspector.hpp>
+#include <Editor/EditorManager.hpp>
 #include <Editor/EditorTheme.hpp>
 #include <Editor/EditorWidgets.hpp>
 #include <Editor/EditorIcons.hpp>
 #include <Editor/ContextMenus.hpp>
+#include <Editor/AssetBrowser.hpp>
 #include <ECS/EntityFactory.hpp>
 #include <Camera.hpp>
 #include <Debug.hpp>
+#include <AgniEngine.hpp>
 
 #ifdef AGNI_HAS_JOLT
 #include <Physics/JoltPhysicsManager.hpp>
@@ -22,8 +25,9 @@ namespace agni
 namespace editor
 {
 
-ECSInspector::ECSInspector(agni::ecs::World& world, agni::ecs::EntityFactory& entityFactory, agni::physics::JoltPhysicsManager* physicsManager)
-    : m_world(world)
+ECSInspector::ECSInspector(EditorManager& editorManager, agni::ecs::World& world, agni::ecs::EntityFactory& entityFactory, agni::physics::JoltPhysicsManager* physicsManager)
+    : m_editorManager(editorManager)
+    , m_world(world)
     , m_entityFactory(entityFactory)
     , m_physicsManager(physicsManager)
 {
@@ -191,6 +195,43 @@ void ECSInspector::renderEntityList()
 	if (m_contextMenus)
 	{
 		m_contextMenus->showHierarchyContextMenu(m_selectedEntity);
+	}
+
+	// Drag-drop target for spawning assets from Asset Browser
+	if (ImGui::BeginDragDropTarget())
+	{
+		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_GLTF"))
+		{
+			const char* assetName = (const char*)payload->Data;
+
+			// Get loaded assets from editor manager
+			const auto& loadedAssets = m_editorManager.getLoadedAssets();
+			auto it = loadedAssets.find(assetName);
+
+			if (it != loadedAssets.end())
+			{
+				// Calculate spawn position (in front of camera)
+				// We need access to the camera - get it through AgniEngine
+				// The inspector already has access to EntityFactory, which was created by AgniEngine
+				// For now, spawn at origin - we'll improve this
+				glm::vec3 spawnPos = glm::vec3(0.0f, 2.0f, 0.0f);
+
+				// Spawn the asset as ECS entities
+				m_entityFactory.createEntitiesFromGLTF(
+					it->second,
+					glm::translate(glm::mat4(1.0f), spawnPos)
+				);
+
+				AGNI_PRINT("[ECSInspector] Spawned asset in hierarchy: {}\n", assetName);
+			}
+
+			// Clear drag state in asset browser
+			if (auto* assetBrowser = m_editorManager.getAssetBrowser())
+			{
+				assetBrowser->clearDrag();
+			}
+		}
+		ImGui::EndDragDropTarget();
 	}
 
 	ImGui::EndChild();

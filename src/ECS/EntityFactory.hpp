@@ -37,6 +37,11 @@ public:
 	// Returns the root entity containing all converted nodes
 	flecs::entity createFromGltf(LoadedGLTF& gltf, const char* rootName = nullptr);
 
+	// Create entities from a loaded glTF file with a root transform
+	// Used by Asset Browser drag-and-drop
+	flecs::entity createEntitiesFromGLTF(std::shared_ptr<LoadedGLTF> gltf,
+	                                     const glm::mat4&            rootTransform);
+
 	// Create a single entity from an existing Node
 	// Useful for incremental migration
 	flecs::entity createFromNode(std::shared_ptr<Node> node,

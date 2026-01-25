@@ -22,13 +22,14 @@ class ECSInspector;
 class EditorUI;
 class InputManager;
 class ContextMenus;
+class AssetBrowser;
 
 // Editor Manager - Coordinates all editor systems
 class EditorManager
 {
 public:
 	EditorManager(AgniEngine& engine);
-	~EditorManager() = default;
+	~EditorManager();
 
 	// Initialize editor systems (call after engine init)
 	void init();
@@ -80,6 +81,7 @@ public:
 	ECSInspector* getInspector();
 	ContextMenus* getContextMenus();
 	EditorUI* getEditorUI();
+	AssetBrowser* getAssetBrowser();
 
 	// ========================================================================
 	// Asset Loading
@@ -105,6 +107,7 @@ private:
 	std::unique_ptr<EditorUI>      m_editorUI;
 	std::unique_ptr<InputManager>  m_inputManager;
 	std::unique_ptr<ContextMenus>  m_contextMenus;
+	std::unique_ptr<AssetBrowser>  m_assetBrowser;
 
 	// Editor state
 	EntityID m_selectedEntity = NULL_ENTITY;

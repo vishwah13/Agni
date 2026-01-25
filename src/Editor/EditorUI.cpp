@@ -117,6 +117,10 @@ void EditorUI::renderMainMenuBar()
 			{
 				m_showInspector = !m_showInspector;
 			}
+			if (ImGui::MenuItem("Asset Browser", nullptr, m_showAssetBrowser))
+			{
+				m_showAssetBrowser = !m_showAssetBrowser;
+			}
 			if (ImGui::MenuItem("Performance", nullptr, m_showPerformance))
 			{
 				m_showPerformance = !m_showPerformance;
@@ -131,6 +135,7 @@ void EditorUI::renderMainMenuBar()
 				// Show all windows
 				m_showHierarchy = true;
 				m_showInspector = true;
+				m_showAssetBrowser = true;
 				m_showPerformance = true;
 				m_showRendering = true;
 			}

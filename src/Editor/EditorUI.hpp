@@ -26,6 +26,7 @@ public:
 	bool& getInspectorVisible() { return m_showInspector; }
 	bool& getPerformanceVisible() { return m_showPerformance; }
 	bool& getRenderingVisible() { return m_showRendering; }
+	bool& getAssetBrowserVisible() { return m_showAssetBrowser; }
 
 private:
 	void renderMainMenuBar();
@@ -40,6 +41,7 @@ private:
 	bool m_showInspector = true;
 	bool m_showPerformance = true;
 	bool m_showRendering = true;
+	bool m_showAssetBrowser = true;
 };
 
 } // namespace editor
