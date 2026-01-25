@@ -2,10 +2,15 @@
 
 #include <Components.hpp>
 #include <SDL3/SDL_events.h>
+#include <filesystem>
 #include <memory>
+#include <unordered_map>
+#include <vector>
 
 // Forward declarations
 class AgniEngine;
+struct AsyncLoadHandle;
+struct LoadedGLTF;
 
 namespace agni
 {
@@ -76,6 +81,22 @@ public:
 	ContextMenus* getContextMenus();
 	EditorUI* getEditorUI();
 
+	// ========================================================================
+	// Asset Loading
+	// ========================================================================
+
+	// Get active async loads (for progress UI)
+	const std::vector<std::shared_ptr<AsyncLoadHandle>>& getActiveLoads() const
+	{
+		return m_activeLoads;
+	}
+
+	// Get loaded assets cache
+	const std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>>& getLoadedAssets() const
+	{
+		return m_loadedAssets;
+	}
+
 private:
 	AgniEngine& m_engine;
 
@@ -87,6 +108,19 @@ private:
 
 	// Editor state
 	EntityID m_selectedEntity = NULL_ENTITY;
+
+	// ========================================================================
+	// Async Asset Loading
+	// ========================================================================
+
+	// Active async loads in progress
+	std::vector<std::shared_ptr<AsyncLoadHandle>> m_activeLoads;
+
+	// Loaded assets cache (filename -> LoadedGLTF)
+	std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>> m_loadedAssets;
+
+	// Handle file drop event
+	void onFileDrop(const std::filesystem::path& path);
 
 	// Setup keyboard shortcuts
 	void setupShortcuts();

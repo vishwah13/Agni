@@ -410,6 +410,12 @@ void AgniEngine::run()
 			resizeSwapchain();
 		}
 
+		// Update editor systems (processes async asset loads, input state, etc.)
+		if (m_editorManager)
+		{
+			m_editorManager->update();
+		}
+
 		// ====================================================================
 		// ImGui Frame and Editor Rendering
 		// ====================================================================
@@ -883,12 +889,9 @@ void AgniEngine::initDefaultData()
 	// auto        structureFile = m_assetLoader.loadGltf(this, structurePath);
 	auto meshPrimitivesFile = m_assetLoader.loadGltf(this, meshPrimitivesPath);
 
-	// TEST: Load helmet using async loading
+	// Load helmet using async loading
 	AGNI_PRINT("Starting async load of: {}\n", helmetPath);
-	auto helmetHandle = m_assetLoader.loadGltfAsync(this, helmetPath,
-		[](float progress, const std::string& stage) {
-			AGNI_PRINT("[Async Progress] {:.0f}% - {}\n", progress * 100.0f, stage);
-		});
+	auto helmetHandle = m_assetLoader.loadGltfAsync(this, helmetPath);
 
 	// Wait for async load to complete (blocking for this test)
 	while (!helmetHandle->gpuUploadComplete) {

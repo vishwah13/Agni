@@ -5,6 +5,10 @@
 #include <Editor/ContextMenus.hpp>
 #include <AgniEngine.hpp>
 #include <Debug.hpp>
+#include <Loader.hpp>
+
+#include <algorithm>
+#include <cctype>
 
 namespace agni
 {
@@ -66,6 +70,13 @@ void EditorManager::processInput(const SDL_Event& e)
 	{
 		m_inputManager->processEvent(e);
 	}
+
+	// Handle file drop (drag-and-drop from file explorer)
+	if (e.type == SDL_EVENT_DROP_FILE)
+	{
+		std::filesystem::path path(e.drop.data);
+		onFileDrop(path);
+	}
 }
 
 void EditorManager::update()
@@ -73,6 +84,43 @@ void EditorManager::update()
 	if (m_inputManager)
 	{
 		m_inputManager->update();
+	}
+
+	// Process completed async loads (GPU finalization on main thread)
+	m_engine.m_assetLoader.processCompletedLoads();
+
+	// Check active loads and move completed ones to asset cache
+	for (auto it = m_activeLoads.begin(); it != m_activeLoads.end(); )
+	{
+		auto& handle = *it;
+
+		if (handle->gpuUploadComplete)
+		{
+			if (handle->result)
+			{
+				// Store in loaded assets cache
+				std::string filename = handle->filePath.filename().string();
+				m_loadedAssets[filename] = handle->result;
+
+				// Also store in renderer's loaded scenes so GPU resources stay alive
+				m_engine.m_renderer.getLoadedScenes()[filename] = handle->result;
+
+				AGNI_PRINT("[Editor] Asset loaded: {}\n", filename);
+
+				// TODO: Optionally convert to ECS entities automatically
+				// m_engine.getEntityFactory().createEntitiesFromGLTF(handle->result, ...);
+			}
+			else
+			{
+				AGNI_PRINT("[Editor] Failed to load: {}\n", handle->filePath.string());
+			}
+
+			it = m_activeLoads.erase(it);
+		}
+		else
+		{
+			++it;
+		}
 	}
 }
 
@@ -248,6 +296,32 @@ ContextMenus* EditorManager::getContextMenus()
 EditorUI* EditorManager::getEditorUI()
 {
 	return m_editorUI.get();
+}
+
+// ============================================================================
+// Asset Loading (Drag-and-Drop)
+// ============================================================================
+
+void EditorManager::onFileDrop(const std::filesystem::path& path)
+{
+	// Check if it's a supported file type
+	std::string ext = path.extension().string();
+
+	// Convert to lowercase for comparison
+	std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+	if (ext == ".gltf" || ext == ".glb")
+	{
+		AGNI_PRINT("[Editor] Starting async load: {}\n", path.string());
+
+		// Start async load
+		auto handle = m_engine.m_assetLoader.loadGltfAsync(&m_engine, path);
+		m_activeLoads.push_back(handle);
+	}
+	else
+	{
+		AGNI_PRINT("[Editor] Unsupported file type: {}\n", ext);
+	}
 }
 
 } // namespace editor
