@@ -261,6 +261,10 @@ public:
 	std::shared_ptr<MeshAsset> m_cubeMesh;
 	std::shared_ptr<MeshAsset> m_sphereMesh;
 	std::shared_ptr<MeshAsset> m_planeMesh;
+	std::shared_ptr<MeshAsset> m_suzanneMesh;
+	std::shared_ptr<MeshAsset> m_cylinderMesh;
+	std::shared_ptr<MeshAsset> m_torusMesh;
+	std::shared_ptr<MeshAsset> m_coneMesh;
 
 	// Quit flag
 	bool m_shouldQuit = false;
@@ -339,6 +343,22 @@ public:
 	std::shared_ptr<MeshAsset> getPlaneMesh() const
 	{
 		return m_planeMesh;
+	}
+	std::shared_ptr<MeshAsset> getSuzanneMesh() const
+	{
+		return m_suzanneMesh;
+	}
+	std::shared_ptr<MeshAsset> getCylinderMesh() const
+	{
+		return m_cylinderMesh;
+	}
+	std::shared_ptr<MeshAsset> getTorusMesh() const
+	{
+		return m_torusMesh;
+	}
+	std::shared_ptr<MeshAsset> getConeMesh() const
+	{
+		return m_coneMesh;
 	}
 
 	// Quit method

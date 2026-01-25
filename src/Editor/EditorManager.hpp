@@ -53,6 +53,10 @@ public:
 		Cube,
 		Sphere,
 		Plane,
+		Suzanne,
+		Cylinder,
+		Torus,
+		Cone,
 		PointLight,
 		DirectionalLight,
 		SpotLight

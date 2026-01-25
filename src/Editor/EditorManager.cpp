@@ -222,6 +222,71 @@ void EditorManager::createEntity(EntityType type, const glm::vec3& position)
 		break;
 	}
 
+	case EntityType::Suzanne:
+	{
+		auto entity = m_engine.getEntityFactory().createMeshEntity(
+		    m_engine.getSuzanneMesh(), transform, "Suzanne");
+
+		m_engine.getECSWorld().addComponent(entity.id(), RigidBodyComponent{
+			.type = RigidBodyType::Dynamic,
+			.mass = 1.0f
+		});
+		m_engine.getECSWorld().addComponent(entity.id(), ColliderComponent{
+			.type = ColliderType::Sphere,
+			.sphereRadius = 0.8f
+		});
+		break;
+	}
+
+	case EntityType::Cylinder:
+	{
+		auto entity = m_engine.getEntityFactory().createMeshEntity(
+		    m_engine.getCylinderMesh(), transform, "Cylinder");
+
+		m_engine.getECSWorld().addComponent(entity.id(), RigidBodyComponent{
+			.type = RigidBodyType::Dynamic,
+			.mass = 1.0f
+		});
+		m_engine.getECSWorld().addComponent(entity.id(), ColliderComponent{
+			.type = ColliderType::Capsule,
+			.capsuleRadius = 0.5f,
+			.capsuleHalfHeight = 1.0f
+		});
+		break;
+	}
+
+	case EntityType::Torus:
+	{
+		auto entity = m_engine.getEntityFactory().createMeshEntity(
+		    m_engine.getTorusMesh(), transform, "Torus");
+
+		m_engine.getECSWorld().addComponent(entity.id(), RigidBodyComponent{
+			.type = RigidBodyType::Dynamic,
+			.mass = 1.0f
+		});
+		m_engine.getECSWorld().addComponent(entity.id(), ColliderComponent{
+			.type = ColliderType::Sphere,
+			.sphereRadius = 1.0f
+		});
+		break;
+	}
+
+	case EntityType::Cone:
+	{
+		auto entity = m_engine.getEntityFactory().createMeshEntity(
+		    m_engine.getConeMesh(), transform, "Cone");
+
+		m_engine.getECSWorld().addComponent(entity.id(), RigidBodyComponent{
+			.type = RigidBodyType::Dynamic,
+			.mass = 1.0f
+		});
+		m_engine.getECSWorld().addComponent(entity.id(), ColliderComponent{
+			.type = ColliderType::Sphere,
+			.sphereRadius = 0.7f
+		});
+		break;
+	}
+
 	case EntityType::PointLight:
 	{
 		LightComponent light;

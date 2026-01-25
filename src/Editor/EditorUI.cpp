@@ -86,6 +86,23 @@ void EditorUI::renderMainMenuBar()
 				{
 					m_editorManager.createEntity(EditorManager::EntityType::Plane, spawnPos);
 				}
+				ImGui::Separator();
+				if (ImGui::MenuItem("Suzanne"))
+				{
+					m_editorManager.createEntity(EditorManager::EntityType::Suzanne, spawnPos);
+				}
+				if (ImGui::MenuItem("Cylinder"))
+				{
+					m_editorManager.createEntity(EditorManager::EntityType::Cylinder, spawnPos);
+				}
+				if (ImGui::MenuItem("Torus"))
+				{
+					m_editorManager.createEntity(EditorManager::EntityType::Torus, spawnPos);
+				}
+				if (ImGui::MenuItem("Cone"))
+				{
+					m_editorManager.createEntity(EditorManager::EntityType::Cone, spawnPos);
+				}
 				ImGui::EndMenu();
 			}
 			if (ImGui::BeginMenu("Light"))

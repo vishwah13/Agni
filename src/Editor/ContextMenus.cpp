@@ -107,6 +107,23 @@ void ContextMenus::renderCreateSubmenu(const glm::vec3& position)
 		{
 			m_editorManager.createEntity(EditorManager::EntityType::Plane, position);
 		}
+		ImGui::Separator();
+		if (ImGui::MenuItem("Suzanne"))
+		{
+			m_editorManager.createEntity(EditorManager::EntityType::Suzanne, position);
+		}
+		if (ImGui::MenuItem("Cylinder"))
+		{
+			m_editorManager.createEntity(EditorManager::EntityType::Cylinder, position);
+		}
+		if (ImGui::MenuItem("Torus"))
+		{
+			m_editorManager.createEntity(EditorManager::EntityType::Torus, position);
+		}
+		if (ImGui::MenuItem("Cone"))
+		{
+			m_editorManager.createEntity(EditorManager::EntityType::Cone, position);
+		}
 		ImGui::EndMenu();
 	}
 

@@ -883,67 +883,37 @@ void AgniEngine::initDefaultData()
 	m_mainCamera.m_mouseSensitivity = 0.3f;
 
 	std::string meshPrimitivesPath = {"../../assets/MeshPrimitives.glb"};
-	// std::string structurePath = {"../../assets/structure.glb"};
-	std::string helmetPath = {
-	"../../assets/free_1975_porsche_911_930_turbo.glb"};
-	// auto        structureFile = m_assetLoader.loadGltf(this, structurePath);
-	auto meshPrimitivesFile = m_assetLoader.loadGltf(this, meshPrimitivesPath);
 
-	// Load helmet using async loading
-	AGNI_PRINT("Starting async load of: {}\n", helmetPath);
-	auto helmetHandle = m_assetLoader.loadGltfAsync(this, helmetPath);
+	// Load MeshPrimitives using async multi-threaded loading (needed immediately for editor primitives)
+	AGNI_PRINT("[Startup] Loading MeshPrimitives.glb (async, multi-threaded)...\n");
+	auto meshPrimitivesHandle = m_assetLoader.loadGltfAsync(this, meshPrimitivesPath);
 
-	// Wait for async load to complete (blocking for this test)
-	while (!helmetHandle->gpuUploadComplete) {
+	// Wait for MeshPrimitives to complete (needed for cube/sphere/plane meshes)
+	AGNI_PRINT("[Startup] Waiting for MeshPrimitives to complete...\n");
+	while (!meshPrimitivesHandle->gpuUploadComplete) {
 		m_assetLoader.processCompletedLoads();
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 	}
 
-	// Get the result from the async handle
-	std::optional<std::shared_ptr<LoadedGLTF>> helmetPathFile;
-	if (helmetHandle->result) {
-		helmetPathFile = helmetHandle->result;
-		AGNI_PRINT("Async load completed successfully!\n");
-	} else {
-		AGNI_PRINT("Async load failed!\n");
-	}
+	assert(meshPrimitivesHandle->result);
+	auto meshPrimitivesFile = meshPrimitivesHandle->result;
+	AGNI_PRINT("[Startup] MeshPrimitives loaded successfully!\n");
 
-	assert(meshPrimitivesFile.has_value());
-	assert(helmetPathFile.has_value());
+	m_cubeMesh      = meshPrimitivesFile->meshes["Cube"];
+	m_sphereMesh    = meshPrimitivesFile->meshes["Icosphere"];
+	m_planeMesh     = meshPrimitivesFile->meshes["Plane"];
+	m_suzanneMesh   = meshPrimitivesFile->meshes["Suzanne"];
+	m_cylinderMesh  = meshPrimitivesFile->meshes["Cylinder"];
+	m_torusMesh     = meshPrimitivesFile->meshes["Torus"];
+	m_coneMesh      = meshPrimitivesFile->meshes["Cone"];
 
-	// Debug: print available mesh names
-	AGNI_PRINT("Available meshes in MeshPrimitives.glb:\n");
-	for (auto& [name, mesh] : meshPrimitivesFile->get()->meshes)
-	{
-		AGNI_PRINT("  - '{}'\n", name);
-	}
-
-	m_sphereMesh = meshPrimitivesFile->get()->meshes["Icosphere"];
-	m_cubeMesh   = meshPrimitivesFile->get()->meshes["Cube"];
-	m_planeMesh  = meshPrimitivesFile->get()->meshes["Plane"];
-
-	// m_renderer.getLoadedScenes()["structure"] = *structureFile;
-	m_assetLoader.getMeshResources() = *meshPrimitivesFile;
+	m_assetLoader.getMeshResources() = meshPrimitivesFile;
 
 	// Initialize EditorManager (after assets are loaded)
 	m_editorManager->init();
-	m_editorManager->getInspector()->setMeshResources(*meshPrimitivesFile);
+	m_editorManager->getInspector()->setMeshResources(meshPrimitivesFile);
 	m_editorManager->getInspector()->setContextMenus(
 	m_editorManager->getContextMenus());
-
-	// ============================================================================
-	// Convert loaded glTF scene to ECS entities
-	// ============================================================================
-
-	// IMPORTANT: Store the LoadedGLTF to keep GPU resources alive
-	// Even though we're using ECS entities, they reference the mesh/material
-	// data
-	m_renderer.getLoadedScenes()["helmet"] = *helmetPathFile;
-
-	// Convert the loaded glTF to ECS entities
-	auto rootEntity =
-	m_entityFactory->createFromGltf(*helmetPathFile.value(), "LightTestScene");
-	AGNI_PRINT("Created ECS scene with root entity ID: {}\n", rootEntity.id());
 
 #ifdef AGNI_HAS_JOLT
 	// ========================================================================
