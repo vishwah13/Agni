@@ -30,6 +30,7 @@
 #include <thread>
 
 #include <Debug.hpp>
+#include <ThreadPool.hpp>
 
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
@@ -66,6 +67,9 @@ void AgniEngine::init()
 	// only one engine initialization is allowed with the application.
 	assert(loadedEngine == nullptr);
 	loadedEngine = this;
+
+	// Initialize thread pool for async operations (asset loading, etc.)
+	agni::ThreadPool::Initialize();
 
 	initRenderDocAPI();
 
@@ -152,6 +156,9 @@ void AgniEngine::cleanup()
 {
 	if (m_isInitialized)
 	{
+		// Shutdown thread pool first (waits for any pending tasks)
+		agni::ThreadPool::Shutdown();
+
 		vkDeviceWaitIdle(m_device);
 
 		for (int i = 0; i < FRAME_OVERLAP; i++)

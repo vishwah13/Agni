@@ -38,6 +38,8 @@ add_executable (engine
   Skybox.cpp
   Debug.hpp
   Debug.cpp
+  ThreadPool.hpp
+  ThreadPool.cpp
   VulkanTools.hpp
   VulkanTools.cpp
   Scene.hpp
