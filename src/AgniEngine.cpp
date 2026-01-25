@@ -882,7 +882,28 @@ void AgniEngine::initDefaultData()
 	"../../assets/free_1975_porsche_911_930_turbo.glb"};
 	// auto        structureFile = m_assetLoader.loadGltf(this, structurePath);
 	auto meshPrimitivesFile = m_assetLoader.loadGltf(this, meshPrimitivesPath);
-	auto helmetPathFile     = m_assetLoader.loadGltf(this, helmetPath);
+
+	// TEST: Load helmet using async loading
+	AGNI_PRINT("Starting async load of: {}\n", helmetPath);
+	auto helmetHandle = m_assetLoader.loadGltfAsync(this, helmetPath,
+		[](float progress, const std::string& stage) {
+			AGNI_PRINT("[Async Progress] {:.0f}% - {}\n", progress * 100.0f, stage);
+		});
+
+	// Wait for async load to complete (blocking for this test)
+	while (!helmetHandle->gpuUploadComplete) {
+		m_assetLoader.processCompletedLoads();
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+
+	// Get the result from the async handle
+	std::optional<std::shared_ptr<LoadedGLTF>> helmetPathFile;
+	if (helmetHandle->result) {
+		helmetPathFile = helmetHandle->result;
+		AGNI_PRINT("Async load completed successfully!\n");
+	} else {
+		AGNI_PRINT("Async load failed!\n");
+	}
 
 	assert(meshPrimitivesFile.has_value());
 	assert(helmetPathFile.has_value());
