@@ -845,26 +845,31 @@ bool SceneSerializer::deserializeScene(const std::string& json, const SceneLoadO
 	}
 
 	// Second pass: Rebuild hierarchy using ID mapping
-	world.get().each([&](flecs::entity e, agni::ecs::SceneNodeComponent& snc) {
-		if (snc.parent != NULL_ENTITY)
-		{
-			auto it = idMapping.find(snc.parent);
-			if (it != idMapping.end())
-			{
-				// Update parent to new ID
-				EntityID newParentId = it->second;
-				snc.parent           = newParentId;
+	world.get().defer_begin();
 
-				// Use World::setParent to properly set up hierarchy
-				world.setParent(e.id(), newParentId);
-			}
-			else
-			{
-				snc.parent = NULL_ENTITY;
-			}
-		}
-		snc.dirtyWorld = true;
-	});
+	world.get().query<agni::ecs::SceneNodeComponent>()
+	    .each([&](flecs::entity e, agni::ecs::SceneNodeComponent& snc) {
+		    if (snc.parent != NULL_ENTITY)
+		    {
+			    auto it = idMapping.find(snc.parent);
+			    if (it != idMapping.end())
+			    {
+				    // Update parent to new ID
+				    EntityID newParentId = it->second;
+				    snc.parent           = newParentId;
+
+				    // Use World::setParent to properly set up hierarchy
+				    world.setParent(e.id(), newParentId);
+			    }
+			    else
+			    {
+				    snc.parent = NULL_ENTITY;
+			    }
+		    }
+		    snc.dirtyWorld = true;
+	    });
+
+	world.get().defer_end();
 
 	if (options.progressCallback)
 	{
@@ -959,15 +964,22 @@ void SceneSerializer::reloadAssets(const std::vector<std::string>& assetPaths, c
 		auto fullPath = resolveAssetPath(path);
 		if (!std::filesystem::exists(fullPath))
 		{
-			AGNI_PRINT("[SceneSerializer] Asset not found: {}\n", fullPath.string());
+			AGNI_PRINT("[SceneSerializer] WARNING: Asset not found: {}\n", fullPath.string());
+			AGNI_PRINT("[SceneSerializer]          Searched path: {}\n", path);
 			continue;
 		}
 
 		// Load synchronously for now (could use async later)
+		AGNI_PRINT("[SceneSerializer] Loading asset: {}\n", fullPath.string());
 		auto result = m_engine.m_assetLoader.loadGltf(&m_engine, fullPath);
 		if (result.has_value())
 		{
 			loadedScenes[path] = result.value();
+			AGNI_PRINT("[SceneSerializer] Asset loaded successfully\n");
+		}
+		else
+		{
+			AGNI_PRINT("[SceneSerializer] WARNING: Failed to load asset: {}\n", fullPath.string());
 		}
 	}
 }
