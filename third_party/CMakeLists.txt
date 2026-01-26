@@ -99,6 +99,10 @@ target_include_directories(vma INTERFACE vma/include)
 
 target_include_directories(glm INTERFACE glm)
 
+# dmon is a header-only file watcher library
+add_library(dmon INTERFACE)
+target_include_directories(dmon INTERFACE dmon)
+
 #add_library(sdl2 INTERFACE)
 
 #target_include_directories(sdl2 INTERFACE $ENV{VULKAN_SDK}/Include/SDL2 )

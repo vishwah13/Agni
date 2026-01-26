@@ -129,11 +129,12 @@ target_include_directories(engine SYSTEM PRIVATE
     ${PROJECT_SOURCE_DIR}/third_party/volk
     ${PROJECT_SOURCE_DIR}/third_party/Vulkan-Headers/include
     ${PROJECT_SOURCE_DIR}/third_party/jolt
+    ${PROJECT_SOURCE_DIR}/third_party/dmon
 )
 
 add_dependencies(engine Shaders)
 
-target_link_libraries(engine PUBLIC vma glm volk::volk Vulkan::Headers fmt::fmt stb_image SDL3::SDL3 vkbootstrap imgui imguizmo fastgltf::fastgltf renderdoc mikktspace flecs::flecs_static)
+target_link_libraries(engine PUBLIC vma glm volk::volk Vulkan::Headers fmt::fmt stb_image SDL3::SDL3 vkbootstrap imgui imguizmo fastgltf::fastgltf renderdoc mikktspace flecs::flecs_static dmon)
 
 # Link Jolt if enabled
 if(AGNI_ENABLE_JOLT)

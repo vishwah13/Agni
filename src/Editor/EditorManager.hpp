@@ -121,6 +121,10 @@ public:
 		return m_loadedAssets;
 	}
 
+	// Asset loading helpers
+	bool loadAssetSync(const std::filesystem::path& path);
+	bool isAssetLoaded(const std::string& path) const;
+
 private:
 	AgniEngine& m_engine;
 

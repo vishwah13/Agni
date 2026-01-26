@@ -18,6 +18,9 @@
 #include <ImGuizmo.h>
 #include <fmt/core.h>
 
+#include <filesystem>
+#include <algorithm>
+
 #include <glm/gtc/type_ptr.hpp>
 
 namespace agni
@@ -200,6 +203,49 @@ void ECSInspector::renderEntityList()
 	// Drag-drop target for spawning assets from Asset Browser
 	if (ImGui::BeginDragDropTarget())
 	{
+		// Handle new ASSET_FILE payload (full path from file browser)
+		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_FILE"))
+		{
+			const char* filePath = (const char*)payload->Data;
+			std::filesystem::path path(filePath);
+
+			// Check file extension
+			std::string ext = path.extension().string();
+			std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+			if (ext == ".glb" || ext == ".gltf")
+			{
+				// Load if not already loaded
+				std::string key = path.string();
+				if (!m_editorManager.isAssetLoaded(key))
+				{
+					m_editorManager.loadAssetSync(path);
+				}
+
+				// Spawn the asset
+				const auto& loadedAssets = m_editorManager.getLoadedAssets();
+				auto it = loadedAssets.find(key);
+
+				if (it != loadedAssets.end())
+				{
+					glm::vec3 spawnPos = glm::vec3(0.0f, 2.0f, 0.0f);
+					m_entityFactory.createEntitiesFromGLTF(
+					    it->second,
+					    glm::translate(glm::mat4(1.0f), spawnPos)
+					);
+
+					AGNI_PRINT("[ECSInspector] Spawned asset: {}\n", path.filename().string());
+				}
+			}
+
+			// Clear drag state
+			if (auto* assetBrowser = m_editorManager.getAssetBrowser())
+			{
+				assetBrowser->clearDrag();
+			}
+		}
+
+		// Keep old ASSET_GLTF handler for backward compatibility
 		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_GLTF"))
 		{
 			const char* assetName = (const char*)payload->Data;
@@ -210,10 +256,6 @@ void ECSInspector::renderEntityList()
 
 			if (it != loadedAssets.end())
 			{
-				// Calculate spawn position (in front of camera)
-				// We need access to the camera - get it through AgniEngine
-				// The inspector already has access to EntityFactory, which was created by AgniEngine
-				// For now, spawn at origin - we'll improve this
 				glm::vec3 spawnPos = glm::vec3(0.0f, 2.0f, 0.0f);
 
 				// Spawn the asset as ECS entities

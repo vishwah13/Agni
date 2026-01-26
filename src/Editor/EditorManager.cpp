@@ -10,6 +10,7 @@
 #include <Loader.hpp>
 
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <SDL3/SDL_dialog.h>
 #include <algorithm>
 #include <cctype>
@@ -24,7 +25,14 @@ EditorManager::EditorManager(AgniEngine& engine)
 {
 }
 
-EditorManager::~EditorManager() = default;
+EditorManager::~EditorManager()
+{
+	// Cleanup asset browser file watcher
+	if (m_assetBrowser)
+	{
+		m_assetBrowser->cleanup();
+	}
+}
 
 void EditorManager::init()
 {
@@ -114,6 +122,12 @@ void EditorManager::update()
 	if (m_inputManager)
 	{
 		m_inputManager->update();
+	}
+
+	// Update asset browser (file watcher refresh)
+	if (m_assetBrowser)
+	{
+		m_assetBrowser->update();
 	}
 
 	// Process completed async loads (GPU finalization on main thread)
@@ -471,16 +485,83 @@ void EditorManager::onFileDrop(const std::filesystem::path& path)
 
 	if (ext == ".gltf" || ext == ".glb")
 	{
-		AGNI_PRINT("[Editor] Starting async load: {}\n", path.string());
+		// Check if drop is over Asset Browser window
+		bool dropOnAssetBrowser = false;
 
-		// Start async load
-		auto handle = m_engine.m_assetLoader.loadGltfAsync(&m_engine, path);
-		m_activeLoads.push_back(handle);
+		if (m_assetBrowser && m_assetBrowser->isVisible())
+		{
+			// Check if mouse is over Asset Browser window
+			ImGuiWindow* window = ImGui::FindWindowByName("Asset Browser");
+			if (window)
+			{
+				ImVec2 mousePos = ImGui::GetMousePos();
+				ImRect windowRect = window->Rect();
+				dropOnAssetBrowser = windowRect.Contains(mousePos);
+				AGNI_PRINT("[Editor] Window found: {}\n", window != nullptr);
+				AGNI_PRINT("[Editor] Mouse pos: ({}, {})\n", mousePos.x, mousePos.y);
+				AGNI_PRINT("[Editor] Window rect: ({}, {}) to ({}, {})\n",
+				           windowRect.Min.x, windowRect.Min.y, windowRect.Max.x, windowRect.Max.y);
+				AGNI_PRINT("[Editor] Drop over Asset Browser: {}\n", dropOnAssetBrowser);
+			}
+			else
+			{
+				AGNI_PRINT("[Editor] Asset Browser window not found by name\n");
+			}
+		}
+		else
+		{
+			AGNI_PRINT("[Editor] Asset Browser not visible or not initialized\n");
+		}
+
+		if (dropOnAssetBrowser)
+		{
+			// Import: copy file to assets folder
+			AGNI_PRINT("[Editor] Importing file to assets folder: {}\n", path.string());
+			m_assetBrowser->handleExternalDrop(path);
+		}
+		else
+		{
+			// Load directly and add to scene
+			AGNI_PRINT("[Editor] Starting async load: {}\n", path.string());
+			auto handle = m_engine.m_assetLoader.loadGltfAsync(&m_engine, path);
+			m_activeLoads.push_back(handle);
+		}
 	}
 	else
 	{
 		AGNI_PRINT("[Editor] Unsupported file type: {}\n", ext);
 	}
+}
+
+bool EditorManager::loadAssetSync(const std::filesystem::path& path)
+{
+	std::string key = path.string();
+
+	// Check if already loaded
+	if (m_loadedAssets.find(key) != m_loadedAssets.end())
+	{
+		return true;
+	}
+
+	// Load synchronously
+	AGNI_PRINT("[EditorManager] Loading asset synchronously: {}\n", path.string());
+	auto result = m_engine.m_assetLoader.loadGltf(&m_engine, path);
+
+	if (result.has_value())
+	{
+		m_loadedAssets[key] = result.value();
+		m_engine.getRenderer().getLoadedScenes()[key] = result.value();
+		AGNI_PRINT("[EditorManager] Asset loaded: {}\n", path.string());
+		return true;
+	}
+
+	AGNI_PRINT("[EditorManager] Failed to load asset: {}\n", path.string());
+	return false;
+}
+
+bool EditorManager::isAssetLoaded(const std::string& path) const
+{
+	return m_loadedAssets.find(path) != m_loadedAssets.end();
 }
 
 // ============================================================================
