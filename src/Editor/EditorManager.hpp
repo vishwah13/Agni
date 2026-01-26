@@ -11,6 +11,7 @@
 class AgniEngine;
 struct AsyncLoadHandle;
 struct LoadedGLTF;
+struct ImVec2;
 
 namespace agni::scene
 {
@@ -150,7 +151,7 @@ private:
 	std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>> m_loadedAssets;
 
 	// Handle file drop event
-	void onFileDrop(const std::filesystem::path& path);
+	void onFileDrop(const std::filesystem::path& path, const ImVec2& dropPos);
 
 	// Setup keyboard shortcuts
 	void setupShortcuts();

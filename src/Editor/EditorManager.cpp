@@ -113,7 +113,10 @@ void EditorManager::processInput(const SDL_Event& e)
 	if (e.type == SDL_EVENT_DROP_FILE)
 	{
 		std::filesystem::path path(e.drop.data);
-		onFileDrop(path);
+
+		// Pass drop position to handler
+		ImVec2 dropPos(e.drop.x, e.drop.y);
+		onFileDrop(path, dropPos);
 	}
 }
 
@@ -475,7 +478,7 @@ AssetBrowser* EditorManager::getAssetBrowser()
 // Asset Loading (Drag-and-Drop)
 // ============================================================================
 
-void EditorManager::onFileDrop(const std::filesystem::path& path)
+void EditorManager::onFileDrop(const std::filesystem::path& path, const ImVec2& dropPos)
 {
 	// Check if it's a supported file type
 	std::string ext = path.extension().string();
@@ -490,27 +493,17 @@ void EditorManager::onFileDrop(const std::filesystem::path& path)
 
 		if (m_assetBrowser && m_assetBrowser->isVisible())
 		{
-			// Check if mouse is over Asset Browser window
+			// Check if drop position is over Asset Browser window
 			ImGuiWindow* window = ImGui::FindWindowByName("Asset Browser");
 			if (window)
 			{
-				ImVec2 mousePos = ImGui::GetMousePos();
 				ImRect windowRect = window->Rect();
-				dropOnAssetBrowser = windowRect.Contains(mousePos);
-				AGNI_PRINT("[Editor] Window found: {}\n", window != nullptr);
-				AGNI_PRINT("[Editor] Mouse pos: ({}, {})\n", mousePos.x, mousePos.y);
+				dropOnAssetBrowser = windowRect.Contains(dropPos);
+				AGNI_PRINT("[Editor] Drop pos: ({}, {})\n", dropPos.x, dropPos.y);
 				AGNI_PRINT("[Editor] Window rect: ({}, {}) to ({}, {})\n",
 				           windowRect.Min.x, windowRect.Min.y, windowRect.Max.x, windowRect.Max.y);
 				AGNI_PRINT("[Editor] Drop over Asset Browser: {}\n", dropOnAssetBrowser);
 			}
-			else
-			{
-				AGNI_PRINT("[Editor] Asset Browser window not found by name\n");
-			}
-		}
-		else
-		{
-			AGNI_PRINT("[Editor] Asset Browser not visible or not initialized\n");
 		}
 
 		if (dropOnAssetBrowser)
