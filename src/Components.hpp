@@ -167,3 +167,14 @@ struct ColliderComponent
 
 // Tag for entities participating in physics simulation
 struct PhysicsEnabledTag {};
+
+// ============================================================================
+// Asset Reference Component (for scene serialization)
+// ============================================================================
+
+struct AssetReferenceComponent
+{
+	std::string assetPath;  // Relative path to asset file (e.g., "assets/models/car.glb")
+	std::string meshName;   // Mesh name within asset (e.g., "Wheel_FL")
+	std::string assetType;  // "gltf", "primitive", or "procedural"
+};

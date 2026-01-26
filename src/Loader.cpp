@@ -1031,6 +1031,10 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 			node->refreshTransform(glm::mat4 {1.f});
 		}
 	}
+
+	// Store source path for scene serialization
+	scene->sourcePath = filePath;
+
 	return scene;
 }
 
@@ -1908,6 +1912,9 @@ void AssetLoader::finalizePendingLoad(PendingGPUUpload& pending)
 
 	pending.handle->result           = scene;
 	pending.handle->gpuUploadComplete = true;
+
+	// Store source path for scene serialization
+	scene->sourcePath = pending.handle->filePath;
 
 	AGNI_PRINT("[Async] Loaded GLTF: {}\n", pending.handle->filePath.string());
 }

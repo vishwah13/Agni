@@ -52,6 +52,9 @@ struct LoadedGLTF
 	// order
 	std::vector<std::shared_ptr<Node>> m_topNodes;
 
+	// Source file path for serialization (set after loading)
+	std::filesystem::path sourcePath;
+
 	AgniEngine* m_creator;
 
 	~LoadedGLTF()

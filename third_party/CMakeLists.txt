@@ -58,7 +58,7 @@ set(SDL_HAPTIC OFF CACHE BOOL "Disable SDL Haptic" FORCE)
 set(SDL_HIDAPI OFF CACHE BOOL "Disable SDL HIDAPI" FORCE)
 set(SDL_POWER OFF CACHE BOOL "Disable SDL Power" FORCE)
 set(SDL_SENSOR OFF CACHE BOOL "Disable SDL Sensor" FORCE)
-set(SDL_DIALOG OFF CACHE BOOL "Disable SDL Dialog" FORCE)
+set(SDL_DIALOG ON CACHE BOOL "Enable SDL Dialog" FORCE)
 set(SDL_TRAY OFF CACHE BOOL "Disable SDL Tray" FORCE)
 
 # Disable specific audio backends

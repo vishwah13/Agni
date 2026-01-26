@@ -70,6 +70,10 @@ add_executable (engine
   Editor/EditorWidgets.hpp
   Editor/EditorWidgets.cpp
   Editor/EditorIcons.hpp
+
+  # Scene Serialization
+  Scene/SceneSerializer.hpp
+  Scene/SceneSerializer.cpp
 )
 
 # Add Physics source files conditionally
@@ -116,6 +120,7 @@ target_include_directories(engine SYSTEM PRIVATE
     ${PROJECT_SOURCE_DIR}/third_party/stb_image
     ${PROJECT_SOURCE_DIR}/third_party/vkbootstrap/src
     ${PROJECT_SOURCE_DIR}/third_party/fastgltf/include
+    ${PROJECT_SOURCE_DIR}/third_party/fastgltf/deps/simdjson
     ${PROJECT_SOURCE_DIR}/third_party/fmt/include
     ${PROJECT_SOURCE_DIR}/third_party/renderdoc
     ${PROJECT_SOURCE_DIR}/third_party/mikktspace

@@ -29,6 +29,9 @@ void World::registerComponents()
 	m_world.component<RigidBodyComponent>();
 	m_world.component<ColliderComponent>();
 
+	// Scene serialization component
+	m_world.component<AssetReferenceComponent>();
+
 	// Register tag components
 	m_world.component<MeshEntityTag>();
 	m_world.component<LightEntityTag>();
@@ -270,12 +273,13 @@ void World::progress(float deltaTime)
 
 void World::clearAllEntities()
 {
-	// Delete all entities to release component data (especially RenderMeshComponent which holds shared_ptr to mesh assets)
+	// Delete all entities with TransformComponent (our scene entities)
 	m_world.defer_begin();
 
-	m_world.each([](flecs::entity e) {
-		e.destruct();
-	});
+	m_world.query<TransformComponent>()
+	    .each([](flecs::entity e, TransformComponent&) {
+		    e.destruct();
+	    });
 
 	m_world.defer_end();
 }

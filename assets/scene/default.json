@@ -1,0 +1,117 @@
+{
+  "version": "1.0",
+  "metadata": {
+    "savedAt": "2026-01-26T21:37:56",
+    "engine": "Agni"
+  },
+  "entities": [
+    {
+      "name": "Plane",
+      "id": 4294967881,
+      "components": {
+        "TransformComponent": {
+          "localTransform": [12.686098,0,0,0,0,1,0,0,0,0,9.637732,0,3.7971263,0.042169333,6.1523604,1]
+        },
+        "SceneNodeComponent": {
+          "parent": 0,
+          "children": [],
+          "depth": 0
+        },
+        "AssetReferenceComponent": {
+          "assetPath": "",
+          "meshName": "Plane",
+          "assetType": "primitive"
+        },
+        "RenderMeshComponent": {
+          "visible": true
+        },
+        "RenderableTag": {
+          "visible": true
+        },
+        "RigidBodyComponent": {
+          "type": "Static",
+          "mass": 1,
+          "friction": 0.5,
+          "restitution": 0,
+          "useGravity": true
+        },
+        "ColliderComponent": {
+          "type": "Box",
+          "boxHalfExtents": [1,0.1,1],
+          "sphereRadius": 0.5,
+          "capsuleRadius": 0.5,
+          "capsuleHalfHeight": 1,
+          "center": [0,0,0],
+          "isTrigger": false
+        }
+      },
+      "tags": ["MeshEntityTag"]
+    },
+    {
+      "name": "Cube",
+      "id": 4294967880,
+      "components": {
+        "TransformComponent": {
+          "localTransform": [0.9996707,-1.4610856e-07,0.02566236,0,9.331533e-08,1,2.0584218e-06,0,-0.02566236,-2.0553491e-06,0.9996707,0,4.077429,0.6221696,6.8154936,1]
+        },
+        "SceneNodeComponent": {
+          "parent": 0,
+          "children": [],
+          "depth": 0
+        },
+        "AssetReferenceComponent": {
+          "assetPath": "",
+          "meshName": "Cube",
+          "assetType": "primitive"
+        },
+        "RenderMeshComponent": {
+          "visible": true
+        },
+        "RenderableTag": {
+          "visible": true
+        },
+        "RigidBodyComponent": {
+          "type": "Dynamic",
+          "mass": 1,
+          "friction": 0.5,
+          "restitution": 0,
+          "useGravity": true
+        },
+        "ColliderComponent": {
+          "type": "Box",
+          "boxHalfExtents": [0.5,0.5,0.5],
+          "sphereRadius": 0.5,
+          "capsuleRadius": 0.5,
+          "capsuleHalfHeight": 1,
+          "center": [0,0,0],
+          "isTrigger": false
+        }
+      },
+      "tags": ["MeshEntityTag"]
+    },
+    {
+      "name": "Directional Light",
+      "id": 4294967879,
+      "components": {
+        "TransformComponent": {
+          "localTransform": [1,0,0,0,0,0.26595414,-0.9639857,0,0,0.9639857,0.26595414,0,4.0890417,2.1045957,6.7717013,1]
+        },
+        "SceneNodeComponent": {
+          "parent": 0,
+          "children": [],
+          "depth": 0
+        },
+        "LightComponent": {
+          "type": "Directional",
+          "color": [1,1,1],
+          "intensity": 1,
+          "radius": 10,
+          "direction": [0,-1,0],
+          "innerConeAngle": 12.5,
+          "outerConeAngle": 17.5
+        }
+      },
+      "tags": ["LightEntityTag"]
+    }
+  ]
+}

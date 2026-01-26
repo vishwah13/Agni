@@ -53,6 +53,9 @@ flecs::entity EntityFactory::createLightEntity(const LightComponent& light,
 
 flecs::entity EntityFactory::createFromGltf(LoadedGLTF& gltf, const char* rootName)
 {
+	// Store source path for AssetReferenceComponent
+	m_currentAssetPath = gltf.sourcePath.string();
+
 	// Create a root entity to hold all the converted nodes
 	flecs::entity rootEntity = m_world.get().entity(rootName);
 	rootEntity.set<TransformComponent>({});
@@ -64,6 +67,9 @@ flecs::entity EntityFactory::createFromGltf(LoadedGLTF& gltf, const char* rootNa
 		convertNodeRecursive(topNode, rootEntity);
 	}
 
+	// Clear source path after conversion
+	m_currentAssetPath.clear();
+
 	return rootEntity;
 }
 
@@ -72,6 +78,9 @@ flecs::entity EntityFactory::createEntitiesFromGLTF(std::shared_ptr<LoadedGLTF> 
 {
 	if (!gltf)
 		return flecs::entity::null();
+
+	// Store source path for AssetReferenceComponent
+	m_currentAssetPath = gltf->sourcePath.string();
 
 	// Create a root entity to hold all the converted nodes
 	flecs::entity rootEntity = m_world.get().entity();
@@ -87,6 +96,9 @@ flecs::entity EntityFactory::createEntitiesFromGLTF(std::shared_ptr<LoadedGLTF> 
 	{
 		convertNodeRecursive(topNode, rootEntity);
 	}
+
+	// Clear source path after conversion
+	m_currentAssetPath.clear();
 
 	return rootEntity;
 }
@@ -112,6 +124,16 @@ flecs::entity EntityFactory::convertNodeRecursive(std::shared_ptr<Node> node, fl
 		RenderMeshComponent& renderMesh = entity.ensure<RenderMeshComponent>();
 		renderMesh.meshAsset            = meshNode->getMesh();
 		renderMesh.visible              = true;
+
+		// Set asset reference for serialization
+		if (meshNode->getMesh())
+		{
+			AssetReferenceComponent arc {};
+			arc.assetPath = m_currentAssetPath;
+			arc.meshName  = meshNode->getMesh()->m_name;
+			arc.assetType = "gltf";
+			entity.set<AssetReferenceComponent>(arc);
+		}
 	}
 	// Check if this is a LightNode
 	else if (LightNode* lightNode = dynamic_cast<LightNode*>(node.get()))

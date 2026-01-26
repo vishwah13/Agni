@@ -50,6 +50,9 @@ public:
 private:
 	World& m_world;
 
+	// Current asset source path (set during glTF conversion for AssetReferenceComponent)
+	std::string m_currentAssetPath;
+
 	// Recursively convert a Node and its children to ECS entities
 	flecs::entity convertNodeRecursive(std::shared_ptr<Node> node, flecs::entity parent);
 };

@@ -29,10 +29,22 @@ void EditorUI::renderMainMenuBar()
 	{
 		if (ImGui::BeginMenu("File"))
 		{
-			if (ImGui::MenuItem("New Scene", "Ctrl+N")) { /* TODO */ }
-			if (ImGui::MenuItem("Open Scene...", "Ctrl+O")) { /* TODO */ }
-			if (ImGui::MenuItem("Save Scene", "Ctrl+S")) { /* TODO */ }
-			if (ImGui::MenuItem("Save Scene As...", "Ctrl+Shift+S")) { /* TODO */ }
+			if (ImGui::MenuItem("New Scene", "Ctrl+N"))
+			{
+				m_editorManager.newScene();
+			}
+			if (ImGui::MenuItem("Open Scene...", "Ctrl+O"))
+			{
+				m_editorManager.openScene();
+			}
+			if (ImGui::MenuItem("Save Scene", "Ctrl+S"))
+			{
+				m_editorManager.saveScene();
+			}
+			if (ImGui::MenuItem("Save Scene As...", "Ctrl+Shift+S"))
+			{
+				m_editorManager.saveSceneAs();
+			}
 			ImGui::Separator();
 			if (ImGui::MenuItem("Exit", "Alt+F4"))
 			{

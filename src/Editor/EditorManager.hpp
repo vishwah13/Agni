@@ -12,6 +12,11 @@ class AgniEngine;
 struct AsyncLoadHandle;
 struct LoadedGLTF;
 
+namespace agni::scene
+{
+class SceneSerializer;
+}
+
 namespace agni
 {
 namespace editor
@@ -86,6 +91,19 @@ public:
 	ContextMenus* getContextMenus();
 	EditorUI* getEditorUI();
 	AssetBrowser* getAssetBrowser();
+	agni::scene::SceneSerializer* getSceneSerializer();
+
+	// ========================================================================
+	// Scene Operations
+	// ========================================================================
+
+	void newScene();
+	void openScene();
+	void saveScene();
+	void saveSceneAs();
+
+	// Get current scene path (empty if unsaved)
+	const std::filesystem::path& getCurrentScenePath() const;
 
 	// ========================================================================
 	// Asset Loading
@@ -107,11 +125,12 @@ private:
 	AgniEngine& m_engine;
 
 	// Editor subsystems
-	std::unique_ptr<ECSInspector>  m_inspector;
-	std::unique_ptr<EditorUI>      m_editorUI;
-	std::unique_ptr<InputManager>  m_inputManager;
-	std::unique_ptr<ContextMenus>  m_contextMenus;
-	std::unique_ptr<AssetBrowser>  m_assetBrowser;
+	std::unique_ptr<ECSInspector>                m_inspector;
+	std::unique_ptr<EditorUI>                    m_editorUI;
+	std::unique_ptr<InputManager>                m_inputManager;
+	std::unique_ptr<ContextMenus>                m_contextMenus;
+	std::unique_ptr<AssetBrowser>                m_assetBrowser;
+	std::unique_ptr<agni::scene::SceneSerializer> m_sceneSerializer;
 
 	// Editor state
 	EntityID m_selectedEntity = NULL_ENTITY;

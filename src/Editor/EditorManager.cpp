@@ -4,11 +4,13 @@
 #include <Editor/InputManager.hpp>
 #include <Editor/ContextMenus.hpp>
 #include <Editor/AssetBrowser.hpp>
+#include <Scene/SceneSerializer.hpp>
 #include <AgniEngine.hpp>
 #include <Debug.hpp>
 #include <Loader.hpp>
 
 #include <imgui.h>
+#include <SDL3/SDL_dialog.h>
 #include <algorithm>
 #include <cctype>
 
@@ -50,8 +52,22 @@ void EditorManager::init()
 	// Create asset browser
 	m_assetBrowser = std::make_unique<AssetBrowser>(*this);
 
+	// Create scene serializer
+	m_sceneSerializer = std::make_unique<agni::scene::SceneSerializer>(m_engine);
+
 	// Setup keyboard shortcuts
 	setupShortcuts();
+
+	// Load default scene if it exists
+	std::filesystem::path defaultScene = "../../assets/scene/default.json";
+	if (std::filesystem::exists(defaultScene))
+	{
+		AGNI_PRINT("[EditorManager] Loading default scene...\n");
+		agni::scene::SceneLoadOptions options;
+		options.clearExisting = true;
+		options.reloadAssets  = true;
+		m_sceneSerializer->loadScene(defaultScene, options);
+	}
 
 	AGNI_PRINT("[EditorManager] Initialized\n");
 }
@@ -152,10 +168,34 @@ void EditorManager::setupShortcuts()
 		setSelectedEntity(NULL_ENTITY);
 	});
 
-	// Ctrl+D - duplicate entity (future)
+	// Ctrl+D - duplicate entity
 	m_inputManager->registerShortcut({SDLK_D, true, false, false}, [this]()
 	{
 		duplicateSelectedEntity();
+	});
+
+	// Ctrl+N - new scene
+	m_inputManager->registerShortcut({SDLK_N, true, false, false}, [this]()
+	{
+		newScene();
+	});
+
+	// Ctrl+O - open scene
+	m_inputManager->registerShortcut({SDLK_O, true, false, false}, [this]()
+	{
+		openScene();
+	});
+
+	// Ctrl+S - save scene
+	m_inputManager->registerShortcut({SDLK_S, true, false, false}, [this]()
+	{
+		saveScene();
+	});
+
+	// Ctrl+Shift+S - save scene as
+	m_inputManager->registerShortcut({SDLK_S, true, true, false}, [this]()
+	{
+		saveSceneAs();
 	});
 
 	AGNI_PRINT("[EditorManager] Keyboard shortcuts registered\n");
@@ -180,6 +220,11 @@ void EditorManager::createEntity(EntityType type, const glm::vec3& position)
 		auto entity = m_engine.getEntityFactory().createMeshEntity(
 		    m_engine.getCubeMesh(), transform, "Cube");
 
+		m_engine.getECSWorld().addComponent(entity.id(), AssetReferenceComponent{
+			.assetPath = "",
+			.meshName = "Cube",
+			.assetType = "primitive"
+		});
 		m_engine.getECSWorld().addComponent(entity.id(), RigidBodyComponent{
 			.type = RigidBodyType::Dynamic,
 			.mass = 1.0f
@@ -196,6 +241,11 @@ void EditorManager::createEntity(EntityType type, const glm::vec3& position)
 		auto entity = m_engine.getEntityFactory().createMeshEntity(
 		    m_engine.getSphereMesh(), transform, "Sphere");
 
+		m_engine.getECSWorld().addComponent(entity.id(), AssetReferenceComponent{
+			.assetPath = "",
+			.meshName = "Sphere",
+			.assetType = "primitive"
+		});
 		m_engine.getECSWorld().addComponent(entity.id(), RigidBodyComponent{
 			.type = RigidBodyType::Dynamic,
 			.mass = 1.0f
@@ -212,6 +262,11 @@ void EditorManager::createEntity(EntityType type, const glm::vec3& position)
 		auto entity = m_engine.getEntityFactory().createMeshEntity(
 		    m_engine.getPlaneMesh(), transform, "Plane");
 
+		m_engine.getECSWorld().addComponent(entity.id(), AssetReferenceComponent{
+			.assetPath = "",
+			.meshName = "Plane",
+			.assetType = "primitive"
+		});
 		m_engine.getECSWorld().addComponent(entity.id(), RigidBodyComponent{
 			.type = RigidBodyType::Static
 		});
@@ -227,6 +282,11 @@ void EditorManager::createEntity(EntityType type, const glm::vec3& position)
 		auto entity = m_engine.getEntityFactory().createMeshEntity(
 		    m_engine.getSuzanneMesh(), transform, "Suzanne");
 
+		m_engine.getECSWorld().addComponent(entity.id(), AssetReferenceComponent{
+			.assetPath = "",
+			.meshName = "Suzanne",
+			.assetType = "primitive"
+		});
 		m_engine.getECSWorld().addComponent(entity.id(), RigidBodyComponent{
 			.type = RigidBodyType::Dynamic,
 			.mass = 1.0f
@@ -243,6 +303,11 @@ void EditorManager::createEntity(EntityType type, const glm::vec3& position)
 		auto entity = m_engine.getEntityFactory().createMeshEntity(
 		    m_engine.getCylinderMesh(), transform, "Cylinder");
 
+		m_engine.getECSWorld().addComponent(entity.id(), AssetReferenceComponent{
+			.assetPath = "",
+			.meshName = "Cylinder",
+			.assetType = "primitive"
+		});
 		m_engine.getECSWorld().addComponent(entity.id(), RigidBodyComponent{
 			.type = RigidBodyType::Dynamic,
 			.mass = 1.0f
@@ -260,6 +325,11 @@ void EditorManager::createEntity(EntityType type, const glm::vec3& position)
 		auto entity = m_engine.getEntityFactory().createMeshEntity(
 		    m_engine.getTorusMesh(), transform, "Torus");
 
+		m_engine.getECSWorld().addComponent(entity.id(), AssetReferenceComponent{
+			.assetPath = "",
+			.meshName = "Torus",
+			.assetType = "primitive"
+		});
 		m_engine.getECSWorld().addComponent(entity.id(), RigidBodyComponent{
 			.type = RigidBodyType::Dynamic,
 			.mass = 1.0f
@@ -276,6 +346,11 @@ void EditorManager::createEntity(EntityType type, const glm::vec3& position)
 		auto entity = m_engine.getEntityFactory().createMeshEntity(
 		    m_engine.getConeMesh(), transform, "Cone");
 
+		m_engine.getECSWorld().addComponent(entity.id(), AssetReferenceComponent{
+			.assetPath = "",
+			.meshName = "Cone",
+			.assetType = "primitive"
+		});
 		m_engine.getECSWorld().addComponent(entity.id(), RigidBodyComponent{
 			.type = RigidBodyType::Dynamic,
 			.mass = 1.0f
@@ -405,6 +480,180 @@ void EditorManager::onFileDrop(const std::filesystem::path& path)
 	else
 	{
 		AGNI_PRINT("[Editor] Unsupported file type: {}\n", ext);
+	}
+}
+
+// ============================================================================
+// Scene Operations
+// ============================================================================
+
+agni::scene::SceneSerializer* EditorManager::getSceneSerializer()
+{
+	return m_sceneSerializer.get();
+}
+
+const std::filesystem::path& EditorManager::getCurrentScenePath() const
+{
+	static std::filesystem::path empty;
+	return m_sceneSerializer ? m_sceneSerializer->getCurrentScenePath() : empty;
+}
+
+void EditorManager::newScene()
+{
+	AGNI_PRINT("[Editor] newScene() called\n");
+
+	// Clear all entities
+	m_engine.getECSWorld().clearAllEntities();
+	m_selectedEntity = NULL_ENTITY;
+
+	// Clear scene path
+	if (m_sceneSerializer)
+	{
+		m_sceneSerializer->setCurrentScenePath("");
+		m_sceneSerializer->clearDirty();
+	}
+
+	AGNI_PRINT("[Editor] New scene created - all entities cleared\n");
+}
+
+// File dialog callback for opening scenes
+static void openSceneCallback(void* userdata, const char* const* filelist, int filter)
+{
+	(void)filter;
+
+	if (!filelist)
+	{
+		AGNI_PRINT("[Editor] File dialog error: {}\n", SDL_GetError());
+		return;
+	}
+
+	if (!filelist[0])
+	{
+		AGNI_PRINT("[Editor] File dialog cancelled\n");
+		return;
+	}
+
+	auto* manager = static_cast<EditorManager*>(userdata);
+	std::filesystem::path path(filelist[0]);
+	if (manager->getSceneSerializer())
+	{
+		agni::scene::SceneLoadOptions options;
+		options.clearExisting = true;
+		options.reloadAssets  = true;
+
+		if (manager->getSceneSerializer()->loadScene(path, options))
+		{
+			AGNI_PRINT("[Editor] Scene loaded: {}\n", path.string());
+		}
+		else
+		{
+			AGNI_PRINT("[Editor] Failed to load scene: {}\n",
+			           manager->getSceneSerializer()->getLastError());
+		}
+	}
+}
+
+// File dialog callback for saving scenes
+static void saveSceneAsCallback(void* userdata, const char* const* filelist, int filter)
+{
+	(void)filter;
+
+	if (!filelist)
+	{
+		AGNI_PRINT("[Editor] File dialog error: {}\n", SDL_GetError());
+		return;
+	}
+
+	if (!filelist[0])
+	{
+		AGNI_PRINT("[Editor] File dialog cancelled\n");
+		return;
+	}
+
+	auto* manager = static_cast<EditorManager*>(userdata);
+	std::filesystem::path path(filelist[0]);
+
+	// Add .json extension if not present
+	if (path.extension() != ".json")
+	{
+		path += ".json";
+	}
+
+	if (manager->getSceneSerializer())
+	{
+		agni::scene::SceneSaveOptions options;
+		options.prettyPrint = true;
+
+		if (manager->getSceneSerializer()->saveScene(path, options))
+		{
+			AGNI_PRINT("[Editor] Scene saved: {}\n", path.string());
+		}
+		else
+		{
+			AGNI_PRINT("[Editor] Failed to save scene: {}\n",
+			           manager->getSceneSerializer()->getLastError());
+		}
+	}
+}
+
+void EditorManager::openScene()
+{
+	AGNI_PRINT("[Editor] Opening file dialog...\n");
+
+	SDL_DialogFileFilter filters[] = {
+	    {"Scene Files", "json"},
+	    {"All Files", "*"}
+	};
+
+	SDL_ShowOpenFileDialog(openSceneCallback, this, m_engine.m_window, filters, 2, nullptr, false);
+
+	const char* error = SDL_GetError();
+	if (error && error[0] != '\0')
+	{
+		AGNI_PRINT("[Editor] SDL Error: {}\n", error);
+	}
+}
+
+void EditorManager::saveScene()
+{
+	if (!m_sceneSerializer)
+		return;
+
+	if (m_sceneSerializer->getCurrentScenePath().empty())
+	{
+		// No current path, use Save As
+		saveSceneAs();
+		return;
+	}
+
+	agni::scene::SceneSaveOptions options;
+	options.prettyPrint = true;
+
+	if (m_sceneSerializer->saveScene(m_sceneSerializer->getCurrentScenePath(), options))
+	{
+		AGNI_PRINT("[Editor] Scene saved: {}\n", m_sceneSerializer->getCurrentScenePath().string());
+	}
+	else
+	{
+		AGNI_PRINT("[Editor] Failed to save scene: {}\n", m_sceneSerializer->getLastError());
+	}
+}
+
+void EditorManager::saveSceneAs()
+{
+	AGNI_PRINT("[Editor] Opening save dialog...\n");
+
+	SDL_DialogFileFilter filters[] = {
+	    {"Scene Files", "json"},
+	    {"All Files", "*"}
+	};
+
+	SDL_ShowSaveFileDialog(saveSceneAsCallback, this, m_engine.m_window, filters, 2, nullptr);
+
+	const char* error = SDL_GetError();
+	if (error && error[0] != '\0')
+	{
+		AGNI_PRINT("[Editor] SDL Error: {}\n", error);
 	}
 }
 
