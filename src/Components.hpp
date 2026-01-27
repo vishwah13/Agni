@@ -178,3 +178,14 @@ struct AssetReferenceComponent
 	std::string meshName;   // Mesh name within asset (e.g., "Wheel_FL")
 	std::string assetType;  // "gltf", "primitive", or "procedural"
 };
+
+// ============================================================================
+// Entity Info Component (Unity-style display name + metadata)
+// ============================================================================
+
+struct EntityInfoComponent
+{
+	std::string displayName;         // User-visible name (can duplicate, like Unity)
+	bool        isPrefabInstance {false};  // Whether instantiated from a prefab
+	// Note: GUID is entity.id() - no need to store separately
+};

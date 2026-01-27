@@ -167,6 +167,9 @@ flecs::entity EntityFactory::convertNodeRecursive(std::shared_ptr<Node> node, fl
 			arc.assetType = "gltf";
 			entity.set<AssetReferenceComponent>(arc);
 		}
+
+		// Set display name (base name without counter)
+		entity.set<EntityInfoComponent>({.displayName = baseName});
 	}
 	// Check if this is a LightNode
 	else if (LightNode* lightNode = dynamic_cast<LightNode*>(node.get()))
@@ -182,6 +185,9 @@ flecs::entity EntityFactory::convertNodeRecursive(std::shared_ptr<Node> node, fl
 		LightComponent& lc = entity.ensure<LightComponent>();
 		lc                 = lightNode->getLightComponent();
 
+		// Set display name for light
+		entity.set<EntityInfoComponent>({.displayName = lightTypeName});
+
 		// If light has attached mesh, create a child entity for it
 		if (lightNode->hasMesh())
 		{
@@ -191,6 +197,9 @@ flecs::entity EntityFactory::convertNodeRecursive(std::shared_ptr<Node> node, fl
 			RenderMeshComponent& renderMesh = meshChild.ensure<RenderMeshComponent>();
 			renderMesh.meshAsset            = lightNode->getMesh();
 			renderMesh.visible              = true;
+
+			// Set display name for light mesh
+			meshChild.set<EntityInfoComponent>({.displayName = "LightMesh"});
 
 			// Set as child of light entity
 			m_world.setParent(meshChild.id(), entity.id());
@@ -203,6 +212,7 @@ flecs::entity EntityFactory::convertNodeRecursive(std::shared_ptr<Node> node, fl
 		entity = m_world.get().entity(nodeName.c_str());
 		entity.set<TransformComponent>({});
 		entity.set<SceneNodeComponent>({});
+		entity.set<EntityInfoComponent>({.displayName = "Node"});
 	}
 
 	// Set transform from node

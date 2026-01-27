@@ -42,6 +42,9 @@ void World::registerComponents()
 	// Scene serialization component
 	m_world.component<AssetReferenceComponent>();
 
+	// Entity metadata (Unity-style display names)
+	m_world.component<EntityInfoComponent>();
+
 	// Register tag components
 	m_world.component<MeshEntityTag>();
 	m_world.component<LightEntityTag>();

@@ -197,6 +197,12 @@ flecs::entity EntityBuilder::build()
 		entity.set<AssetReferenceComponent>(m_assetRef.value());
 	}
 
+	// Set entity info (display name is base name without counter, like Unity)
+	entity.set<EntityInfoComponent>({
+	    .displayName = m_baseName,
+	    .isPrefabInstance = false  // Will be set by PrefabManager when implemented
+	});
+
 	// Set parent relationship
 	if (m_parent != NULL_ENTITY)
 	{

@@ -147,18 +147,25 @@ void ECSInspector::renderEntityList()
 
 	// Iterate through all entities with TransformComponent (filters out internal Flecs entities)
 	m_world.get().query<const TransformComponent>().each([this](flecs::entity e, const TransformComponent&) {
-		// Get entity name
-		const char* namePtr = e.name();
+		// Get display name from EntityInfoComponent (Unity-style, can duplicate)
 		std::string displayName;
-
-		if (namePtr && strlen(namePtr) > 0)
+		const EntityInfoComponent* info = e.try_get<EntityInfoComponent>();
+		if (info && !info->displayName.empty())
 		{
-			displayName = namePtr;
+			displayName = info->displayName;
 		}
 		else
 		{
-			// Generate name from ID if unnamed
-			displayName = "Entity_" + std::to_string(e.id());
+			// Fallback to Flecs name or generate from ID
+			const char* namePtr = e.name();
+			if (namePtr && strlen(namePtr) > 0)
+			{
+				displayName = namePtr;
+			}
+			else
+			{
+				displayName = "Entity_" + std::to_string(e.id());
+			}
 		}
 
 		// Apply filter
@@ -297,7 +304,12 @@ void ECSInspector::renderComponentInspector()
 		return;
 	}
 
-	widgets::InfoRow("Entity", "%s", entity.name().c_str());
+	// Show display name from EntityInfoComponent (Unity-style)
+	const EntityInfoComponent* info = entity.try_get<EntityInfoComponent>();
+	const char* displayName = (info && !info->displayName.empty())
+	    ? info->displayName.c_str()
+	    : entity.name().c_str();
+	widgets::InfoRow("Entity", "%s", displayName);
 	widgets::InfoRow("ID", "%llu", m_selectedEntity);
 	ImGui::Separator();
 
