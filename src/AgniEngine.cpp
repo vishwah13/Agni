@@ -17,6 +17,7 @@
 #include <Editor/InputManager.hpp>
 
 #include <Components.hpp>
+#include <ECS/EntityManager.hpp>
 #include <Initializers.hpp>
 #include <Types.hpp>
 #include <VulkanTools.hpp>
@@ -908,6 +909,18 @@ void AgniEngine::initDefaultData()
 	m_coneMesh      = meshPrimitivesFile->meshes["Cone"];
 
 	m_assetLoader.getMeshResources() = meshPrimitivesFile;
+
+	// Set up mesh provider for EntityManager (used by EntityBuilder presets)
+	m_ecsWorld->getEntityManager().setMeshProvider([this](const std::string& meshName) -> std::shared_ptr<MeshAsset> {
+		if (meshName == "Cube") return m_cubeMesh;
+		if (meshName == "Sphere") return m_sphereMesh;
+		if (meshName == "Plane") return m_planeMesh;
+		if (meshName == "Suzanne") return m_suzanneMesh;
+		if (meshName == "Cylinder") return m_cylinderMesh;
+		if (meshName == "Torus") return m_torusMesh;
+		if (meshName == "Cone") return m_coneMesh;
+		return nullptr;
+	});
 
 	// Initialize EditorManager (after assets are loaded)
 	m_editorManager->init();

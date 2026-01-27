@@ -1,4 +1,6 @@
 #include <ECS/EntityFactory.hpp>
+#include <ECS/EntityManager.hpp>
+#include <ECS/EntityBuilder.hpp>
 #include <AgniEngine.hpp>
 #include <Loader.hpp>
 
@@ -56,11 +58,10 @@ flecs::entity EntityFactory::createFromGltf(LoadedGLTF& gltf, const char* rootNa
 	// Store source path for AssetReferenceComponent
 	m_currentAssetPath = gltf.sourcePath.string();
 
-	// Create a root entity with unique name
-	static uint32_t gltfRootCounter = 0;
-	std::string uniqueName = (rootName && rootName[0] != '\0')
-	    ? std::string(rootName) + "_" + std::to_string(++gltfRootCounter)
-	    : "GltfRoot_" + std::to_string(++gltfRootCounter);
+	// Create a root entity with unique name using EntityManager
+	EntityManager& entityManager = m_world.getEntityManager();
+	std::string baseName = (rootName && rootName[0] != '\0') ? rootName : "GltfRoot";
+	std::string uniqueName = entityManager.getUniqueName(baseName);
 	flecs::entity rootEntity = m_world.get().entity(uniqueName.c_str());
 	rootEntity.set<TransformComponent>({});
 	rootEntity.set<SceneNodeComponent>({});
@@ -88,14 +89,14 @@ flecs::entity EntityFactory::createEntitiesFromGLTF(std::shared_ptr<LoadedGLTF> 
 
 	flecs::entity resultEntity;
 
-	// Generate unique root name from filename
-	static uint32_t rootCounter = 0;
-	std::string rootName = gltf->sourcePath.stem().string();
-	if (rootName.empty())
-		rootName = gltf->sourcePath.filename().string();
-	if (rootName.empty())
-		rootName = "Asset";
-	rootName += "_" + std::to_string(++rootCounter);
+	// Generate unique root name from filename using EntityManager
+	EntityManager& entityManager = m_world.getEntityManager();
+	std::string baseName = gltf->sourcePath.stem().string();
+	if (baseName.empty())
+		baseName = gltf->sourcePath.filename().string();
+	if (baseName.empty())
+		baseName = "Asset";
+	std::string rootName = entityManager.getUniqueName(baseName);
 
 	// If only one top-level node, use it directly as the root (no extra container)
 	// This handles both simple assets (single mesh) and assets with their own root node
@@ -144,16 +145,16 @@ flecs::entity EntityFactory::createFromNode(std::shared_ptr<Node> node, flecs::e
 
 flecs::entity EntityFactory::convertNodeRecursive(std::shared_ptr<Node> node, flecs::entity parent)
 {
+	EntityManager& entityManager = m_world.getEntityManager();
 	flecs::entity entity;
 
 	// Check if this is a MeshNode
 	MeshNode* meshNode = dynamic_cast<MeshNode*>(node.get());
 	if (meshNode)
 	{
-		// Generate unique entity name from mesh name
-		static uint32_t meshCounter = 0;
+		// Generate unique entity name from mesh name using EntityManager
 		std::string baseName = meshNode->getMesh() ? meshNode->getMesh()->m_name : "Mesh";
-		std::string uniqueName = baseName + "_" + std::to_string(++meshCounter);
+		std::string uniqueName = entityManager.getUniqueName(baseName);
 		entity = m_world.createMeshEntity(uniqueName.c_str());
 
 		// Set mesh
@@ -174,12 +175,11 @@ flecs::entity EntityFactory::convertNodeRecursive(std::shared_ptr<Node> node, fl
 	// Check if this is a LightNode
 	else if (LightNode* lightNode = dynamic_cast<LightNode*>(node.get()))
 	{
-		// Generate unique light name based on type
-		static uint32_t lightCounter = 0;
+		// Generate unique light name based on type using EntityManager
 		const char* lightTypeName = lightNode->getType() == LightType::Point          ? "PointLight"
 		                            : lightNode->getType() == LightType::Directional  ? "DirectionalLight"
 		                                                                              : "SpotLight";
-		std::string uniqueLightName = std::string(lightTypeName) + "_" + std::to_string(++lightCounter);
+		std::string uniqueLightName = entityManager.getUniqueName(lightTypeName);
 		entity = m_world.createLightEntity(uniqueLightName.c_str());
 
 		// Copy light component
@@ -189,8 +189,7 @@ flecs::entity EntityFactory::convertNodeRecursive(std::shared_ptr<Node> node, fl
 		// If light has attached mesh, create a child entity for it
 		if (lightNode->hasMesh())
 		{
-			static uint32_t lightMeshCounter = 0;
-			std::string lightMeshName = "LightMesh_" + std::to_string(++lightMeshCounter);
+			std::string lightMeshName = entityManager.getUniqueName("LightMesh");
 			flecs::entity meshChild = m_world.createMeshEntity(lightMeshName.c_str());
 
 			RenderMeshComponent& renderMesh = meshChild.ensure<RenderMeshComponent>();
@@ -204,8 +203,7 @@ flecs::entity EntityFactory::convertNodeRecursive(std::shared_ptr<Node> node, fl
 	// Empty node (just transform)
 	else
 	{
-		static uint32_t nodeCounter = 0;
-		std::string nodeName = "Node_" + std::to_string(++nodeCounter);
+		std::string nodeName = entityManager.getUniqueName("Node");
 		entity = m_world.get().entity(nodeName.c_str());
 		entity.set<TransformComponent>({});
 		entity.set<SceneNodeComponent>({});

@@ -4,6 +4,8 @@
 #include <Editor/InputManager.hpp>
 #include <Editor/ContextMenus.hpp>
 #include <Editor/AssetBrowser.hpp>
+#include <ECS/EntityManager.hpp>
+#include <ECS/EntityBuilder.hpp>
 #include <Scene/SceneSerializer.hpp>
 #include <AgniEngine.hpp>
 #include <Debug.hpp>
@@ -224,196 +226,28 @@ void EditorManager::setupShortcuts()
 
 void EditorManager::createEntity(EntityType type, const glm::vec3& position)
 {
-	glm::mat4 transform = glm::translate(glm::mat4(1.0f), position);
+	// Map EntityType to preset name
+	static const std::unordered_map<EntityType, std::string> presetMap = {
+		{EntityType::Empty, "Empty"},
+		{EntityType::Cube, "Cube"},
+		{EntityType::Sphere, "Sphere"},
+		{EntityType::Plane, "Plane"},
+		{EntityType::Suzanne, "Suzanne"},
+		{EntityType::Cylinder, "Cylinder"},
+		{EntityType::Torus, "Torus"},
+		{EntityType::Cone, "Cone"},
+		{EntityType::PointLight, "PointLight"},
+		{EntityType::DirectionalLight, "DirectionalLight"},
+		{EntityType::SpotLight, "SpotLight"},
+	};
 
-	switch (type)
+	auto it = presetMap.find(type);
+	if (it != presetMap.end())
 	{
-	case EntityType::Empty:
-		m_engine.getECSWorld().createEntity("Empty Entity");
-		break;
-
-	case EntityType::Cube:
-	{
-		auto entity = m_engine.getEntityFactory().createMeshEntity(
-		    m_engine.getCubeMesh(), transform, "Cube");
-
-		m_engine.getECSWorld().addComponent(entity.id(), AssetReferenceComponent{
-			.assetPath = "",
-			.meshName = "Cube",
-			.assetType = "primitive"
-		});
-		m_engine.getECSWorld().addComponent(entity.id(), RigidBodyComponent{
-			.type = RigidBodyType::Dynamic,
-			.mass = 1.0f
-		});
-		m_engine.getECSWorld().addComponent(entity.id(), ColliderComponent{
-			.type = ColliderType::Box,
-			.boxHalfExtents = glm::vec3(0.5f)
-		});
-		break;
-	}
-
-	case EntityType::Sphere:
-	{
-		auto entity = m_engine.getEntityFactory().createMeshEntity(
-		    m_engine.getSphereMesh(), transform, "Sphere");
-
-		m_engine.getECSWorld().addComponent(entity.id(), AssetReferenceComponent{
-			.assetPath = "",
-			.meshName = "Sphere",
-			.assetType = "primitive"
-		});
-		m_engine.getECSWorld().addComponent(entity.id(), RigidBodyComponent{
-			.type = RigidBodyType::Dynamic,
-			.mass = 1.0f
-		});
-		m_engine.getECSWorld().addComponent(entity.id(), ColliderComponent{
-			.type = ColliderType::Sphere,
-			.sphereRadius = 0.5f
-		});
-		break;
-	}
-
-	case EntityType::Plane:
-	{
-		auto entity = m_engine.getEntityFactory().createMeshEntity(
-		    m_engine.getPlaneMesh(), transform, "Plane");
-
-		m_engine.getECSWorld().addComponent(entity.id(), AssetReferenceComponent{
-			.assetPath = "",
-			.meshName = "Plane",
-			.assetType = "primitive"
-		});
-		m_engine.getECSWorld().addComponent(entity.id(), RigidBodyComponent{
-			.type = RigidBodyType::Static
-		});
-		m_engine.getECSWorld().addComponent(entity.id(), ColliderComponent{
-			.type = ColliderType::Box,
-			.boxHalfExtents = glm::vec3(1.0f, 0.1f, 1.0f)
-		});
-		break;
-	}
-
-	case EntityType::Suzanne:
-	{
-		auto entity = m_engine.getEntityFactory().createMeshEntity(
-		    m_engine.getSuzanneMesh(), transform, "Suzanne");
-
-		m_engine.getECSWorld().addComponent(entity.id(), AssetReferenceComponent{
-			.assetPath = "",
-			.meshName = "Suzanne",
-			.assetType = "primitive"
-		});
-		m_engine.getECSWorld().addComponent(entity.id(), RigidBodyComponent{
-			.type = RigidBodyType::Dynamic,
-			.mass = 1.0f
-		});
-		m_engine.getECSWorld().addComponent(entity.id(), ColliderComponent{
-			.type = ColliderType::Sphere,
-			.sphereRadius = 0.8f
-		});
-		break;
-	}
-
-	case EntityType::Cylinder:
-	{
-		auto entity = m_engine.getEntityFactory().createMeshEntity(
-		    m_engine.getCylinderMesh(), transform, "Cylinder");
-
-		m_engine.getECSWorld().addComponent(entity.id(), AssetReferenceComponent{
-			.assetPath = "",
-			.meshName = "Cylinder",
-			.assetType = "primitive"
-		});
-		m_engine.getECSWorld().addComponent(entity.id(), RigidBodyComponent{
-			.type = RigidBodyType::Dynamic,
-			.mass = 1.0f
-		});
-		m_engine.getECSWorld().addComponent(entity.id(), ColliderComponent{
-			.type = ColliderType::Capsule,
-			.capsuleRadius = 0.5f,
-			.capsuleHalfHeight = 1.0f
-		});
-		break;
-	}
-
-	case EntityType::Torus:
-	{
-		auto entity = m_engine.getEntityFactory().createMeshEntity(
-		    m_engine.getTorusMesh(), transform, "Torus");
-
-		m_engine.getECSWorld().addComponent(entity.id(), AssetReferenceComponent{
-			.assetPath = "",
-			.meshName = "Torus",
-			.assetType = "primitive"
-		});
-		m_engine.getECSWorld().addComponent(entity.id(), RigidBodyComponent{
-			.type = RigidBodyType::Dynamic,
-			.mass = 1.0f
-		});
-		m_engine.getECSWorld().addComponent(entity.id(), ColliderComponent{
-			.type = ColliderType::Sphere,
-			.sphereRadius = 1.0f
-		});
-		break;
-	}
-
-	case EntityType::Cone:
-	{
-		auto entity = m_engine.getEntityFactory().createMeshEntity(
-		    m_engine.getConeMesh(), transform, "Cone");
-
-		m_engine.getECSWorld().addComponent(entity.id(), AssetReferenceComponent{
-			.assetPath = "",
-			.meshName = "Cone",
-			.assetType = "primitive"
-		});
-		m_engine.getECSWorld().addComponent(entity.id(), RigidBodyComponent{
-			.type = RigidBodyType::Dynamic,
-			.mass = 1.0f
-		});
-		m_engine.getECSWorld().addComponent(entity.id(), ColliderComponent{
-			.type = ColliderType::Sphere,
-			.sphereRadius = 0.7f
-		});
-		break;
-	}
-
-	case EntityType::PointLight:
-	{
-		LightComponent light;
-		light.type = LightType::Point;
-		light.color = glm::vec3(1.0f, 1.0f, 1.0f);
-		light.intensity = 10.0f;
-		light.radius = 20.0f;
-		m_engine.getEntityFactory().createLightEntity(light, transform, "Point Light");
-		break;
-	}
-
-	case EntityType::DirectionalLight:
-	{
-		LightComponent light;
-		light.type = LightType::Directional;
-		light.color = glm::vec3(1.0f, 1.0f, 1.0f);
-		light.intensity = 1.0f;
-		light.direction = glm::vec3(0.0f, -1.0f, 0.0f);
-		m_engine.getEntityFactory().createLightEntity(light, transform, "Directional Light");
-		break;
-	}
-
-	case EntityType::SpotLight:
-	{
-		LightComponent light;
-		light.type = LightType::Spot;
-		light.color = glm::vec3(1.0f, 1.0f, 1.0f);
-		light.intensity = 10.0f;
-		light.radius = 20.0f;
-		light.direction = glm::vec3(0.0f, -1.0f, 0.0f);
-		light.innerConeAngle = 25.0f;
-		light.outerConeAngle = 35.0f;
-		m_engine.getEntityFactory().createLightEntity(light, transform, "Spot Light");
-		break;
-	}
+		m_engine.getECSWorld().getEntityManager().create()
+		    .fromPreset(it->second)
+		    .withPosition(position)
+		    .build();
 	}
 }
 

@@ -11,6 +11,11 @@
 struct MeshAsset;
 struct DrawContext;
 
+namespace agni::ecs
+{
+class EntityManager;
+} // namespace agni::ecs
+
 namespace agni
 {
 namespace ecs
@@ -107,8 +112,12 @@ public:
 		e.set<T>(component);
 	}
 
+	// Entity Manager (central hub for entity creation)
+	EntityManager& getEntityManager();
+
 private:
-	flecs::world m_world;
+	flecs::world                       m_world;
+	std::unique_ptr<EntityManager> m_entityManager;
 
 	void registerComponents();
 	void registerSystems();

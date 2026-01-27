@@ -51,6 +51,10 @@ add_executable (engine
   ECS/World.cpp
   ECS/EntityFactory.hpp
   ECS/EntityFactory.cpp
+  ECS/EntityManager.hpp
+  ECS/EntityManager.cpp
+  ECS/EntityBuilder.hpp
+  ECS/EntityBuilder.cpp
 
   # Editor Tools
   Editor/EditorManager.hpp

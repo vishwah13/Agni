@@ -1,4 +1,5 @@
 #include <ECS/World.hpp>
+#include <ECS/EntityManager.hpp>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -8,12 +9,21 @@ namespace ecs
 {
 
 World::World()
+    : m_entityManager(std::make_unique<EntityManager>(*this))
 {
 	registerComponents();
 	registerSystems();
+
+	// Register built-in entity presets (primitives, lights)
+	m_entityManager->registerBuiltinPresets();
 }
 
 World::~World() = default;
+
+EntityManager& World::getEntityManager()
+{
+	return *m_entityManager;
+}
 
 void World::registerComponents()
 {
@@ -282,6 +292,9 @@ void World::clearAllEntities()
 	    });
 
 	m_world.defer_end();
+
+	// Reset entity naming counters for fresh scene
+	m_entityManager->resetCounters();
 }
 
 flecs::entity World::createMeshEntity(const char* name)
