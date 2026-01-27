@@ -197,9 +197,9 @@ flecs::entity EntityBuilder::build()
 		entity.set<AssetReferenceComponent>(m_assetRef.value());
 	}
 
-	// Set entity info (display name is base name without counter, like Unity)
+	// Set entity info (display name includes counter: Cube_1, Cube_2, etc.)
 	entity.set<EntityInfoComponent>({
-	    .displayName = m_baseName,
+	    .displayName = uniqueName,
 	    .isPrefabInstance = false  // Will be set by PrefabManager when implemented
 	});
 

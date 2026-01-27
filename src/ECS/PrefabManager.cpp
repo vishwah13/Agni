@@ -1,5 +1,6 @@
 #include "PrefabManager.hpp"
 #include "World.hpp"
+#include "EntityManager.hpp"
 
 #include <Loader.hpp>
 
@@ -167,13 +168,21 @@ flecs::entity PrefabManager::instantiate(flecs::entity prefab, const glm::vec3& 
 	// Create instance using Flecs IsA relationship
 	flecs::entity instance = flecsWorld.entity().is_a(prefab);
 
+	// Get base name from prefab's EntityInfoComponent
+	const EntityInfoComponent* prefabInfo = prefab.try_get<EntityInfoComponent>();
+	std::string baseName = prefabInfo ? prefabInfo->displayName : "Entity";
+
+	// Generate unique display name (Cube_1, Cube_2, etc.)
+	std::string uniqueName = m_world.getEntityManager().getUniqueName(baseName);
+
 	// Set position
 	TransformComponent& tc = instance.ensure<TransformComponent>();
 	tc.localTransform = glm::translate(glm::mat4(1.0f), position);
 	tc.worldTransform = tc.localTransform;
 
-	// Mark as prefab instance
+	// Set entity info with unique display name
 	EntityInfoComponent& info = instance.ensure<EntityInfoComponent>();
+	info.displayName = uniqueName;
 	info.isPrefabInstance = true;
 
 	// Resolve mesh if needed (in case provider wasn't ready at prefab creation)

@@ -7,6 +7,8 @@
 #include <ECS/EntityManager.hpp>
 #include <ECS/EntityBuilder.hpp>
 #include <ECS/PrefabManager.hpp>
+#include <Editor/CommandHistory.hpp>
+#include <Editor/EntityCommands.hpp>
 #include <Scene/SceneSerializer.hpp>
 #include <AgniEngine.hpp>
 #include <Debug.hpp>
@@ -65,6 +67,9 @@ void EditorManager::init()
 
 	// Create scene serializer
 	m_sceneSerializer = std::make_unique<agni::scene::SceneSerializer>(m_engine);
+
+	// Create command history for undo/redo
+	m_commandHistory = std::make_unique<CommandHistory>();
 
 	// Setup keyboard shortcuts
 	setupShortcuts();
@@ -218,6 +223,18 @@ void EditorManager::setupShortcuts()
 		saveSceneAs();
 	});
 
+	// Ctrl+Z - undo
+	m_inputManager->registerShortcut({SDLK_Z, true, false, false}, [this]()
+	{
+		undo();
+	});
+
+	// Ctrl+Y - redo (alternative: Ctrl+Shift+Z)
+	m_inputManager->registerShortcut({SDLK_Y, true, false, false}, [this]()
+	{
+		redo();
+	});
+
 	AGNI_PRINT("[EditorManager] Keyboard shortcuts registered\n");
 }
 
@@ -245,8 +262,13 @@ void EditorManager::createEntity(EntityType type, const glm::vec3& position)
 	auto it = prefabMap.find(type);
 	if (it != prefabMap.end())
 	{
-		// Use Flecs native prefabs via PrefabManager
-		m_engine.getECSWorld().getPrefabManager().instantiate(it->second, position);
+		// Use command for undo/redo support
+		auto command = std::make_unique<CreateEntityCommand>(
+		    m_engine.getECSWorld(),
+		    m_engine.getECSWorld().getPrefabManager(),
+		    it->second,
+		    position);
+		m_commandHistory->execute(std::move(command));
 	}
 }
 
@@ -254,7 +276,14 @@ void EditorManager::deleteSelectedEntity()
 {
 	if (m_selectedEntity != NULL_ENTITY)
 	{
-		m_engine.getECSWorld().destroyEntity(m_selectedEntity);
+		// Use command for undo/redo support
+		auto command = std::make_unique<DeleteEntityCommand>(
+		    m_engine.getECSWorld(),
+		    m_engine.getECSWorld().getPrefabManager(),
+		    m_selectedEntity);
+		m_commandHistory->execute(std::move(command));
+
+		// Clear selection
 		m_selectedEntity = NULL_ENTITY;
 
 		// Update inspector
@@ -275,6 +304,34 @@ void EditorManager::duplicateSelectedEntity()
 	// - Offset position slightly
 	// - Select the new entity
 	AGNI_PRINT("[EditorManager] Duplicate not yet implemented\n");
+}
+
+void EditorManager::undo()
+{
+	if (m_commandHistory && m_commandHistory->canUndo())
+	{
+		m_commandHistory->undo();
+		AGNI_PRINT("[EditorManager] Undo: {}\n", m_commandHistory->getRedoDescription());
+	}
+}
+
+void EditorManager::redo()
+{
+	if (m_commandHistory && m_commandHistory->canRedo())
+	{
+		m_commandHistory->redo();
+		AGNI_PRINT("[EditorManager] Redo: {}\n", m_commandHistory->getUndoDescription());
+	}
+}
+
+bool EditorManager::canUndo() const
+{
+	return m_commandHistory && m_commandHistory->canUndo();
+}
+
+bool EditorManager::canRedo() const
+{
+	return m_commandHistory && m_commandHistory->canRedo();
 }
 
 void EditorManager::setSelectedEntity(EntityID entity)

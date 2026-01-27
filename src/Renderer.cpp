@@ -233,12 +233,12 @@ void Renderer::resize(VkExtent2D newExtent, VkSampleCountFlagBits msaaSamples)
 	                                             false,
 	                                             m_msaaSamples);
 
-	// Recreate object ID image for picking
+	// Recreate object ID image for picking (64-bit entity ID)
 	VkImageUsageFlags pickingColorUsages = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
 	                                       VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	m_objectIDImage = m_resourceManager->createImage(
 	    drawImageExtent,
-	    VK_FORMAT_R32_UINT,
+	    VK_FORMAT_R32G32_UINT,  // Two 32-bit channels for full 64-bit entity ID
 	    pickingColorUsages,
 	    false,
 	    VK_SAMPLE_COUNT_1_BIT);
@@ -1946,7 +1946,7 @@ void Renderer::initObjectIDPipeline()
 	builder.setMultisamplingNone();
 	builder.disableBlending();
 	builder.enableDepthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);  // Reversed-Z
-	builder.setColorAttachmentFormat(VK_FORMAT_R32_UINT);
+	builder.setColorAttachmentFormat(VK_FORMAT_R32G32_UINT);  // 64-bit entity ID (2x uint32)
 	builder.setDepthFormat(VK_FORMAT_D32_SFLOAT);
 	builder.m_pipelineLayout = m_objectIDPipelineLayout;
 	builder.enableDescriptorBuffer();

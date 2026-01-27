@@ -29,6 +29,7 @@ class EditorUI;
 class InputManager;
 class ContextMenus;
 class AssetBrowser;
+class CommandHistory;
 
 // Editor Manager - Coordinates all editor systems
 class EditorManager
@@ -76,6 +77,15 @@ public:
 
 	// Duplicate currently selected entity
 	void duplicateSelectedEntity();
+
+	// ========================================================================
+	// Undo/Redo
+	// ========================================================================
+
+	void undo();
+	void redo();
+	bool canUndo() const;
+	bool canRedo() const;
 
 	// ========================================================================
 	// Selection Management
@@ -130,12 +140,13 @@ private:
 	AgniEngine& m_engine;
 
 	// Editor subsystems
-	std::unique_ptr<ECSInspector>                m_inspector;
-	std::unique_ptr<EditorUI>                    m_editorUI;
-	std::unique_ptr<InputManager>                m_inputManager;
-	std::unique_ptr<ContextMenus>                m_contextMenus;
-	std::unique_ptr<AssetBrowser>                m_assetBrowser;
+	std::unique_ptr<ECSInspector>                 m_inspector;
+	std::unique_ptr<EditorUI>                     m_editorUI;
+	std::unique_ptr<InputManager>                 m_inputManager;
+	std::unique_ptr<ContextMenus>                 m_contextMenus;
+	std::unique_ptr<AssetBrowser>                 m_assetBrowser;
 	std::unique_ptr<agni::scene::SceneSerializer> m_sceneSerializer;
+	std::unique_ptr<CommandHistory>               m_commandHistory;
 
 	// Editor state
 	EntityID m_selectedEntity = NULL_ENTITY;

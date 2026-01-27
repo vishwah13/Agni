@@ -76,6 +76,10 @@ add_executable (engine
   Editor/EditorWidgets.hpp
   Editor/EditorWidgets.cpp
   Editor/EditorIcons.hpp
+  Editor/CommandHistory.hpp
+  Editor/CommandHistory.cpp
+  Editor/EntityCommands.hpp
+  Editor/EntityCommands.cpp
 
   # Scene Serialization
   Scene/SceneSerializer.hpp
