@@ -89,23 +89,11 @@ flecs::entity EntityFactory::createEntitiesFromGLTF(std::shared_ptr<LoadedGLTF> 
 
 	flecs::entity resultEntity;
 
-	// Generate unique root name from filename using EntityManager
-	EntityManager& entityManager = m_world.getEntityManager();
-	std::string baseName = gltf->sourcePath.stem().string();
-	if (baseName.empty())
-		baseName = gltf->sourcePath.filename().string();
-	if (baseName.empty())
-		baseName = "Asset";
-	std::string rootName = entityManager.getUniqueName(baseName);
-
 	// If only one top-level node, use it directly as the root (no extra container)
-	// This handles both simple assets (single mesh) and assets with their own root node
+	// convertNodeRecursive handles naming, so we don't call getUniqueName here
 	if (gltf->m_topNodes.size() == 1)
 	{
 		resultEntity = convertNodeRecursive(gltf->m_topNodes[0], flecs::entity::null());
-
-		// Rename to use the asset filename
-		resultEntity.set_name(rootName.c_str());
 
 		// Apply the root transform to this entity
 		TransformComponent& tc = resultEntity.ensure<TransformComponent>();
@@ -114,7 +102,15 @@ flecs::entity EntityFactory::createEntitiesFromGLTF(std::shared_ptr<LoadedGLTF> 
 	}
 	else
 	{
-		// Multiple top-level nodes: create a root entity to hold them all
+		// Multiple top-level nodes: create a container entity with unique name
+		EntityManager& entityManager = m_world.getEntityManager();
+		std::string baseName = gltf->sourcePath.stem().string();
+		if (baseName.empty())
+			baseName = gltf->sourcePath.filename().string();
+		if (baseName.empty())
+			baseName = "Asset";
+		std::string rootName = entityManager.getUniqueName(baseName);
+
 		flecs::entity rootEntity = m_world.get().entity(rootName.c_str());
 
 		// Set root transform
