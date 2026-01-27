@@ -41,6 +41,10 @@ add_library(stb_image INTERFACE)
 add_library(renderdoc INTERFACE)
 add_library(mikktspace STATIC)
 
+# simdjson - high-performance JSON parser
+set(SIMDJSON_BUILD_STATIC_LIB ON CACHE BOOL "" FORCE)
+add_subdirectory(simdjson EXCLUDE_FROM_ALL)
+
 add_subdirectory(fastgltf)
 add_subdirectory(fmt EXCLUDE_FROM_ALL)
 

@@ -120,7 +120,7 @@ target_include_directories(engine SYSTEM PRIVATE
     ${PROJECT_SOURCE_DIR}/third_party/stb_image
     ${PROJECT_SOURCE_DIR}/third_party/vkbootstrap/src
     ${PROJECT_SOURCE_DIR}/third_party/fastgltf/include
-    ${PROJECT_SOURCE_DIR}/third_party/fastgltf/deps/simdjson
+    ${PROJECT_SOURCE_DIR}/third_party/simdjson/include
     ${PROJECT_SOURCE_DIR}/third_party/fmt/include
     ${PROJECT_SOURCE_DIR}/third_party/renderdoc
     ${PROJECT_SOURCE_DIR}/third_party/mikktspace
@@ -134,7 +134,7 @@ target_include_directories(engine SYSTEM PRIVATE
 
 add_dependencies(engine Shaders)
 
-target_link_libraries(engine PUBLIC vma glm volk::volk Vulkan::Headers fmt::fmt stb_image SDL3::SDL3 vkbootstrap imgui imguizmo fastgltf::fastgltf renderdoc mikktspace flecs::flecs_static dmon)
+target_link_libraries(engine PUBLIC vma glm volk::volk Vulkan::Headers fmt::fmt stb_image SDL3::SDL3 vkbootstrap imgui imguizmo fastgltf::fastgltf simdjson renderdoc mikktspace flecs::flecs_static dmon)
 
 # Link Jolt if enabled
 if(AGNI_ENABLE_JOLT)
