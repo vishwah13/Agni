@@ -72,13 +72,12 @@ struct GPUDrawPushConstants
 	uint32_t        m_padding;
 };
 
-// push constants for object ID picking pass
+// push constants for object ID picking pass (64-bit entity ID support)
 struct ObjectIDPushConstants
 {
 	glm::mat4       m_worldMatrix;
 	VkDeviceAddress m_vertexBuffer;
-	uint32_t        m_entityID;
-	uint32_t        m_padding;
+	uint64_t        m_entityID;      // Full 64-bit Flecs entity ID
 };
 
 struct GPUSceneData

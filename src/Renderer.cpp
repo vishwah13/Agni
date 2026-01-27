@@ -1880,7 +1880,7 @@ void Renderer::initPickingResources(VkExtent2D windowExtent)
 
 	m_objectIDImage = m_resourceManager->createImage(
 	    extent,
-	    VK_FORMAT_R32_UINT,
+	    VK_FORMAT_R32G32_UINT,  // Two 32-bit channels for full 64-bit entity ID
 	    colorUsage,
 	    false,
 	    VK_SAMPLE_COUNT_1_BIT);  // No MSAA for picking
@@ -1894,9 +1894,9 @@ void Renderer::initPickingResources(VkExtent2D windowExtent)
 	    false,
 	    VK_SAMPLE_COUNT_1_BIT);  // No MSAA for picking
 
-	// Create staging buffer for reading back pixel data (4 bytes for RGBA)
+	// Create staging buffer for reading back pixel data (8 bytes for R32G32_UINT)
 	m_pickingStagingBuffer = m_resourceManager->createBuffer(
-	    4,
+	    8,
 	    VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 	    VMA_MEMORY_USAGE_GPU_TO_CPU);
 }
@@ -2105,8 +2105,7 @@ void Renderer::drawObjectIDPass(VkCommandBuffer cmd, FrameData& currentFrame)
 		ObjectIDPushConstants pushConstants;
 		pushConstants.m_worldMatrix = obj.m_transform;
 		pushConstants.m_vertexBuffer = obj.m_vertexBufferAddress;
-		pushConstants.m_entityID = static_cast<uint32_t>(obj.m_entityID & 0xFFFFFFFF);  // Use full 32 bits
-		pushConstants.m_padding = 0;
+		pushConstants.m_entityID = obj.m_entityID;  // Full 64-bit ID, no truncation
 
 		vkCmdPushConstants(cmd,
 		                   m_objectIDPipelineLayout,
@@ -2169,9 +2168,11 @@ void Renderer::processPickingResult()
 		void* data;
 		vmaMapMemory(m_resourceManager->getAllocator(), m_pickingStagingBuffer.m_allocation, &data);
 
-		// Direct read - no decoding needed with R32_UINT format
+		// Reconstruct 64-bit entity ID from R32G32_UINT format
 		uint32_t* pixel = static_cast<uint32_t*>(data);
-		m_lastPickedEntityID = *pixel;
+		uint64_t entityIDLow = pixel[0];
+		uint64_t entityIDHigh = pixel[1];
+		m_lastPickedEntityID = (entityIDHigh << 32) | entityIDLow;
 
 		vmaUnmapMemory(m_resourceManager->getAllocator(), m_pickingStagingBuffer.m_allocation);
 

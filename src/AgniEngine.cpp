@@ -473,33 +473,11 @@ void AgniEngine::run()
 			uint64_t pickedEntityID = m_renderer.getPickedEntityID();
 			if (pickedEntityID != 0)
 			{
-				// The picked ID is only 32 bits (lower bits of the Flecs entity
-				// ID) We need to find the actual entity that matches these
-				// lower bits and is still valid (Flecs uses upper 32 bits for
-				// generation counter)
-				uint64_t foundEntityID = 0;
-
-				// Query only renderable entities (same filter as rendering)
-				m_ecsWorld->get()
-				.query<const TransformComponent,
-				       const agni::ecs::RenderMeshComponent,
-				       const RenderableTag>()
-				.each(
-				[&](flecs::entity e,
-				    const TransformComponent&,
-				    const agni::ecs::RenderMeshComponent&,
-				    const RenderableTag&)
+				// Full 64-bit entity ID from GPU - use directly
+				flecs::entity pickedEntity = m_ecsWorld->get().entity(pickedEntityID);
+				if (pickedEntity.is_alive())
 				{
-					// Match lower 32 bits of renderable entities only
-					if ((e.id() & 0xFFFFFFFF) == pickedEntityID && e.is_alive())
-					{
-						foundEntityID = e.id();
-					}
-				});
-
-				if (foundEntityID != 0)
-				{
-					m_editorManager->setSelectedEntity(foundEntityID);
+					m_editorManager->setSelectedEntity(pickedEntityID);
 				}
 			}
 			m_renderer.clearPickingResult();

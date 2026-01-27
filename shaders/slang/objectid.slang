@@ -5,13 +5,12 @@ import input_structures;
 [[vk::binding(0, 0)]]
 ConstantBuffer<SceneData> sceneData;
 
-// Push constants with entity ID for picking
+// Push constants with 64-bit entity ID for picking
 struct ObjectIDPushConstants
 {
     float4x4 worldMatrix;
     uint64_t vertexBufferPtr;
-    uint     entityID;
-    uint     padding;
+    uint64_t entityID;      // Full 64-bit Flecs entity ID
 };
 
 [[vk::push_constant]]
@@ -44,8 +43,10 @@ VertexOutput vertexMain(uint vertexIndex : SV_VertexID)
 }
 
 [shader("fragment")]
-uint fragmentMain(VertexOutput input) : SV_Target0
+uint2 fragmentMain(VertexOutput input) : SV_Target0
 {
-    // Direct output - no encoding needed with R32_UINT format
-    return pushConstants.entityID;
+    // Split 64-bit entity ID into two 32-bit values for R32G32_UINT format
+    uint low = uint(pushConstants.entityID & 0xFFFFFFFF);
+    uint high = uint(pushConstants.entityID >> 32);
+    return uint2(low, high);
 }
