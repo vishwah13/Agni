@@ -1,6 +1,5 @@
 #include <ECS/EntityFactory.hpp>
 #include <ECS/EntityManager.hpp>
-#include <ECS/EntityBuilder.hpp>
 #include <AgniEngine.hpp>
 #include <Loader.hpp>
 

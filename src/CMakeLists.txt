@@ -53,8 +53,6 @@ add_executable (engine
   ECS/EntityFactory.cpp
   ECS/EntityManager.hpp
   ECS/EntityManager.cpp
-  ECS/EntityBuilder.hpp
-  ECS/EntityBuilder.cpp
   ECS/PrefabManager.hpp
   ECS/PrefabManager.cpp
 

@@ -4,8 +4,6 @@
 #include <Editor/InputManager.hpp>
 #include <Editor/ContextMenus.hpp>
 #include <Editor/AssetBrowser.hpp>
-#include <ECS/EntityManager.hpp>
-#include <ECS/EntityBuilder.hpp>
 #include <ECS/PrefabManager.hpp>
 #include <Editor/CommandHistory.hpp>
 #include <Editor/EntityCommands.hpp>

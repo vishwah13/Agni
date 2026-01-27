@@ -16,9 +16,7 @@ World::World()
 	registerComponents();
 	registerSystems();
 
-	// Register built-in entity presets (primitives, lights)
-	m_entityManager->registerBuiltinPresets();
-
+	// Note: EntityManager is now just for unique naming (counters)
 	// Note: PrefabManager built-in prefabs are registered after mesh provider is set
 	// (done in AgniEngine after primitives are loaded)
 }
