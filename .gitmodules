@@ -47,3 +47,6 @@
 [submodule "third_party/dmon"]
 	path = third_party/dmon
 	url = https://github.com/septag/dmon
+[submodule "third_party/simdjson"]
+	path = third_party/simdjson
+	url = https://github.com/simdjson/simdjson
