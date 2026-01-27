@@ -6,6 +6,7 @@
 #include <Editor/AssetBrowser.hpp>
 #include <ECS/EntityManager.hpp>
 #include <ECS/EntityBuilder.hpp>
+#include <ECS/PrefabManager.hpp>
 #include <Scene/SceneSerializer.hpp>
 #include <AgniEngine.hpp>
 #include <Debug.hpp>
@@ -226,8 +227,8 @@ void EditorManager::setupShortcuts()
 
 void EditorManager::createEntity(EntityType type, const glm::vec3& position)
 {
-	// Map EntityType to preset name
-	static const std::unordered_map<EntityType, std::string> presetMap = {
+	// Map EntityType to prefab name
+	static const std::unordered_map<EntityType, std::string> prefabMap = {
 		{EntityType::Empty, "Empty"},
 		{EntityType::Cube, "Cube"},
 		{EntityType::Sphere, "Sphere"},
@@ -241,13 +242,11 @@ void EditorManager::createEntity(EntityType type, const glm::vec3& position)
 		{EntityType::SpotLight, "SpotLight"},
 	};
 
-	auto it = presetMap.find(type);
-	if (it != presetMap.end())
+	auto it = prefabMap.find(type);
+	if (it != prefabMap.end())
 	{
-		m_engine.getECSWorld().getEntityManager().create()
-		    .fromPreset(it->second)
-		    .withPosition(position)
-		    .build();
+		// Use Flecs native prefabs via PrefabManager
+		m_engine.getECSWorld().getPrefabManager().instantiate(it->second, position);
 	}
 }
 

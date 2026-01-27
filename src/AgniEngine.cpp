@@ -18,6 +18,7 @@
 
 #include <Components.hpp>
 #include <ECS/EntityManager.hpp>
+#include <ECS/PrefabManager.hpp>
 #include <Initializers.hpp>
 #include <Types.hpp>
 #include <VulkanTools.hpp>
@@ -899,6 +900,19 @@ void AgniEngine::initDefaultData()
 		if (meshName == "Cone") return m_coneMesh;
 		return nullptr;
 	});
+
+	// Set up mesh provider for PrefabManager (Flecs native prefabs)
+	m_ecsWorld->getPrefabManager().setMeshProvider([this](const std::string& meshName) -> std::shared_ptr<MeshAsset> {
+		if (meshName == "Cube") return m_cubeMesh;
+		if (meshName == "Sphere") return m_sphereMesh;
+		if (meshName == "Plane") return m_planeMesh;
+		if (meshName == "Suzanne") return m_suzanneMesh;
+		if (meshName == "Cylinder") return m_cylinderMesh;
+		if (meshName == "Torus") return m_torusMesh;
+		if (meshName == "Cone") return m_coneMesh;
+		return nullptr;
+	});
+	m_ecsWorld->getPrefabManager().registerBuiltinPrefabs();
 
 	// Initialize EditorManager (after assets are loaded)
 	m_editorManager->init();

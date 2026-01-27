@@ -14,6 +14,7 @@ struct DrawContext;
 namespace agni::ecs
 {
 class EntityManager;
+class PrefabManager;
 } // namespace agni::ecs
 
 namespace agni
@@ -115,9 +116,13 @@ public:
 	// Entity Manager (central hub for entity creation)
 	EntityManager& getEntityManager();
 
+	// Prefab Manager (Flecs native prefabs)
+	PrefabManager& getPrefabManager();
+
 private:
-	flecs::world                       m_world;
+	flecs::world                   m_world;
 	std::unique_ptr<EntityManager> m_entityManager;
+	std::unique_ptr<PrefabManager> m_prefabManager;
 
 	void registerComponents();
 	void registerSystems();

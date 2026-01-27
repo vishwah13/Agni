@@ -1,5 +1,6 @@
 #include <ECS/World.hpp>
 #include <ECS/EntityManager.hpp>
+#include <ECS/PrefabManager.hpp>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -10,12 +11,16 @@ namespace ecs
 
 World::World()
     : m_entityManager(std::make_unique<EntityManager>(*this))
+    , m_prefabManager(std::make_unique<PrefabManager>(*this))
 {
 	registerComponents();
 	registerSystems();
 
 	// Register built-in entity presets (primitives, lights)
 	m_entityManager->registerBuiltinPresets();
+
+	// Note: PrefabManager built-in prefabs are registered after mesh provider is set
+	// (done in AgniEngine after primitives are loaded)
 }
 
 World::~World() = default;
@@ -23,6 +28,11 @@ World::~World() = default;
 EntityManager& World::getEntityManager()
 {
 	return *m_entityManager;
+}
+
+PrefabManager& World::getPrefabManager()
+{
+	return *m_prefabManager;
 }
 
 void World::registerComponents()

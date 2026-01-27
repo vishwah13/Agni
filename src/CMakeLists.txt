@@ -55,6 +55,8 @@ add_executable (engine
   ECS/EntityManager.cpp
   ECS/EntityBuilder.hpp
   ECS/EntityBuilder.cpp
+  ECS/PrefabManager.hpp
+  ECS/PrefabManager.cpp
 
   # Editor Tools
   Editor/EditorManager.hpp
