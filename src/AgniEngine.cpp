@@ -411,7 +411,8 @@ void AgniEngine::run()
 			resizeSwapchain();
 		}
 
-		// Update editor systems (processes async asset loads, input state, etc.)
+		// Update editor systems (processes async asset loads, input state,
+		// etc.)
 		if (m_editorManager)
 		{
 			m_editorManager->update();
@@ -474,7 +475,8 @@ void AgniEngine::run()
 			if (pickedEntityID != 0)
 			{
 				// Full 64-bit entity ID from GPU - use directly
-				flecs::entity pickedEntity = m_ecsWorld->get().entity(pickedEntityID);
+				flecs::entity pickedEntity =
+				m_ecsWorld->get().entity(pickedEntityID);
 				if (pickedEntity.is_alive())
 				{
 					m_editorManager->setSelectedEntity(pickedEntityID);
@@ -863,13 +865,17 @@ void AgniEngine::initDefaultData()
 
 	std::string meshPrimitivesPath = {"../../assets/MeshPrimitives.glb"};
 
-	// Load MeshPrimitives using async multi-threaded loading (needed immediately for editor primitives)
-	AGNI_PRINT("[Startup] Loading MeshPrimitives.glb (async, multi-threaded)...\n");
-	auto meshPrimitivesHandle = m_assetLoader.loadGltfAsync(this, meshPrimitivesPath);
+	// Load MeshPrimitives using async multi-threaded loading (needed
+	// immediately for editor primitives)
+	AGNI_PRINT(
+	"[Startup] Loading MeshPrimitives.glb (async, multi-threaded)...\n");
+	auto meshPrimitivesHandle =
+	m_assetLoader.loadGltfAsync(this, meshPrimitivesPath);
 
 	// Wait for MeshPrimitives to complete (needed for cube/sphere/plane meshes)
 	AGNI_PRINT("[Startup] Waiting for MeshPrimitives to complete...\n");
-	while (!meshPrimitivesHandle->gpuUploadComplete) {
+	while (!meshPrimitivesHandle->gpuUploadComplete)
+	{
 		m_assetLoader.processCompletedLoads();
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 	}
@@ -878,25 +884,34 @@ void AgniEngine::initDefaultData()
 	auto meshPrimitivesFile = meshPrimitivesHandle->result;
 	AGNI_PRINT("[Startup] MeshPrimitives loaded successfully!\n");
 
-	m_cubeMesh      = meshPrimitivesFile->meshes["Cube"];
-	m_sphereMesh    = meshPrimitivesFile->meshes["Icosphere"];
-	m_planeMesh     = meshPrimitivesFile->meshes["Plane"];
-	m_suzanneMesh   = meshPrimitivesFile->meshes["Suzanne"];
-	m_cylinderMesh  = meshPrimitivesFile->meshes["Cylinder"];
-	m_torusMesh     = meshPrimitivesFile->meshes["Torus"];
-	m_coneMesh      = meshPrimitivesFile->meshes["Cone"];
+	m_cubeMesh     = meshPrimitivesFile->meshes["Cube"];
+	m_sphereMesh   = meshPrimitivesFile->meshes["Icosphere"];
+	m_planeMesh    = meshPrimitivesFile->meshes["Plane"];
+	m_suzanneMesh  = meshPrimitivesFile->meshes["Suzanne"];
+	m_cylinderMesh = meshPrimitivesFile->meshes["Cylinder"];
+	m_torusMesh    = meshPrimitivesFile->meshes["Torus"];
+	m_coneMesh     = meshPrimitivesFile->meshes["Cone"];
 
 	m_assetLoader.getMeshResources() = meshPrimitivesFile;
 
 	// Set up mesh provider for PrefabManager (Flecs native prefabs)
-	m_ecsWorld->getPrefabManager().setMeshProvider([this](const std::string& meshName) -> std::shared_ptr<MeshAsset> {
-		if (meshName == "Cube") return m_cubeMesh;
-		if (meshName == "Sphere") return m_sphereMesh;
-		if (meshName == "Plane") return m_planeMesh;
-		if (meshName == "Suzanne") return m_suzanneMesh;
-		if (meshName == "Cylinder") return m_cylinderMesh;
-		if (meshName == "Torus") return m_torusMesh;
-		if (meshName == "Cone") return m_coneMesh;
+	m_ecsWorld->getPrefabManager().setMeshProvider(
+	[this](const std::string& meshName) -> std::shared_ptr<MeshAsset>
+	{
+		if (meshName == "Cube")
+			return m_cubeMesh;
+		if (meshName == "Sphere")
+			return m_sphereMesh;
+		if (meshName == "Plane")
+			return m_planeMesh;
+		if (meshName == "Suzanne")
+			return m_suzanneMesh;
+		if (meshName == "Cylinder")
+			return m_cylinderMesh;
+		if (meshName == "Torus")
+			return m_torusMesh;
+		if (meshName == "Cone")
+			return m_coneMesh;
 		return nullptr;
 	});
 	m_ecsWorld->getPrefabManager().registerBuiltinPrefabs();

@@ -8,8 +8,8 @@
 #include <cmath>
 #include <cstring>
 
-#include <vk_mem_alloc.h>
 #include <fmt/core.h>
+#include <vk_mem_alloc.h>
 
 void ResourceManager::init(VkInstance       instance,
                            VkPhysicalDevice physicalDevice,
@@ -27,7 +27,8 @@ void ResourceManager::init(VkInstance       instance,
 	g_vmaStats.reset();
 
 	// Setup device memory allocation callbacks for tracking
-	static VmaDeviceMemoryCallbacks deviceMemoryCallbacks = getVmaDeviceMemoryCallbacks();
+	static VmaDeviceMemoryCallbacks deviceMemoryCallbacks =
+	getVmaDeviceMemoryCallbacks();
 
 	// initialize the memory allocator
 	VmaAllocatorCreateInfo allocatorInfo = {};
@@ -47,32 +48,32 @@ void ResourceManager::init(VkInstance       instance,
 	AGNI_PRINT("[VMA] Allocator created with device memory tracking enabled\n");
 
 	// Note: vmaDestroyAllocator is NOT added to deletion queue
-	// It must be destroyed explicitly via destroyAllocator() after VMA stats are printed
+	// It must be destroyed explicitly via destroyAllocator() after VMA stats
+	// are printed
 
 	// Initialize immediate submit resources
-	VkCommandPoolCreateInfo commandPoolInfo =
-	    vkinit::commandPoolCreateInfo(m_graphicsQueueFamily,
-	                                  VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+	VkCommandPoolCreateInfo commandPoolInfo = vkinit::commandPoolCreateInfo(
+	m_graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
 	VK_CHECK(vkCreateCommandPool(
-	    m_device, &commandPoolInfo, nullptr, &m_immCommandPool));
+	m_device, &commandPoolInfo, nullptr, &m_immCommandPool));
 
 	// allocate the command buffer for immediate submits
 	VkCommandBufferAllocateInfo cmdAllocInfo =
-	    vkinit::commandBufferAllocateInfo(m_immCommandPool, 1);
+	vkinit::commandBufferAllocateInfo(m_immCommandPool, 1);
 
 	VK_CHECK(
-	    vkAllocateCommandBuffers(m_device, &cmdAllocInfo, &m_immCommandBuffer));
+	vkAllocateCommandBuffers(m_device, &cmdAllocInfo, &m_immCommandBuffer));
 
 	// Create fence for immediate submit synchronization
 	VkFenceCreateInfo fenceCreateInfo =
-	    vkinit::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
+	vkinit::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
 	VK_CHECK(vkCreateFence(m_device, &fenceCreateInfo, nullptr, &m_immFence));
 
 	m_mainDeletionQueue.push_function(
-	    [=]() { vkDestroyCommandPool(m_device, m_immCommandPool, nullptr); });
+	[=]() { vkDestroyCommandPool(m_device, m_immCommandPool, nullptr); });
 	m_mainDeletionQueue.push_function(
-	    [=]() { vkDestroyFence(m_device, m_immFence, nullptr); });
+	[=]() { vkDestroyFence(m_device, m_immFence, nullptr); });
 }
 
 void ResourceManager::cleanup()
@@ -177,13 +178,12 @@ AllocatedImage ResourceManager::createImage(VkExtent3D            size,
 	return newImage;
 }
 
-AllocatedImage ResourceManager::createImage(
-void*                 data,
-VkExtent3D            size,
-VkFormat              format,
-VkImageUsageFlags     usage,
-bool                  mipmapped,
-VkSampleCountFlagBits numSamples)
+AllocatedImage ResourceManager::createImage(void*                 data,
+                                            VkExtent3D            size,
+                                            VkFormat              format,
+                                            VkImageUsageFlags     usage,
+                                            bool                  mipmapped,
+                                            VkSampleCountFlagBits numSamples)
 {
 	size_t          data_size    = size.depth * size.width * size.height * 4;
 	AllocatedBuffer uploadbuffer = createBuffer(
@@ -254,7 +254,7 @@ void ResourceManager::destroyImage(const AllocatedImage& img)
 }
 
 void ResourceManager::immediateSubmit(
-    std::function<void(VkCommandBuffer cmd)>&& function)
+std::function<void(VkCommandBuffer cmd)>&& function)
 {
 	VK_CHECK(vkResetFences(m_device, 1, &m_immFence));
 	VK_CHECK(vkResetCommandBuffer(m_immCommandBuffer, 0));
@@ -262,7 +262,7 @@ void ResourceManager::immediateSubmit(
 	VkCommandBuffer cmd = m_immCommandBuffer;
 
 	VkCommandBufferBeginInfo cmdBeginInfo =
-	    vkinit::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+	vkinit::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
 	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
@@ -307,15 +307,14 @@ GPUMeshBuffers ResourceManager::uploadMesh(std::span<uint32_t> indices,
 	vkGetBufferDeviceAddress(m_device, &deviceAdressInfo);
 
 	// create index buffer
-	newSurface.m_indexBuffer = createBuffer(
-	indexBufferSize,
-	VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-	VMA_MEMORY_USAGE_GPU_ONLY);
+	newSurface.m_indexBuffer = createBuffer(indexBufferSize,
+	                                        VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+	                                        VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+	                                        VMA_MEMORY_USAGE_GPU_ONLY);
 
-	AllocatedBuffer staging =
-	createBuffer(vertexBufferSize + indexBufferSize,
-	             VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-	             VMA_MEMORY_USAGE_CPU_ONLY);
+	AllocatedBuffer staging = createBuffer(vertexBufferSize + indexBufferSize,
+	                                       VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+	                                       VMA_MEMORY_USAGE_CPU_ONLY);
 
 	void* data = staging.m_info.pMappedData;
 
