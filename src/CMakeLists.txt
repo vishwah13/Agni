@@ -113,7 +113,8 @@ target_include_directories(engine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 # ============================================================================
 target_compile_options(engine PRIVATE
     $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX>
-    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Werror>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Werror
+        -Wno-missing-field-initializers>
 )
 
 # ============================================================================
@@ -172,5 +173,19 @@ if(WIN32)
   add_custom_command(TARGET engine POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:engine> $<TARGET_FILE_DIR:engine>
     COMMAND_EXPAND_LISTS
+    )
+endif()
+
+if(UNIX AND NOT APPLE)
+    # Set RPATH so engine finds shared libs (libSDL3.so) next to itself
+    set_target_properties(engine PROPERTIES
+        BUILD_RPATH "$ORIGIN"
+        INSTALL_RPATH "$ORIGIN"
+    )
+    # Copy SDL3 shared library next to engine binary
+    add_custom_command(TARGET engine POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:SDL3::SDL3>
+            $<TARGET_FILE_DIR:engine>/
     )
 endif()

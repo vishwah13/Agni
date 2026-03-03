@@ -208,7 +208,7 @@ namespace agni
 				// Create selectable item with entity info
 				char label[256];
 				snprintf(
-				label, sizeof(label), "%s##%llu", displayName.c_str(), e.id());
+				label, sizeof(label), "%s##%lu", displayName.c_str(), static_cast<unsigned long>(e.id()));
 
 				if (ImGui::Selectable(label, isSelected))
 				{
@@ -228,7 +228,7 @@ namespace agni
 				// Show entity ID on hover
 				if (ImGui::IsItemHovered())
 				{
-					ImGui::SetTooltip("Entity ID: %llu", e.id());
+					ImGui::SetTooltip("Entity ID: %lu", static_cast<unsigned long>(e.id()));
 				}
 			});
 
@@ -690,7 +690,7 @@ namespace agni
 					}
 					else if (m_newEntityType == 2) // Light
 					{
-						auto entity = m_entityFactory.createLightEntity(
+						[[maybe_unused]] auto entity = m_entityFactory.createLightEntity(
 						LightComponent {},
 						transform,
 						strlen(m_newEntityName) > 0 ? m_newEntityName

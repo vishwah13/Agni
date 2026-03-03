@@ -26,11 +26,19 @@ BindlessLimits queryBindlessLimits(VkPhysicalDevice physicalDevice)
 
 	vkGetPhysicalDeviceProperties2(physicalDevice, &props2);
 
-	// Use the per-stage sampled images limit for descriptor indexing
-	uint32_t maxTextures = indexingProps.maxPerStageDescriptorUpdateAfterBindSampledImages;
+	// Take the minimum of both the hard limit and the update-after-bind limit
+	uint32_t maxSampledImages = std::min(
+	    props2.properties.limits.maxPerStageDescriptorSampledImages,
+	    indexingProps.maxPerStageDescriptorUpdateAfterBindSampledImages);
+
+	// Reserve headroom for other sampled image descriptors in the same pipeline
+	// stage (e.g., scene data's 3 shadow map combined image samplers)
+	constexpr uint32_t RESERVED_SAMPLED_IMAGES = 8;
+	if (maxSampledImages > RESERVED_SAMPLED_IMAGES)
+		maxSampledImages -= RESERVED_SAMPLED_IMAGES;
 
 	// Cap at a reasonable maximum (1M textures) to avoid excessive memory usage
-	maxTextures = std::min(maxTextures, 1000000u);
+	uint32_t maxTextures = std::min(maxSampledImages, 1000000u);
 
 	limits.maxTextures  = maxTextures;
 	limits.maxMaterials = std::min(maxTextures / 2, 65536u);  // Materials typically < textures

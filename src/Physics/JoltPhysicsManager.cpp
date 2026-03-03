@@ -13,6 +13,9 @@
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Body/BodyActivationListener.h>
 
+// Free function for Jolt trace callback (GCC cannot convert variadic lambdas to function pointers)
+static void JoltTraceNoop(const char*, ...) {}
+
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
@@ -163,7 +166,7 @@ bool JoltPhysicsManager::initialize(const PhysicsSettings& settings)
 	RegisterDefaultAllocator();
 
 	// Install trace and assert callbacks
-	Trace = [](const char* inFMT, ...) {}; // Disable traces
+	Trace = JoltTraceNoop;
 	JPH_IF_ENABLE_ASSERTS(AssertFailed = [](const char* inExpression, const char* inMessage, const char* inFile, uint inLine) -> bool {
 		AGNI_PRINT("[Jolt Assert] {} at {}:{}\n  {}\n", inExpression, inFile, inLine, inMessage ? inMessage : "");
 		return true; // Trigger breakpoint

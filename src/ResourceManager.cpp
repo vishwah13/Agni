@@ -71,9 +71,9 @@ void ResourceManager::init(VkInstance       instance,
 	VK_CHECK(vkCreateFence(m_device, &fenceCreateInfo, nullptr, &m_immFence));
 
 	m_mainDeletionQueue.push_function(
-	[=]() { vkDestroyCommandPool(m_device, m_immCommandPool, nullptr); });
+	[this]() { vkDestroyCommandPool(m_device, m_immCommandPool, nullptr); });
 	m_mainDeletionQueue.push_function(
-	[=]() { vkDestroyFence(m_device, m_immFence, nullptr); });
+	[this]() { vkDestroyFence(m_device, m_immFence, nullptr); });
 }
 
 void ResourceManager::cleanup()

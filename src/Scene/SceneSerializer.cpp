@@ -189,7 +189,11 @@ namespace agni::scene
 			auto    now   = std::chrono::system_clock::now();
 			auto    timeT = std::chrono::system_clock::to_time_t(now);
 			std::tm tm {};
-			localtime_s(&tm, &timeT);
+	#ifdef _MSC_VER
+		localtime_s(&tm, &timeT);
+#else
+		localtime_r(&timeT, &tm);
+#endif
 			std::string timestamp =
 			fmt::format("{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}",
 			            tm.tm_year + 1900,

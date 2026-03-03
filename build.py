@@ -362,7 +362,7 @@ Examples:
     if platform.system() == 'Windows':
         exe_path = script_dir / "bin" / build_type / "engine.exe"
     else:
-        exe_path = script_dir / "bin" / "engine"
+        exe_path = script_dir / "bin" / build_type / "engine"
 
     print_success(f"Executable: {exe_path}")
 

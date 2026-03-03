@@ -66,7 +66,7 @@ void SwapchainManager::destroySwapchain(VkDevice device)
 	}
 
 	// destroy swapchain resources
-	for (int i = 0; i < m_swapchainImageViews.size(); i++)
+	for (size_t i = 0; i < m_swapchainImageViews.size(); i++)
 	{
 		vkDestroyImageView(device, m_swapchainImageViews[i], nullptr);
 	}

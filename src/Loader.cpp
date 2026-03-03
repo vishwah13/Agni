@@ -881,7 +881,7 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 			// loop the vertices of this surface, find min/max bounds
 			glm::vec3 minpos = vertices[initial_vtx].m_position;
 			glm::vec3 maxpos = vertices[initial_vtx].m_position;
-			for (int i = initial_vtx; i < vertices.size(); i++)
+			for (size_t i = initial_vtx; i < vertices.size(); i++)
 			{
 				minpos = glm::min(minpos, vertices[i].m_position);
 				maxpos = glm::max(maxpos, vertices[i].m_position);
@@ -982,7 +982,7 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		std::visit(
 		fastgltf::visitor {[&](fastgltf::math::fmat4x4 matrix)
 		                   {
-			                   memcpy(&newNode->getLocalTransform(),
+			                   std::memcpy(static_cast<void*>(&newNode->getLocalTransform()),
 			                          matrix.data(),
 			                          sizeof(matrix));
 		                   },
@@ -1010,7 +1010,7 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 	}
 
 	// run loop again to setup transform hierarchy
-	for (int i = 0; i < gltf.nodes.size(); i++)
+	for (size_t i = 0; i < gltf.nodes.size(); i++)
 	{
 		fastgltf::Node&        node      = gltf.nodes[i];
 		std::shared_ptr<Node>& sceneNode = nodes[i];
@@ -1867,7 +1867,7 @@ void AssetLoader::finalizePendingLoad(PendingGPUUpload& pending)
 		std::visit(
 		    fastgltf::visitor {
 		        [&](fastgltf::math::fmat4x4 matrix)
-		        { memcpy(&newNode->getLocalTransform(), matrix.data(), sizeof(matrix)); },
+		        { std::memcpy(static_cast<void*>(&newNode->getLocalTransform()), matrix.data(), sizeof(matrix)); },
 		        [&](fastgltf::TRS transform)
 		        {
 			        glm::vec3 tl(transform.translation[0], transform.translation[1], transform.translation[2]);

@@ -162,7 +162,7 @@ void AgniEngine::cleanup()
 
 		vkDeviceWaitIdle(m_device);
 
-		for (int i = 0; i < FRAME_OVERLAP; i++)
+		for (uint32_t i = 0; i < FRAME_OVERLAP; i++)
 		{
 			vkDestroyCommandPool(m_device, m_frames[i].m_commandPool, nullptr);
 
@@ -254,7 +254,6 @@ void AgniEngine::draw()
 	getCurrentFrame().m_deletionQueue.flush();
 	getCurrentFrame()
 	.m_descriptorBuffer.reset(); // Reset descriptor buffer allocator
-	VK_CHECK(vkResetFences(m_device, 1, &getCurrentFrame().m_renderFence));
 
 	// request image from the swapchain
 	uint32_t swapchainImageIndex;
@@ -269,6 +268,11 @@ void AgniEngine::draw()
 		m_swapchainManager.requestResize();
 		return;
 	}
+
+	// Reset the fence only after we know we will submit work this frame.
+	// Resetting before the acquire check would leave the fence unsignaled
+	// on an early return, causing a timeout on the next frame.
+	VK_CHECK(vkResetFences(m_device, 1, &getCurrentFrame().m_renderFence));
 
 	VkCommandBuffer cmd = getCurrentFrame().m_mainCommandBuffer;
 
@@ -604,7 +608,7 @@ void AgniEngine::initCommands()
 	VkCommandPoolCreateInfo commandPoolInfo = vkinit::commandPoolCreateInfo(
 	m_graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
-	for (int i = 0; i < FRAME_OVERLAP; i++)
+	for (uint32_t i = 0; i < FRAME_OVERLAP; i++)
 	{
 
 		VK_CHECK(vkCreateCommandPool(
@@ -631,7 +635,7 @@ void AgniEngine::initSyncStructures()
 	vkinit::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
 	VkSemaphoreCreateInfo semaphoreCreateInfo = vkinit::semaphoreCreateInfo();
 
-	for (int i = 0; i < FRAME_OVERLAP; i++)
+	for (uint32_t i = 0; i < FRAME_OVERLAP; i++)
 	{
 		VK_CHECK(vkCreateFence(
 		m_device, &fenceCreateInfo, nullptr, &m_frames[i].m_renderFence));
@@ -693,7 +697,7 @@ void AgniEngine::resizeSwapchain()
 
 	// Flush all frame deletion queues to clean up pending resources (e.g.,
 	// light buffers)
-	for (int i = 0; i < FRAME_OVERLAP; i++)
+	for (uint32_t i = 0; i < FRAME_OVERLAP; i++)
 	{
 		m_frames[i].m_deletionQueue.flush();
 	}
@@ -749,7 +753,7 @@ void AgniEngine::initDescriptors()
 
 	m_globalDescriptorAllocator.init(m_device, 10, sizes);
 
-	for (int i = 0; i < FRAME_OVERLAP; i++)
+	for (uint32_t i = 0; i < FRAME_OVERLAP; i++)
 	{
 		// Initialize descriptor buffer allocator
 		m_frames[i].m_descriptorBuffer.init(m_device,

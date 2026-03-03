@@ -11,8 +11,13 @@ void* operator new(size_t size)
 	return malloc(size);
 }
 
-// Global operator delete override for CPU allocation tracking
-void operator delete(void* memory, size_t size)
+// Global operator delete overrides for CPU allocation tracking
+void operator delete(void* memory) noexcept
+{
+	free(memory);
+}
+
+void operator delete(void* memory, size_t size) noexcept
 {
 	g_allocationMetrics.m_totalFreed += static_cast<uint32_t>(size);
 	free(memory);
