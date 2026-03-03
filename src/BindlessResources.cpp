@@ -31,9 +31,6 @@ BindlessLimits queryBindlessLimits(VkPhysicalDevice physicalDevice)
 	    props2.properties.limits.maxPerStageDescriptorSampledImages,
 	    indexingProps.maxPerStageDescriptorUpdateAfterBindSampledImages);
 
-	// Reserve headroom for other sampled image descriptors in the same pipeline
-	// stage (e.g., scene data's 3 shadow map combined image samplers)
-	constexpr uint32_t RESERVED_SAMPLED_IMAGES = 8;
 	if (maxSampledImages > RESERVED_SAMPLED_IMAGES)
 		maxSampledImages -= RESERVED_SAMPLED_IMAGES;
 

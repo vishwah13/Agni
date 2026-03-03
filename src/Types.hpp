@@ -100,8 +100,12 @@ struct GPUSceneData
 };
 
 // Shadow mapping constants
-constexpr uint32_t SHADOW_MAP_RESOLUTION = 2048;
+constexpr uint32_t SHADOW_MAP_RESOLUTION       = 2048;
 constexpr uint32_t POINT_SHADOW_MAP_RESOLUTION = 2048;
+
+// Headroom reserved for non-bindless sampled image descriptors
+// (e.g. shadow maps) sharing the same pipeline stage as the bindless set.
+constexpr uint32_t RESERVED_SAMPLED_IMAGES = 8;
 
 // Push constants for shadow pass (minimal - depth only)
 struct ShadowPushConstants
