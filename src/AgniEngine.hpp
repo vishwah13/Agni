@@ -43,11 +43,12 @@ constexpr uint32_t FRAME_OVERLAP = 2;
 struct FrameData
 {
 
-	VkCommandPool   m_commandPool;
-	VkCommandBuffer m_mainCommandBuffer;
+	VkCommandPool   m_commandPool       = VK_NULL_HANDLE;
+	VkCommandBuffer m_mainCommandBuffer = VK_NULL_HANDLE;
 
-	VkSemaphore m_swapchainSemaphore, m_renderSemaphore;
-	VkFence     m_renderFence;
+	VkSemaphore m_swapchainSemaphore = VK_NULL_HANDLE;
+	VkSemaphore m_renderSemaphore    = VK_NULL_HANDLE;
+	VkFence     m_renderFence        = VK_NULL_HANDLE;
 
 	DeletionQueue m_deletionQueue;
 	// Descriptor buffer allocator for per-frame descriptors
@@ -201,11 +202,11 @@ public:
 	SwapchainManager m_swapchainManager;
 	Texture          m_texture;
 
-	VkInstance               m_instance;       // Vulkan library handle
-	VkDebugUtilsMessengerEXT m_debugMessenger; // Vulkan debug output handle
-	VkPhysicalDevice         m_chosenGPU; // GPU chosen as the default device
-	VkDevice                 m_device;    // Vulkan device for commands
-	VkSurfaceKHR             m_surface;   // Vulkan window surface
+	VkInstance               m_instance       = VK_NULL_HANDLE; // Vulkan library handle
+	VkDebugUtilsMessengerEXT m_debugMessenger = VK_NULL_HANDLE; // Vulkan debug output handle
+	VkPhysicalDevice         m_chosenGPU     = VK_NULL_HANDLE; // GPU chosen as the default device
+	VkDevice                 m_device        = VK_NULL_HANDLE; // Vulkan device for commands
+	VkSurfaceKHR             m_surface       = VK_NULL_HANDLE; // Vulkan window surface
 	VkDescriptorPool m_imguiPool {VK_NULL_HANDLE}; // ImGui descriptor pool
 
 	// Descriptor buffer extension properties
@@ -223,8 +224,8 @@ public:
 		return m_frames[m_frameNumber % FRAME_OVERLAP];
 	}
 
-	VkQueue  m_graphicsQueue;
-	uint32_t m_graphicsQueueFamily;
+	VkQueue  m_graphicsQueue       = VK_NULL_HANDLE;
+	uint32_t m_graphicsQueueFamily = 0;
 
 	DescriptorAllocatorGrowable m_globalDescriptorAllocator;
 

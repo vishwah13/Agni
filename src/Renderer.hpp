@@ -25,42 +25,42 @@ class World;
 
 struct EngineStats
 {
-	float m_frametime;
-	int   m_triangleCount;
-	int   m_drawcallCount;
-	float m_sceneUpdateTime;
-	float m_meshDrawTime;
+	float m_frametime       = 0.0f;
+	int   m_triangleCount   = 0;
+	int   m_drawcallCount   = 0;
+	float m_sceneUpdateTime = 0.0f;
+	float m_meshDrawTime    = 0.0f;
 };
 
 struct ComputePushConstants
 {
-	glm::vec4 m_data1;
-	glm::vec4 m_data2;
-	glm::vec4 m_data3;
-	glm::vec4 m_data4;
+	glm::vec4 m_data1 {0.0f};
+	glm::vec4 m_data2 {0.0f};
+	glm::vec4 m_data3 {0.0f};
+	glm::vec4 m_data4 {0.0f};
 };
 
 struct ComputeEffect
 {
-	const char* m_name;
+	const char* m_name = nullptr;
 
-	VkPipeline       m_pipeline;
-	VkPipelineLayout m_layout;
+	VkPipeline       m_pipeline = VK_NULL_HANDLE;
+	VkPipelineLayout m_layout   = VK_NULL_HANDLE;
 
-	ComputePushConstants m_data;
+	ComputePushConstants m_data {};
 };
 
 struct RenderObject
 {
-	uint32_t m_indexCount;
-	uint32_t m_firstIndex;
-	VkBuffer m_indexBuffer;
+	uint32_t m_indexCount = 0;
+	uint32_t m_firstIndex = 0;
+	VkBuffer m_indexBuffer = VK_NULL_HANDLE;
 
-	MaterialInstance* m_material;
-	Bounds            m_bounds;
-	glm::mat4         m_transform;
-	VkDeviceAddress   m_vertexBufferAddress;
-	uint64_t          m_entityID {0};  // Entity ID for picking
+	MaterialInstance* m_material            = nullptr;
+	Bounds            m_bounds {};
+	glm::mat4         m_transform {1.0f};
+	VkDeviceAddress   m_vertexBufferAddress = 0;
+	uint64_t          m_entityID            = 0;  // Entity ID for picking
 };
 
 // Directional light data for DrawContext
@@ -220,7 +220,7 @@ private:
 	AllocatedImage m_drawImage;
 	AllocatedImage m_depthImage;
 	AllocatedImage m_msaaColorImage;
-	VkExtent2D     m_drawExtent;
+	VkExtent2D     m_drawExtent = {0, 0};
 
 	// Render settings
 	float                     m_renderScale  = 1.f;
@@ -232,9 +232,9 @@ private:
 	std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>> m_loadedScenes;
 
 	// Descriptors
-	VkDescriptorSetLayout m_drawImageDescriptorLayout;
-	VkDescriptorSet       m_drawImageDescriptors;
-	VkDescriptorSetLayout m_gpuSceneDataDescriptorLayout;
+	VkDescriptorSetLayout m_drawImageDescriptorLayout    = VK_NULL_HANDLE;
+	VkDescriptorSet       m_drawImageDescriptors         = VK_NULL_HANDLE;
+	VkDescriptorSetLayout m_gpuSceneDataDescriptorLayout = VK_NULL_HANDLE;
 
 	// Descriptor buffer system
 	DescriptorLayoutInfo      m_gpuSceneDataLayoutInfo;
@@ -246,8 +246,8 @@ private:
 	MaterialRegistry m_materialRegistry;
 
 	// Background effects
-	VkPipeline                 m_gradientPipeline;
-	VkPipelineLayout           m_gradientPipelineLayout;
+	VkPipeline                 m_gradientPipeline       = VK_NULL_HANDLE;
+	VkPipelineLayout           m_gradientPipelineLayout = VK_NULL_HANDLE;
 	std::vector<ComputeEffect> m_backgroundEffects;
 	int                        m_currentBackgroundEffect {0};
 

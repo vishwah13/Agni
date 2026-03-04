@@ -21,14 +21,14 @@ struct BindlessLimits
 // GPU-side material data for bindless rendering (std430 layout compatible)
 struct GPUMaterialData
 {
-	glm::vec4 colorFactors;
-	glm::vec4 metalRoughFactors;
-	uint32_t  colorTexIndex;
-	uint32_t  metalRoughTexIndex;
-	uint32_t  normalTexIndex;
-	uint32_t  aoTexIndex;
-	uint32_t  samplerIndex;
-	uint32_t  padding[3];
+	glm::vec4 colorFactors {0.0f};
+	glm::vec4 metalRoughFactors {0.0f};
+	uint32_t  colorTexIndex      = 0;
+	uint32_t  metalRoughTexIndex = 0;
+	uint32_t  normalTexIndex     = 0;
+	uint32_t  aoTexIndex         = 0;
+	uint32_t  samplerIndex       = 0;
+	uint32_t  padding[3]         = {0, 0, 0};
 };
 
 // Sampler types available in the bindless system

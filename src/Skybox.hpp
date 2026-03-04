@@ -9,7 +9,7 @@ class ResourceManager;
 
 struct SkyBoxPushConstants
 {
-	VkDeviceAddress m_vertexBufferAddress;
+	VkDeviceAddress m_vertexBufferAddress = 0;
 };
 
 class Skybox
@@ -44,8 +44,8 @@ public:
 private:
 	struct MaterialResources
 	{
-		AllocatedImage m_cubemapImage;
-		VkSampler      m_cubemapSampler;
+		AllocatedImage m_cubemapImage {};
+		VkSampler      m_cubemapSampler = VK_NULL_HANDLE;
 	};
 
 	// Mesh data

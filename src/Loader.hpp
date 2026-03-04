@@ -23,9 +23,9 @@ struct GLTFMaterial
 
 struct GeoSurface
 {
-	uint32_t                      m_startIndex;
-	uint32_t                      m_count;
-	Bounds                        m_bounds;
+	uint32_t                      m_startIndex = 0;
+	uint32_t                      m_count      = 0;
+	Bounds                        m_bounds {};
 	std::shared_ptr<GLTFMaterial> m_material;
 };
 
@@ -55,7 +55,7 @@ struct LoadedGLTF
 	// Source file path for serialization (set after loading)
 	std::filesystem::path sourcePath;
 
-	AgniEngine* m_creator;
+	AgniEngine* m_creator = nullptr;
 
 	~LoadedGLTF()
 	{

@@ -575,13 +575,13 @@ AssetLoader::loadGltf(AgniEngine* engine, std::filesystem::path filePath)
 		uint32_t samplerIndex;
 		if (magFilter == VK_FILTER_LINEAR && minFilter == VK_FILTER_LINEAR)
 		{
-			samplerIndex = (mipmapMode == VK_SAMPLER_MIPMAP_MODE_LINEAR)
+			samplerIndex = (mipmapMode & VK_SAMPLER_MIPMAP_MODE_LINEAR)
 			               ? static_cast<uint32_t>(BindlessSamplerType::LinearMipmap)
 			               : static_cast<uint32_t>(BindlessSamplerType::Linear);
 		}
 		else
 		{
-			samplerIndex = (mipmapMode == VK_SAMPLER_MIPMAP_MODE_LINEAR)
+			samplerIndex = (mipmapMode & VK_SAMPLER_MIPMAP_MODE_LINEAR)
 			               ? static_cast<uint32_t>(BindlessSamplerType::NearestMipmap)
 			               : static_cast<uint32_t>(BindlessSamplerType::Nearest);
 		}
@@ -1547,13 +1547,13 @@ std::shared_ptr<AsyncLoadHandle> AssetLoader::loadGltfAsync(
 			uint32_t samplerIndex;
 			if (magFilter == VK_FILTER_LINEAR && minFilter == VK_FILTER_LINEAR)
 			{
-				samplerIndex = (mipmapMode == VK_SAMPLER_MIPMAP_MODE_LINEAR)
+				samplerIndex = (mipmapMode & VK_SAMPLER_MIPMAP_MODE_LINEAR)
 				                   ? static_cast<uint32_t>(BindlessSamplerType::LinearMipmap)
 				                   : static_cast<uint32_t>(BindlessSamplerType::Linear);
 			}
 			else
 			{
-				samplerIndex = (mipmapMode == VK_SAMPLER_MIPMAP_MODE_LINEAR)
+				samplerIndex = (mipmapMode & VK_SAMPLER_MIPMAP_MODE_LINEAR)
 				                   ? static_cast<uint32_t>(BindlessSamplerType::NearestMipmap)
 				                   : static_cast<uint32_t>(BindlessSamplerType::Nearest);
 			}

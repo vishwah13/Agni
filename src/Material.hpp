@@ -22,10 +22,10 @@ struct MaterialPipeline
 
 struct MaterialInstance
 {
-	MaterialPipeline* m_pipeline;
-	uint32_t          m_materialIndex;      // Bindless material array index
-	VkDeviceSize      m_descriptorOffset;   // Used by Skybox for its cubemap descriptor
-	MaterialPass      m_passType;
+	MaterialPipeline* m_pipeline         = nullptr;
+	uint32_t          m_materialIndex    = 0;      // Bindless material array index
+	VkDeviceSize      m_descriptorOffset = 0;      // Used by Skybox for its cubemap descriptor
+	MaterialPass      m_passType         = MaterialPass::MainColor;
 };
 
 struct GltfPbrMaterial

@@ -74,7 +74,7 @@ private:
 	EditorManager&            m_editorManager;
 	agni::ecs::World&         m_world;
 	agni::ecs::EntityFactory& m_entityFactory;
-	agni::physics::JoltPhysicsManager* m_physicsManager;
+	agni::physics::JoltPhysicsManager* m_physicsManager = nullptr;
 	class ContextMenus* m_contextMenus = nullptr;
 	std::shared_ptr<LoadedGLTF> m_meshResources;
 

@@ -70,7 +70,7 @@ private:
 	struct EntityState
 	{
 		std::string prefabName;  // If it's a prefab instance
-		glm::vec3 position;
+		glm::vec3 position {0.0f};
 		TransformComponent transform;
 		EntityID parent = NULL_ENTITY;
 		bool isPrefabInstance = false;
@@ -111,8 +111,8 @@ public:
 private:
 	agni::ecs::World& m_world;
 	EntityID m_entityID;
-	glm::mat4 m_oldTransform;
-	glm::mat4 m_newTransform;
+	glm::mat4 m_oldTransform {1.0f};
+	glm::mat4 m_newTransform {1.0f};
 	std::string m_displayName;
 };
 

@@ -30,8 +30,8 @@ struct DescriptorAllocatorGrowable
 public:
 	struct PoolSizeRatio
 	{
-		VkDescriptorType m_type;
-		float            m_ratio;
+		VkDescriptorType m_type  = VK_DESCRIPTOR_TYPE_SAMPLER;
+		float            m_ratio = 0.0f;
 	};
 
 	void init(VkDevice                 device,
@@ -53,7 +53,7 @@ private:
 	std::vector<PoolSizeRatio>    m_ratios;
 	std::vector<VkDescriptorPool> m_fullPools;
 	std::vector<VkDescriptorPool> m_readyPools;
-	uint32_t                      m_setsPerPool;
+	uint32_t                      m_setsPerPool = 0;
 };
 
 struct DescriptorWriter

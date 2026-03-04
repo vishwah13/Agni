@@ -14,9 +14,9 @@
 
 // CPU allocation tracking
 struct AllocationMetrics
-{ 
-	uint32_t m_totalAllocated;
-	uint32_t m_totalFreed;
+{
+	uint32_t m_totalAllocated = 0;
+	uint32_t m_totalFreed     = 0;
 	uint32_t CurrentUsage()
 	{
 		return m_totalAllocated - m_totalFreed;

@@ -12,7 +12,7 @@ namespace editor
 // Keyboard shortcut definition
 struct KeyShortcut
 {
-	SDL_Keycode key;
+	SDL_Keycode key = 0;
 	bool ctrl  = false;
 	bool shift = false;
 	bool alt   = false;

@@ -20,18 +20,18 @@ class PipelineBuilder
 public:
 	std::vector<VkPipelineShaderStageCreateInfo> m_shaderStages;
 
-	VkPipelineInputAssemblyStateCreateInfo m_inputAssembly;
-	VkPipelineRasterizationStateCreateInfo m_rasterizer;
-	VkPipelineColorBlendAttachmentState    m_colorBlendAttachment;
-	VkPipelineMultisampleStateCreateInfo   m_multisampling;
-	VkPipelineLayout                       m_pipelineLayout;
-	VkPipelineDepthStencilStateCreateInfo  m_depthStencil;
+	VkPipelineInputAssemblyStateCreateInfo m_inputAssembly {};
+	VkPipelineRasterizationStateCreateInfo m_rasterizer {};
+	VkPipelineColorBlendAttachmentState    m_colorBlendAttachment {};
+	VkPipelineMultisampleStateCreateInfo   m_multisampling {};
+	VkPipelineLayout                       m_pipelineLayout = VK_NULL_HANDLE;
+	VkPipelineDepthStencilStateCreateInfo  m_depthStencil {};
 	// so all systems related to VkRenderPass will be completely skipped
 	// Instead, we extend the VkGraphicsPipelineCreateInfo with a
 	// VkPipelineRenderingCreateInfo added into its pNext chain. This structure
 	// holds a list of the attachment formats the pipeline will use.
-	VkPipelineRenderingCreateInfo m_renderInfo;
-	VkFormat                      m_colorAttachmentformat;
+	VkPipelineRenderingCreateInfo m_renderInfo {};
+	VkFormat                      m_colorAttachmentformat = VK_FORMAT_UNDEFINED;
 	VkPipelineCreateFlags         m_flags {0};
 
 	PipelineBuilder()

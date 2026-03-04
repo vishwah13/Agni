@@ -10,10 +10,11 @@
 #include <string>
 #include <vector>
 
+#include <Material.hpp>
+
 // Forward declarations
 struct GeoSurface;
 struct MaterialInstance;
-enum class MaterialPass : uint8_t;
 
 // Entity ID type - compatible with Flecs entity IDs
 using EntityID = uint64_t;
@@ -67,7 +68,7 @@ struct MeshComponent
 struct MaterialComponent
 {
 	MaterialInstance* materialInstance {nullptr};
-	MaterialPass      passType;
+	MaterialPass      passType = MaterialPass::MainColor;
 };
 
 // ============================================================================
