@@ -184,12 +184,24 @@ if(AGNI_ENABLE_JOLT)
     # CRITICAL: Use dynamic runtime to match the engine
     set(USE_STATIC_MSVC_RUNTIME_LIBRARY OFF CACHE BOOL "" FORCE)
 
-    # Disable examples and tests
+    # Disable examples, tests, and shader compilation (avoids glslc dependency)
     set(TARGET_UNIT_TESTS OFF CACHE BOOL "" FORCE)
     set(TARGET_HELLO_WORLD OFF CACHE BOOL "" FORCE)
     set(TARGET_PERFORMANCE_TEST OFF CACHE BOOL "" FORCE)
     set(TARGET_SAMPLES OFF CACHE BOOL "" FORCE)
     set(TARGET_VIEWER OFF CACHE BOOL "" FORCE)
+    set(TARGET_TEST_FRAMEWORK OFF CACHE BOOL "" FORCE)
+    set(ENABLE_ALL_WARNINGS OFF CACHE BOOL "" FORCE)
+
+    # Disable Jolt GPU compute shader compilation when glslc is not available.
+    # Jolt tries to compile HLSL shaders to SPIR-V via Vulkan_GLSLC_EXECUTABLE,
+    # which fails on CI runners without a full Vulkan SDK.
+    # Re-enable by installing the Vulkan SDK (provides glslc/dxc).
+    find_program(_GLSLC_CHECK glslc)
+    if(NOT _GLSLC_CHECK)
+        set(JPH_USE_VK OFF CACHE BOOL "Disabled: glslc not found" FORCE)
+    endif()
+    unset(_GLSLC_CHECK CACHE)
 
     add_subdirectory(jolt/Build EXCLUDE_FROM_ALL)
 
