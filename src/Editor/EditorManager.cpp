@@ -72,7 +72,7 @@ namespace agni
 
 			// Load default scene if it exists
 			std::filesystem::path defaultScene =
-			"../../assets/scene/default.json";
+			resPath("assets/scene/default.json");
 			if (std::filesystem::exists(defaultScene))
 			{
 				AGNI_PRINT("[EditorManager] Loading default scene...\n");

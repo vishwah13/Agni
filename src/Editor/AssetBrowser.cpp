@@ -42,7 +42,7 @@ namespace agni
 		}
 
 		AssetBrowser::AssetBrowser(EditorManager& editorManager) :
-		    m_editorManager(editorManager), m_assetsFolder("../../assets")
+		    m_editorManager(editorManager), m_assetsFolder(resPath("assets"))
 		{
 			// Initialize file watcher
 			dmon_init();

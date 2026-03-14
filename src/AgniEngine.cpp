@@ -867,7 +867,7 @@ void AgniEngine::initDefaultData()
 	m_mainCamera.m_speed            = .1f;
 	m_mainCamera.m_mouseSensitivity = 0.3f;
 
-	std::string meshPrimitivesPath = {"../../assets/MeshPrimitives.glb"};
+	std::string meshPrimitivesPath = resPath("assets/MeshPrimitives.glb");
 
 	// Load MeshPrimitives using async multi-threaded loading (needed
 	// immediately for editor primitives)
@@ -930,12 +930,12 @@ void AgniEngine::initDefaultData()
 	// Load cubemap faces (order: right, left, top, bottom, front, back for
 	// Vulkan)
 	std::array<std::string, 6> cubemapFaces = {
-	"../../assets/skybox/right.jpg",  // +X
-	"../../assets/skybox/left.jpg",   // -X
-	"../../assets/skybox/top.jpg",    // +Y
-	"../../assets/skybox/bottom.jpg", // -Y
-	"../../assets/skybox/front.jpg",  // +Z
-	"../../assets/skybox/back.jpg"    // -Z
+	resPath("assets/skybox/right.jpg"),  // +X
+	resPath("assets/skybox/left.jpg"),   // -X
+	resPath("assets/skybox/top.jpg"),    // +Y
+	resPath("assets/skybox/bottom.jpg"), // -Y
+	resPath("assets/skybox/front.jpg"),  // +Z
+	resPath("assets/skybox/back.jpg")    // -Z
 	};
 
 	m_skybox.init(this, cubemapFaces);

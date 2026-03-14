@@ -40,6 +40,7 @@ endif()
 
 # Option to compile shaders (default ON for development, set to OFF in CI/CD)
 option(AGNI_COMPILE_SHADERS "Compile Slang shaders to SPIR-V" ON)
+option(AGNI_PRODUCTION_BUILD "Make this a production build" OFF)
 
 # Using Vulkan-Headers submodule instead of system Vulkan SDK
 

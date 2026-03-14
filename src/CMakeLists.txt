@@ -106,6 +106,13 @@ source_group("Shaders/Slang" FILES ${SLANG_SHADER_FILES})
 
 set_property(TARGET engine PROPERTY CXX_STANDARD 20)
 target_compile_definitions(engine PUBLIC GLM_FORCE_DEPTH_ZERO_TO_ONE)
+
+if(AGNI_PRODUCTION_BUILD)
+    target_compile_definitions(engine PUBLIC PRODUCTION_BUILD=1)
+    target_compile_definitions(engine PUBLIC RESOURCES_PATH="./")
+else()
+    target_compile_definitions(engine PUBLIC RESOURCES_PATH="${CMAKE_SOURCE_DIR}/")
+endif()
 target_include_directories(engine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
 # ============================================================================

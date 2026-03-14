@@ -1,5 +1,6 @@
 #include <Editor/EditorTheme.hpp>
 #include <Debug.hpp>
+#include <Types.hpp>
 
 namespace agni
 {
@@ -170,10 +171,12 @@ void ApplyDarkModernTheme(const ThemeConfig& config)
 void ConfigureFonts(ImGuiIO& io, const ThemeConfig& config)
 {
     // Try to load Roboto-Medium from ImGui's bundled fonts
+    std::string defaultFontPath;
     const char* fontPath = config.fontPath;
     if (fontPath == nullptr)
     {
-        fontPath = "../../third_party/imgui/misc/fonts/Roboto-Medium.ttf";
+        defaultFontPath = resPath("third_party/imgui/misc/fonts/Roboto-Medium.ttf");
+        fontPath = defaultFontPath.c_str();
     }
 
     // Attempt to load the font

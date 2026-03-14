@@ -14,6 +14,11 @@
 
 #include <fmt/core.h>
 
+// Resolve resource paths relative to the project root (dev) or working directory (production).
+inline std::string resPath(const char* relativePath) {
+	return std::string(RESOURCES_PATH) + relativePath;
+}
+
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
