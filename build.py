@@ -19,6 +19,7 @@ import argparse
 import subprocess
 import sys
 import shutil
+import time
 from pathlib import Path
 import platform
 
@@ -329,6 +330,8 @@ Examples:
     print_info(f"Build directory:  {build_dir}")
     print_info(f"Build type:       {build_type}")
 
+    start_time = time.time()
+
     # Clean if requested
     if args.clean:
         clean_build(build_dir)
@@ -342,10 +345,18 @@ Examples:
         enable_tracy=not args.no_tracy,
         generator=args.generator
     ):
+        elapsed = time.time() - start_time
+        print_header("Build FAILED")
+        print_error(f"CMake configuration failed after {elapsed:.2f}s")
+        input("\nPress Enter to exit...")
         return 1
 
     # Build project
     if not build_project(build_dir, build_type, args.jobs):
+        elapsed = time.time() - start_time
+        print_header("Build FAILED")
+        print_error(f"Compilation failed after {elapsed:.2f}s")
+        input("\nPress Enter to exit...")
         return 1
 
     # Build Tracy profiler if requested or if Debug build (for development)
@@ -356,6 +367,9 @@ Examples:
         if not build_tracy_profiler(tracy_dir, build_type, args.generator):
             print_warning("Tracy profiler build failed, but engine build succeeded")
 
+    elapsed = time.time() - start_time
+    minutes, seconds = divmod(int(elapsed), 60)
+
     # Print final success message
     print_header("Build Successful!")
 
@@ -364,7 +378,10 @@ Examples:
     else:
         exe_path = script_dir / "bin" / build_type / "engine"
 
-    print_success(f"Executable: {exe_path}")
+    print_success(f"Status:     Build succeeded")
+    print_success(f"Time:       {minutes}m {seconds}s ({elapsed:.2f}s)")
+    print_success(f"Config:     {build_type}")
+    print_success(f"Output:     {exe_path}")
 
     if should_build_tracy:
         if platform.system() == 'Windows':
@@ -374,6 +391,7 @@ Examples:
         print_success(f"Tracy profiler: {tracy_exe}")
         print_info("Run the Tracy profiler, then launch the engine to profile!")
 
+    input("\nPress Enter to exit...")
     return 0
 
 
