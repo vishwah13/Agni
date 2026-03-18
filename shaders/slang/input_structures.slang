@@ -78,6 +78,15 @@ struct SpotLight
     float  padding2;
 };
 
+// Per-draw data for indirect drawing (matches C++ GPUDrawData, std430 layout)
+struct GPUDrawData
+{
+    float4x4 worldMatrix;
+    uint64_t vertexBufferPtr;
+    uint     materialIndex;
+    uint     padding;
+};
+
 // Light data buffer structure (matches C++ GPULightData)
 struct LightData
 {

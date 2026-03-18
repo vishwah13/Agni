@@ -1643,19 +1643,134 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	VkDeviceSize samplerOffset  = 0;
 	VkDeviceSize materialOffset = 0;
 
-	// keep track of what state we are binding
-	MaterialPipeline* lastPipeline    = nullptr;
-	VkBuffer          lastIndexBuffer = VK_NULL_HANDLE;
+	// === Build indirect command buffer + draw data SSBO ===
+	const uint32_t totalDraws =
+	static_cast<uint32_t>(opaqueDraws.size() + transparentDraws.size());
 
-	auto draw = [&](const RenderObject& r)
+	// Helper lambda: fill indirect commands and draw data for a set of draws
+	auto fillDrawData = [&](const std::vector<uint32_t>&    drawIndices,
+	                        const std::vector<RenderObject>& surfaces,
+	                        VkDrawIndexedIndirectCommand*    cmdBuf,
+	                        GPUDrawData*                     dataBuf,
+	                        uint32_t                         baseIndex)
 	{
-		// Rebind pipeline if changed
-		if (r.m_material->m_pipeline != lastPipeline)
+		for (uint32_t i = 0; i < drawIndices.size(); i++)
 		{
-			lastPipeline = r.m_material->m_pipeline;
-			vkCmdBindPipeline(cmd,
-			                  VK_PIPELINE_BIND_POINT_GRAPHICS,
-			                  r.m_material->m_pipeline->m_pipeline);
+			const RenderObject& r            = surfaces[drawIndices[i]];
+			const uint32_t      drawIndex    = baseIndex + i;
+
+			// Fill indirect command
+			cmdBuf[drawIndex].indexCount    = r.m_indexCount;
+			cmdBuf[drawIndex].instanceCount = 1;
+			cmdBuf[drawIndex].firstIndex    = r.m_firstIndex;
+			cmdBuf[drawIndex].vertexOffset  = 0;
+			cmdBuf[drawIndex].firstInstance = drawIndex; // maps to SV_InstanceID
+
+			// Fill per-draw data
+			dataBuf[drawIndex].m_worldMatrix   = r.m_transform;
+			dataBuf[drawIndex].m_vertexBuffer  = r.m_vertexBufferAddress;
+			dataBuf[drawIndex].m_materialIndex = r.m_material->m_materialIndex;
+			dataBuf[drawIndex].m_padding       = 0;
+
+			// Accumulate stats
+			m_stats.m_triangleCount += r.m_indexCount / 3;
+		}
+	};
+
+	if (totalDraws > 0)
+	{
+		// Allocate indirect command buffer
+		const VkDeviceSize indirectBufSize =
+		totalDraws * sizeof(VkDrawIndexedIndirectCommand);
+		AllocatedBuffer indirectBuffer = m_resourceManager->createBuffer(
+		indirectBufSize,
+		VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
+		VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+		// Allocate draw data SSBO
+		const VkDeviceSize drawDataBufSize = totalDraws * sizeof(GPUDrawData);
+		AllocatedBuffer    drawDataBuffer  = m_resourceManager->createBuffer(
+        drawDataBufSize,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+		// Add to frame deletion queue
+		currentFrame.m_deletionQueue.push_function(
+		[rm, indirectBuffer, drawDataBuffer]()
+		{
+			rm->destroyBuffer(indirectBuffer);
+			rm->destroyBuffer(drawDataBuffer);
+		});
+
+		auto* indirectCmds =
+		static_cast<VkDrawIndexedIndirectCommand*>(indirectBuffer.m_info.pMappedData);
+		auto* drawDataPtr =
+		static_cast<GPUDrawData*>(drawDataBuffer.m_info.pMappedData);
+
+		// Fill opaque draws (starting at index 0)
+		fillDrawData(opaqueDraws,
+		             m_mainDrawContext.m_OpaqueSurfaces,
+		             indirectCmds,
+		             drawDataPtr,
+		             0);
+
+		// Fill transparent draws (starting after opaques)
+		const uint32_t transparentBase =
+		static_cast<uint32_t>(opaqueDraws.size());
+		fillDrawData(transparentDraws,
+		             m_mainDrawContext.m_TransparentSurfaces,
+		             indirectCmds,
+		             drawDataPtr,
+		             transparentBase);
+
+		// Get BDA for draw data buffer
+		VkBufferDeviceAddressInfo drawDataAddrInfo {};
+		drawDataAddrInfo.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+		drawDataAddrInfo.buffer = drawDataBuffer.m_buffer;
+		VkDeviceAddress drawDataBDA =
+		vkGetBufferDeviceAddress(m_device, &drawDataAddrInfo);
+
+		// Build batches by index buffer for a range of draws
+		auto buildBatches = [&](uint32_t rangeStart,
+		                        uint32_t rangeCount,
+		                        const std::vector<uint32_t>&    drawIndices,
+		                        const std::vector<RenderObject>& surfaces)
+		-> std::vector<IndirectBatch>
+		{
+			std::vector<IndirectBatch> batches;
+			if (rangeCount == 0)
+				return batches;
+
+			IndirectBatch currentBatch;
+			currentBatch.indexBuffer       = surfaces[drawIndices[0]].m_indexBuffer;
+			currentBatch.firstCommandIndex = rangeStart;
+			currentBatch.commandCount      = 1;
+
+			for (uint32_t i = 1; i < rangeCount; i++)
+			{
+				VkBuffer idxBuf = surfaces[drawIndices[i]].m_indexBuffer;
+				if (idxBuf == currentBatch.indexBuffer)
+				{
+					currentBatch.commandCount++;
+				}
+				else
+				{
+					batches.push_back(currentBatch);
+					currentBatch.indexBuffer       = idxBuf;
+					currentBatch.firstCommandIndex = rangeStart + i;
+					currentBatch.commandCount      = 1;
+				}
+			}
+			batches.push_back(currentBatch);
+			return batches;
+		};
+
+		// Helper: bind pipeline state once per pass
+		auto bindPipelineState = [&](MaterialPipeline* pipeline)
+		{
+			vkCmdBindPipeline(
+			cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipeline);
 
 			// Bind all 4 descriptor buffer offsets (bindless)
 			uint32_t     bufferIndices[4] = {0, 1, 2, 3};
@@ -1666,13 +1781,13 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 			vkCmdSetDescriptorBufferOffsetsEXT(
 			cmd,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			r.m_material->m_pipeline->m_layout,
-			0, // first set
-			4, // descriptor count
+			pipeline->m_layout,
+			0,
+			4,
 			bufferIndices,
 			offsets);
 
-			// set dynamic viewport and scissor
+			// Set dynamic viewport and scissor
 			VkViewport viewport = {};
 			viewport.x          = 0;
 			viewport.y          = 0;
@@ -1680,7 +1795,6 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 			viewport.height     = static_cast<float>(m_drawExtent.height);
 			viewport.minDepth   = 0.f;
 			viewport.maxDepth   = 1.f;
-
 			vkCmdSetViewport(cmd, 0, 1, &viewport);
 
 			VkRect2D scissor      = {};
@@ -1688,56 +1802,90 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 			scissor.offset.y      = 0;
 			scissor.extent.width  = m_drawExtent.width;
 			scissor.extent.height = m_drawExtent.height;
-
 			vkCmdSetScissor(cmd, 0, 1, &scissor);
-		}
 
-		// rebind index buffer if needed
-		if (r.m_indexBuffer != lastIndexBuffer)
+			// Push indirect draw constants (BDA to draw data)
+			IndirectDrawPushConstants pushConst;
+			pushConst.m_drawDataBufferPtr = drawDataBDA;
+			vkCmdPushConstants(cmd,
+			                   pipeline->m_layout,
+			                   VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+			                   0,
+			                   sizeof(IndirectDrawPushConstants),
+			                   &pushConst);
+		};
+
+		// Helper: issue draws for batches
+		auto issueBatchDraws = [&](const std::vector<IndirectBatch>& batches)
 		{
-			lastIndexBuffer = r.m_indexBuffer;
-			vkCmdBindIndexBuffer(cmd, r.m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-		}
+			constexpr uint32_t stride = sizeof(VkDrawIndexedIndirectCommand);
+			for (const auto& batch : batches)
+			{
+				vkCmdBindIndexBuffer(
+				cmd, batch.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-		// Push constants with material index (bindless)
-		GPUDrawPushConstants push_constants;
-		push_constants.m_worldMatrix   = r.m_transform;
-		push_constants.m_vertexBuffer  = r.m_vertexBufferAddress;
-		push_constants.m_materialIndex = r.m_material->m_materialIndex;
-		push_constants.m_padding       = 0;
+				VkDeviceSize bufferOffset =
+				batch.firstCommandIndex * stride;
 
-		vkCmdPushConstants(cmd,
-		                   r.m_material->m_pipeline->m_layout,
-		                   VK_SHADER_STAGE_VERTEX_BIT |
-		                   VK_SHADER_STAGE_FRAGMENT_BIT,
-		                   0,
-		                   sizeof(GPUDrawPushConstants),
-		                   &push_constants);
+				if (m_multiDrawIndirectSupported && m_multiDrawIndirectEnabled)
+				{
+					vkCmdDrawIndexedIndirect(cmd,
+					                         indirectBuffer.m_buffer,
+					                         bufferOffset,
+					                         batch.commandCount,
+					                         stride);
+					m_stats.m_drawcallCount++;
+				}
+				else
+				{
+					for (uint32_t i = 0; i < batch.commandCount; i++)
+					{
+						vkCmdDrawIndexedIndirect(
+						cmd,
+						indirectBuffer.m_buffer,
+						bufferOffset + i * stride,
+						1,
+						stride);
+						m_stats.m_drawcallCount++;
+					}
+				}
+			}
+		};
 
-		vkCmdDrawIndexed(cmd, r.m_indexCount, 1, r.m_firstIndex, 0, 0);
-
-		// add counters for triangles and draws
-		m_stats.m_drawcallCount++;
-		m_stats.m_triangleCount += r.m_indexCount / 3;
-	};
-
-	{
+		// === Draw opaque ===
+		if (!opaqueDraws.empty())
+		{
 #ifdef TRACY_ENABLE
-		ZoneScopedN("Draw Opaque");
+			ZoneScopedN("Draw Opaque Indirect");
 #endif
-		for (auto& r : opaqueDraws)
-		{
-			draw(m_mainDrawContext.m_OpaqueSurfaces[r]);
-		}
-	}
+			const RenderObject& firstOpaque =
+			m_mainDrawContext.m_OpaqueSurfaces[opaqueDraws[0]];
+			bindPipelineState(firstOpaque.m_material->m_pipeline);
 
-	{
-#ifdef TRACY_ENABLE
-		ZoneScopedN("Draw Transparent");
-#endif
-		for (auto& r : transparentDraws)
+			auto opaqueBatches = buildBatches(
+			0,
+			static_cast<uint32_t>(opaqueDraws.size()),
+			opaqueDraws,
+			m_mainDrawContext.m_OpaqueSurfaces);
+			issueBatchDraws(opaqueBatches);
+		}
+
+		// === Draw transparent ===
+		if (!transparentDraws.empty())
 		{
-			draw(m_mainDrawContext.m_TransparentSurfaces[r]);
+#ifdef TRACY_ENABLE
+			ZoneScopedN("Draw Transparent Indirect");
+#endif
+			const RenderObject& firstTransparent =
+			m_mainDrawContext.m_TransparentSurfaces[transparentDraws[0]];
+			bindPipelineState(firstTransparent.m_material->m_pipeline);
+
+			auto transparentBatches = buildBatches(
+			transparentBase,
+			static_cast<uint32_t>(transparentDraws.size()),
+			transparentDraws,
+			m_mainDrawContext.m_TransparentSurfaces);
+			issueBatchDraws(transparentBatches);
 		}
 	}
 

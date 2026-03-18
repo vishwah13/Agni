@@ -168,6 +168,15 @@ public:
 	MaterialRegistry& getMaterialRegistry() { return m_materialRegistry; }
 	const MaterialRegistry& getMaterialRegistry() const { return m_materialRegistry; }
 
+	// Multi-draw indirect accessors
+	bool& getMultiDrawIndirectEnabled() { return m_multiDrawIndirectEnabled; }
+	bool  getMultiDrawIndirectSupported() const { return m_multiDrawIndirectSupported; }
+	void  setMultiDrawIndirect(bool supported, bool enabled)
+	{
+		m_multiDrawIndirectSupported = supported;
+		m_multiDrawIndirectEnabled   = enabled;
+	}
+
 	const AllocatedImage& getMsaaColorImage() const
 	{
 		return m_msaaColorImage;
@@ -304,6 +313,18 @@ private:
 	bool  m_pointShadowsEnabled   = true;
 	bool  m_pointShadowPCFEnabled = true;   // Toggle soft shadows
 	int   m_pointShadowLightIndex = 0;      // Which point light casts shadows
+
+	// Multi-draw indirect support
+	bool m_multiDrawIndirectSupported {false};
+	bool m_multiDrawIndirectEnabled {true};
+
+	// Batch of consecutive indirect draw commands sharing the same index buffer
+	struct IndirectBatch
+	{
+		VkBuffer indexBuffer        = VK_NULL_HANDLE;
+		uint32_t firstCommandIndex  = 0;
+		uint32_t commandCount       = 0;
+	};
 
 	// Private rendering functions
 	void drawBackground(VkCommandBuffer cmd);

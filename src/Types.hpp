@@ -77,6 +77,21 @@ struct GPUDrawPushConstants
 	uint32_t        m_padding       = 0;
 };
 
+// Per-draw data for indirect drawing (stored in SSBO, indexed by firstInstance)
+struct GPUDrawData
+{
+	glm::mat4       m_worldMatrix {1.0f};   // 64 bytes
+	VkDeviceAddress m_vertexBuffer = 0;     // 8 bytes
+	uint32_t        m_materialIndex = 0;    // 4 bytes
+	uint32_t        m_padding = 0;          // 4 bytes
+};  // 80 bytes total, std430 compatible
+
+// Push constants for indirect draw path (just BDA to draw data SSBO)
+struct IndirectDrawPushConstants
+{
+	VkDeviceAddress m_drawDataBufferPtr = 0;  // 8 bytes
+};
+
 // push constants for object ID picking pass (64-bit entity ID support)
 struct ObjectIDPushConstants
 {

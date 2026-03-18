@@ -104,6 +104,9 @@ void AgniEngine::init()
 	                m_chosenGPU,
 	                m_windowExtent);
 
+	// Pass multi-draw indirect support flags to Renderer
+	m_renderer.setMultiDrawIndirect(m_multiDrawIndirectSupported, m_multiDrawIndirectEnabled);
+
 	// Initialize asset loader (creates default textures and samplers)
 	// Must be called before initPipelines() which builds material pipelines
 	m_assetLoader.init(&m_resourceManager, m_device);
@@ -522,9 +525,10 @@ void AgniEngine::initVulkan()
 	SDL_Vulkan_CreateSurface(m_window, m_instance, nullptr, &m_surface);
 
 	VkPhysicalDeviceFeatures deviceFeatures {
-	.sampleRateShading  = VK_TRUE,
-	.multiDrawIndirect  = VK_TRUE,
-	.shaderInt64        = VK_TRUE // Required for uint64_t buffer device addresses in shaders
+	.sampleRateShading          = VK_TRUE,
+	.multiDrawIndirect          = VK_TRUE,
+	.drawIndirectFirstInstance  = VK_TRUE, // Required: indirect draws use firstInstance as draw index
+	.shaderInt64                = VK_TRUE  // Required for uint64_t buffer device addresses in shaders
 	};
 
 	// vulkan 1.3 features

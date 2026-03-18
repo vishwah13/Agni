@@ -42,13 +42,10 @@ SamplerState samplers[4];
 [[vk::binding(0, 3)]]
 StructuredBuffer<GPUMaterialData> materials;
 
-// Push constants matching C++ GPUDrawPushConstants
+// Push constants for indirect draw path (BDA pointer to GPUDrawData array)
 struct PushConstants
 {
-    float4x4 worldMatrix;
-    uint64_t vertexBufferPtr; // Buffer device address as raw uint64
-    uint     materialIndex;   // Index into materials array
-    uint     padding;
+    uint64_t drawDataBufferPtr; // BDA to GPUDrawData[]
 };
 
 [[vk::push_constant]]
@@ -66,6 +63,7 @@ struct VertexOutput
     float3 bitangent : TEXCOORD3;
     float4 lightSpacePos : TEXCOORD4;      // Directional light space position
     float4 spotLightSpacePos : TEXCOORD5;  // Spot light space position
+    nointerpolation uint materialIndex : TEXCOORD6; // Flat interpolant for fragment shader
 };
 
 // Helper function to load vertex from buffer device address
@@ -76,26 +74,36 @@ Vertex loadVertex(uint64_t bufferPtr, uint index)
 }
 
 [shader("vertex")]
-VertexOutput vertexMain(uint vertexIndex : SV_VertexID)
+VertexOutput vertexMain(uint vertexIndex : SV_VertexID,
+                        uint instanceID : SV_InstanceID,
+                        uint baseInstance : SV_StartInstanceLocation)
 {
-    Vertex v = loadVertex(pushConstants.vertexBufferPtr, vertexIndex);
+    // SV_InstanceID = InstanceIndex - BaseInstance in Slang's SPIR-V target,
+    // so reconstruct the full InstanceIndex for cross-target compatibility.
+    uint drawIndex = instanceID + baseInstance;
+
+    // Read per-draw data from SSBO via BDA + drawIndex (set via firstInstance)
+    GPUDrawData* drawDataArray = (GPUDrawData*)pushConstants.drawDataBufferPtr;
+    GPUDrawData drawData = drawDataArray[drawIndex];
+
+    Vertex v = loadVertex(drawData.vertexBufferPtr, vertexIndex);
 
     // Get material data for color factors
-    GPUMaterialData mat = materials[pushConstants.materialIndex];
+    GPUMaterialData mat = materials[drawData.materialIndex];
 
     VertexOutput output;
 
     float4 position = float4(v.position, 1.0f);
-    float4 worldPos = mul(pushConstants.worldMatrix, position);
+    float4 worldPos = mul(drawData.worldMatrix, position);
 
     output.position = mul(sceneData.viewproj, worldPos);
     output.worldPos = worldPos.xyz;
-    output.normal = normalize(mul((float3x3)pushConstants.worldMatrix, v.normal));
+    output.normal = normalize(mul((float3x3)drawData.worldMatrix, v.normal));
     output.color = v.color.xyz * mat.colorFactors.xyz;
     output.uv = float2(v.uv_x, v.uv_y);
 
     // Transform tangent to world space
-    float3 T = normalize(mul((float3x3)pushConstants.worldMatrix, v.tangent.xyz));
+    float3 T = normalize(mul((float3x3)drawData.worldMatrix, v.tangent.xyz));
     // Re-orthogonalize T with respect to N using Gram-Schmidt process
     T = normalize(T - dot(T, output.normal) * output.normal);
     // Calculate bitangent using handedness (w component)
@@ -103,6 +111,9 @@ VertexOutput vertexMain(uint vertexIndex : SV_VertexID)
 
     output.tangent = T;
     output.bitangent = B;
+
+    // Pass material index to fragment shader via flat interpolant
+    output.materialIndex = drawData.materialIndex;
 
     // Calculate light space positions for shadow mapping
     output.lightSpacePos = mul(sceneData.lightSpaceMatrix, worldPos);         // Directional
@@ -319,8 +330,8 @@ float calculatePointShadow(float3 worldPos, float3 lightPos, float3 N)
 [shader("fragment")]
 float4 fragmentMain(VertexOutput input) : SV_Target
 {
-    // Get material data using materialIndex
-    GPUMaterialData mat = materials[pushConstants.materialIndex];
+    // Get material data using flat interpolant from vertex shader
+    GPUMaterialData mat = materials[input.materialIndex];
 
     // Get sampler for this material
     SamplerState matSampler = samplers[mat.samplerIndex];
