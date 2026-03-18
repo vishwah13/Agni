@@ -522,9 +522,9 @@ void AgniEngine::initVulkan()
 	SDL_Vulkan_CreateSurface(m_window, m_instance, nullptr, &m_surface);
 
 	VkPhysicalDeviceFeatures deviceFeatures {
-	.sampleRateShading = VK_TRUE,
-	.shaderInt64 =
-	VK_TRUE // Required for uint64_t buffer device addresses in shaders
+	.sampleRateShading  = VK_TRUE,
+	.multiDrawIndirect  = VK_TRUE,
+	.shaderInt64        = VK_TRUE // Required for uint64_t buffer device addresses in shaders
 	};
 
 	// vulkan 1.3 features
@@ -583,6 +583,12 @@ void AgniEngine::initVulkan()
 	// Query descriptor buffer properties
 	DescriptorBufferAllocator::queryProperties(m_chosenGPU,
 	                                           m_descriptorBufferProps);
+
+	// Query multi-draw indirect support
+	VkPhysicalDeviceFeatures supportedFeatures {};
+	vkGetPhysicalDeviceFeatures(m_chosenGPU, &supportedFeatures);
+	m_multiDrawIndirectSupported = supportedFeatures.multiDrawIndirect == VK_TRUE;
+	AGNI_PRINT("[GPU] Multi-draw indirect: {}\n", m_multiDrawIndirectSupported ? "supported" : "not supported");
 
 	// use vkbootstrap to get a Graphics queue
 	m_graphicsQueue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
