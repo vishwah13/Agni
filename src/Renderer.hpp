@@ -326,6 +326,16 @@ private:
 		uint32_t commandCount       = 0;
 	};
 
+	// Shared indirect draw resources for all shadow passes
+	struct ShadowIndirectResources
+	{
+		AllocatedBuffer            indirectBuffer {};
+		AllocatedBuffer            drawDataBuffer {};
+		VkDeviceAddress            drawDataBDA = 0;
+		std::vector<IndirectBatch> batches;
+		uint32_t                   totalDraws = 0;
+	};
+
 	// Private rendering functions
 	void drawBackground(VkCommandBuffer cmd);
 	void drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame);
@@ -342,14 +352,15 @@ private:
 	// Shadow mapping helpers
 	void initShadowResources();
 	void initShadowPipeline();
-	void drawShadowPass(VkCommandBuffer cmd, FrameData& currentFrame);
-	void drawSpotShadowPass(VkCommandBuffer cmd, FrameData& currentFrame);
+	ShadowIndirectResources buildShadowIndirectBuffers(FrameData& currentFrame);
+	void drawShadowPass(VkCommandBuffer cmd, FrameData& currentFrame, const ShadowIndirectResources& shadowRes);
+	void drawSpotShadowPass(VkCommandBuffer cmd, FrameData& currentFrame, const ShadowIndirectResources& shadowRes);
 	glm::mat4 calculateLightSpaceMatrix(const glm::vec3& lightDir);
 	glm::mat4 calculateSpotLightSpaceMatrix(const glm::vec3& position, const glm::vec3& direction, float outerConeAngle);
 
 	// Point light shadow mapping helpers
 	void initPointShadowResources();
 	void initPointShadowPipeline();
-	void drawPointShadowPass(VkCommandBuffer cmd);
+	void drawPointShadowPass(VkCommandBuffer cmd, const ShadowIndirectResources& shadowRes);
 	std::array<glm::mat4, 6> calculatePointLightMatrices(const glm::vec3& lightPos, float nearPlane, float farPlane);
 };

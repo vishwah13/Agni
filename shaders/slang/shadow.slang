@@ -1,15 +1,15 @@
 // Shadow pass shader - depth-only rendering from light's perspective
+// Uses indirect draw with BDA-based GPUDrawData lookup
 import input_structures;
 
 // Scene data (set 0, binding 0) - contains lightSpaceMatrix
 [[vk::binding(0, 0)]]
 ConstantBuffer<SceneData> sceneData;
 
-// Push constants for shadow pass
+// Push constants for indirect shadow pass (just BDA to draw data SSBO)
 struct ShadowPushConstants
 {
-    float4x4 worldMatrix;
-    uint64_t vertexBufferPtr;
+    uint64_t drawDataBufferPtr;
 };
 
 [[vk::push_constant]]
@@ -23,11 +23,18 @@ Vertex loadVertex(uint64_t bufferPtr, uint index)
 }
 
 [shader("vertex")]
-float4 vertexMain(uint vertexIndex : SV_VertexID) : SV_Position
+float4 vertexMain(uint vertexIndex : SV_VertexID,
+                  uint instanceID : SV_InstanceID,
+                  uint baseInstance : SV_StartInstanceLocation) : SV_Position
 {
-    Vertex v = loadVertex(pushConstants.vertexBufferPtr, vertexIndex);
+    uint drawIndex = instanceID + baseInstance;
 
-    float4 worldPos = mul(pushConstants.worldMatrix, float4(v.position, 1.0f));
+    GPUDrawData* drawDataArray = (GPUDrawData*)pushConstants.drawDataBufferPtr;
+    GPUDrawData drawData = drawDataArray[drawIndex];
+
+    Vertex v = loadVertex(drawData.vertexBufferPtr, vertexIndex);
+
+    float4 worldPos = mul(drawData.worldMatrix, float4(v.position, 1.0f));
     return mul(sceneData.lightSpaceMatrix, worldPos);
 }
 

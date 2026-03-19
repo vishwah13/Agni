@@ -577,7 +577,7 @@ void Renderer::initShadowPipeline()
 	VkPushConstantRange pushConstantRange {};
 	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 	pushConstantRange.offset     = 0;
-	pushConstantRange.size       = sizeof(ShadowPushConstants);
+	pushConstantRange.size       = sizeof(IndirectDrawPushConstants);
 
 	VkPipelineLayoutCreateInfo layoutInfo {};
 	layoutInfo.sType          = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -651,7 +651,7 @@ void Renderer::initPointShadowPipeline()
 	pushConstantRange.stageFlags =
 	VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 	pushConstantRange.offset = 0;
-	pushConstantRange.size   = sizeof(PointShadowPushConstants);
+	pushConstantRange.size   = sizeof(PointShadowIndirectPushConstants);
 
 	VkPipelineLayoutCreateInfo layoutInfo {};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -828,7 +828,108 @@ Renderer::calculatePointLightMatrices(const glm::vec3& lightPos,
 	return matrices;
 }
 
-void Renderer::drawShadowPass(VkCommandBuffer cmd, FrameData& currentFrame)
+Renderer::ShadowIndirectResources Renderer::buildShadowIndirectBuffers(FrameData& currentFrame)
+{
+#ifdef TRACY_ENABLE
+	ZoneScopedN("Build Shadow Indirect Buffers");
+#endif
+
+	ShadowIndirectResources res;
+	const auto& surfaces = m_mainDrawContext.m_OpaqueSurfaces;
+	res.totalDraws = static_cast<uint32_t>(surfaces.size());
+
+	if (res.totalDraws == 0)
+		return res;
+
+	// Create index array and sort by index buffer for batching
+	std::vector<uint32_t> drawIndices(res.totalDraws);
+	for (uint32_t i = 0; i < res.totalDraws; i++)
+		drawIndices[i] = i;
+
+	std::sort(drawIndices.begin(), drawIndices.end(),
+	          [&surfaces](uint32_t a, uint32_t b)
+	          { return surfaces[a].m_indexBuffer < surfaces[b].m_indexBuffer; });
+
+	// Allocate indirect command buffer
+	const VkDeviceSize indirectBufSize =
+	res.totalDraws * sizeof(VkDrawIndexedIndirectCommand);
+	res.indirectBuffer = m_resourceManager->createBuffer(
+	indirectBufSize,
+	VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
+	VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+	// Allocate draw data SSBO
+	const VkDeviceSize drawDataBufSize = res.totalDraws * sizeof(GPUDrawData);
+	res.drawDataBuffer = m_resourceManager->createBuffer(
+	drawDataBufSize,
+	VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+	VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+	VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+	// Add to frame deletion queue
+	auto* rm = m_resourceManager;
+	currentFrame.m_deletionQueue.push_function(
+	[rm, indBuf = res.indirectBuffer, ddBuf = res.drawDataBuffer]()
+	{
+		rm->destroyBuffer(indBuf);
+		rm->destroyBuffer(ddBuf);
+	});
+
+	// Fill indirect commands and draw data
+	auto* indirectCmds =
+	static_cast<VkDrawIndexedIndirectCommand*>(res.indirectBuffer.m_info.pMappedData);
+	auto* drawDataPtr =
+	static_cast<GPUDrawData*>(res.drawDataBuffer.m_info.pMappedData);
+
+	for (uint32_t i = 0; i < res.totalDraws; i++)
+	{
+		const RenderObject& r = surfaces[drawIndices[i]];
+
+		indirectCmds[i].indexCount    = r.m_indexCount;
+		indirectCmds[i].instanceCount = 1;
+		indirectCmds[i].firstIndex    = r.m_firstIndex;
+		indirectCmds[i].vertexOffset  = 0;
+		indirectCmds[i].firstInstance = i; // maps to SV_InstanceID
+
+		drawDataPtr[i].m_worldMatrix   = r.m_transform;
+		drawDataPtr[i].m_vertexBuffer  = r.m_vertexBufferAddress;
+		drawDataPtr[i].m_materialIndex = 0; // unused by shadow shaders
+		drawDataPtr[i].m_padding       = 0;
+	}
+
+	// Get BDA for draw data buffer
+	VkBufferDeviceAddressInfo drawDataAddrInfo {};
+	drawDataAddrInfo.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+	drawDataAddrInfo.buffer = res.drawDataBuffer.m_buffer;
+	res.drawDataBDA = vkGetBufferDeviceAddress(m_device, &drawDataAddrInfo);
+
+	// Build batches by grouping consecutive draws with same index buffer
+	IndirectBatch currentBatch;
+	currentBatch.indexBuffer       = surfaces[drawIndices[0]].m_indexBuffer;
+	currentBatch.firstCommandIndex = 0;
+	currentBatch.commandCount      = 1;
+
+	for (uint32_t i = 1; i < res.totalDraws; i++)
+	{
+		VkBuffer idxBuf = surfaces[drawIndices[i]].m_indexBuffer;
+		if (idxBuf == currentBatch.indexBuffer)
+		{
+			currentBatch.commandCount++;
+		}
+		else
+		{
+			res.batches.push_back(currentBatch);
+			currentBatch.indexBuffer       = idxBuf;
+			currentBatch.firstCommandIndex = i;
+			currentBatch.commandCount      = 1;
+		}
+	}
+	res.batches.push_back(currentBatch);
+
+	return res;
+}
+
+void Renderer::drawShadowPass(VkCommandBuffer cmd, FrameData& currentFrame, const ShadowIndirectResources& shadowRes)
 {
 #ifdef TRACY_ENABLE
 	ZoneScopedN("Shadow Pass");
@@ -928,30 +1029,30 @@ void Renderer::drawShadowPass(VkCommandBuffer cmd, FrameData& currentFrame)
 	                                   &bufferIndex,
 	                                   &sceneDescriptorOffset);
 
-	// Draw all opaque objects (no transparent for shadow mapping)
-	VkBuffer lastIndexBuffer = VK_NULL_HANDLE;
+	// Push BDA to draw data (once for entire pass)
+	IndirectDrawPushConstants pushConst;
+	pushConst.m_drawDataBufferPtr = shadowRes.drawDataBDA;
+	vkCmdPushConstants(cmd,
+	                   m_shadowPipelineLayout,
+	                   VK_SHADER_STAGE_VERTEX_BIT,
+	                   0,
+	                   sizeof(IndirectDrawPushConstants),
+	                   &pushConst);
 
-	for (const auto& obj : m_mainDrawContext.m_OpaqueSurfaces)
+	// Issue indirect draws by batch
+	constexpr uint32_t stride = sizeof(VkDrawIndexedIndirectCommand);
+	for (const auto& batch : shadowRes.batches)
 	{
-		if (obj.m_indexBuffer != lastIndexBuffer)
-		{
-			lastIndexBuffer = obj.m_indexBuffer;
-			vkCmdBindIndexBuffer(
-			cmd, obj.m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-		}
+		vkCmdBindIndexBuffer(cmd, batch.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+		VkDeviceSize offset = batch.firstCommandIndex * stride;
 
-		ShadowPushConstants pushConstants;
-		pushConstants.m_worldMatrix  = obj.m_transform;
-		pushConstants.m_vertexBuffer = obj.m_vertexBufferAddress;
-
-		vkCmdPushConstants(cmd,
-		                   m_shadowPipelineLayout,
-		                   VK_SHADER_STAGE_VERTEX_BIT,
-		                   0,
-		                   sizeof(ShadowPushConstants),
-		                   &pushConstants);
-
-		vkCmdDrawIndexed(cmd, obj.m_indexCount, 1, obj.m_firstIndex, 0, 0);
+		if (m_multiDrawIndirectSupported && m_multiDrawIndirectEnabled)
+			vkCmdDrawIndexedIndirect(cmd, shadowRes.indirectBuffer.m_buffer,
+			                         offset, batch.commandCount, stride);
+		else
+			for (uint32_t i = 0; i < batch.commandCount; i++)
+				vkCmdDrawIndexedIndirect(cmd, shadowRes.indirectBuffer.m_buffer,
+				                         offset + i * stride, 1, stride);
 	}
 
 	vkCmdEndRendering(cmd);
@@ -963,7 +1064,7 @@ void Renderer::drawShadowPass(VkCommandBuffer cmd, FrameData& currentFrame)
 	                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
 }
 
-void Renderer::drawSpotShadowPass(VkCommandBuffer cmd, FrameData& currentFrame)
+void Renderer::drawSpotShadowPass(VkCommandBuffer cmd, FrameData& currentFrame, const ShadowIndirectResources& shadowRes)
 {
 #ifdef TRACY_ENABLE
 	ZoneScopedN("Spot Shadow Pass");
@@ -1066,30 +1167,30 @@ void Renderer::drawSpotShadowPass(VkCommandBuffer cmd, FrameData& currentFrame)
 	                                   &bufferIndex,
 	                                   &sceneDescriptorOffset);
 
-	// Draw all opaque objects
-	VkBuffer lastIndexBuffer = VK_NULL_HANDLE;
+	// Push BDA to draw data (once for entire pass)
+	IndirectDrawPushConstants pushConst;
+	pushConst.m_drawDataBufferPtr = shadowRes.drawDataBDA;
+	vkCmdPushConstants(cmd,
+	                   m_shadowPipelineLayout,
+	                   VK_SHADER_STAGE_VERTEX_BIT,
+	                   0,
+	                   sizeof(IndirectDrawPushConstants),
+	                   &pushConst);
 
-	for (const auto& obj : m_mainDrawContext.m_OpaqueSurfaces)
+	// Issue indirect draws by batch
+	constexpr uint32_t stride = sizeof(VkDrawIndexedIndirectCommand);
+	for (const auto& batch : shadowRes.batches)
 	{
-		if (obj.m_indexBuffer != lastIndexBuffer)
-		{
-			lastIndexBuffer = obj.m_indexBuffer;
-			vkCmdBindIndexBuffer(
-			cmd, obj.m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-		}
+		vkCmdBindIndexBuffer(cmd, batch.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+		VkDeviceSize offset = batch.firstCommandIndex * stride;
 
-		ShadowPushConstants pushConstants;
-		pushConstants.m_worldMatrix  = obj.m_transform;
-		pushConstants.m_vertexBuffer = obj.m_vertexBufferAddress;
-
-		vkCmdPushConstants(cmd,
-		                   m_shadowPipelineLayout,
-		                   VK_SHADER_STAGE_VERTEX_BIT,
-		                   0,
-		                   sizeof(ShadowPushConstants),
-		                   &pushConstants);
-
-		vkCmdDrawIndexed(cmd, obj.m_indexCount, 1, obj.m_firstIndex, 0, 0);
+		if (m_multiDrawIndirectSupported && m_multiDrawIndirectEnabled)
+			vkCmdDrawIndexedIndirect(cmd, shadowRes.indirectBuffer.m_buffer,
+			                         offset, batch.commandCount, stride);
+		else
+			for (uint32_t i = 0; i < batch.commandCount; i++)
+				vkCmdDrawIndexedIndirect(cmd, shadowRes.indirectBuffer.m_buffer,
+				                         offset + i * stride, 1, stride);
 	}
 
 	vkCmdEndRendering(cmd);
@@ -1101,7 +1202,7 @@ void Renderer::drawSpotShadowPass(VkCommandBuffer cmd, FrameData& currentFrame)
 	                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
 }
 
-void Renderer::drawPointShadowPass(VkCommandBuffer cmd)
+void Renderer::drawPointShadowPass(VkCommandBuffer cmd, const ShadowIndirectResources& shadowRes)
 {
 #ifdef TRACY_ENABLE
 	ZoneScopedN("Point Shadow Pass");
@@ -1187,34 +1288,35 @@ void Renderer::drawPointShadowPass(VkCommandBuffer cmd)
 		vkCmdSetViewport(cmd, 0, 1, &viewport);
 		vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-		// Draw all opaque objects
-		VkBuffer lastIndexBuffer = VK_NULL_HANDLE;
+		// Push per-face constants (once per face, not per object)
+		PointShadowIndirectPushConstants pushConst;
+		pushConst.m_drawDataBufferPtr = shadowRes.drawDataBDA;
+		pushConst.m_lightViewProj     = faceMatrices[face];
+		pushConst.m_lightPos          = lightPos;
+		pushConst.m_farPlane          = m_pointShadowFarPlane;
 
-		for (const auto& obj : m_mainDrawContext.m_OpaqueSurfaces)
+		vkCmdPushConstants(cmd,
+		                   m_pointShadowPipelineLayout,
+		                   VK_SHADER_STAGE_VERTEX_BIT |
+		                   VK_SHADER_STAGE_FRAGMENT_BIT,
+		                   0,
+		                   sizeof(PointShadowIndirectPushConstants),
+		                   &pushConst);
+
+		// Issue indirect draws by batch
+		constexpr uint32_t stride = sizeof(VkDrawIndexedIndirectCommand);
+		for (const auto& batch : shadowRes.batches)
 		{
-			if (obj.m_indexBuffer != lastIndexBuffer)
-			{
-				lastIndexBuffer = obj.m_indexBuffer;
-				vkCmdBindIndexBuffer(
-				cmd, obj.m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-			}
+			vkCmdBindIndexBuffer(cmd, batch.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+			VkDeviceSize offset = batch.firstCommandIndex * stride;
 
-			PointShadowPushConstants pushConstants;
-			pushConstants.m_worldMatrix   = obj.m_transform;
-			pushConstants.m_vertexBuffer  = obj.m_vertexBufferAddress;
-			pushConstants.m_lightViewProj = faceMatrices[face];
-			pushConstants.m_lightPos      = lightPos;
-			pushConstants.m_farPlane      = m_pointShadowFarPlane;
-
-			vkCmdPushConstants(cmd,
-			                   m_pointShadowPipelineLayout,
-			                   VK_SHADER_STAGE_VERTEX_BIT |
-			                   VK_SHADER_STAGE_FRAGMENT_BIT,
-			                   0,
-			                   sizeof(PointShadowPushConstants),
-			                   &pushConstants);
-
-			vkCmdDrawIndexed(cmd, obj.m_indexCount, 1, obj.m_firstIndex, 0, 0);
+			if (m_multiDrawIndirectSupported && m_multiDrawIndirectEnabled)
+				vkCmdDrawIndexedIndirect(cmd, shadowRes.indirectBuffer.m_buffer,
+				                         offset, batch.commandCount, stride);
+			else
+				for (uint32_t i = 0; i < batch.commandCount; i++)
+					vkCmdDrawIndexedIndirect(cmd, shadowRes.indirectBuffer.m_buffer,
+					                         offset + i * stride, 1, stride);
 		}
 
 		vkCmdEndRendering(cmd);
@@ -1276,16 +1378,27 @@ void Renderer::renderFrame(VkCommandBuffer cmd,
 	                        VK_IMAGE_LAYOUT_UNDEFINED,
 	                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
+	// Build shared shadow indirect buffers (once for all shadow passes)
+	ShadowIndirectResources shadowRes;
+	bool anyShadowPass =
+	(m_shadowsEnabled && m_mainDrawContext.m_DirectionalLight.active) ||
+	(m_spotShadowsEnabled && !m_mainDrawContext.m_SpotLights.empty()) ||
+	(m_pointShadowsEnabled && !m_mainDrawContext.m_PointLights.empty() &&
+	 m_pointShadowLightIndex < static_cast<int>(m_mainDrawContext.m_PointLights.size()));
+
+	if (anyShadowPass && !m_mainDrawContext.m_OpaqueSurfaces.empty())
+		shadowRes = buildShadowIndirectBuffers(currentFrame);
+
 	// Shadow passes (before main geometry)
 	if (m_shadowsEnabled && m_mainDrawContext.m_DirectionalLight.active)
 	{
-		drawShadowPass(cmd, currentFrame);
+		drawShadowPass(cmd, currentFrame, shadowRes);
 	}
 
 	// Spot light shadow pass
 	if (m_spotShadowsEnabled && !m_mainDrawContext.m_SpotLights.empty())
 	{
-		drawSpotShadowPass(cmd, currentFrame);
+		drawSpotShadowPass(cmd, currentFrame, shadowRes);
 	}
 
 	// Point light shadow pass
@@ -1293,7 +1406,7 @@ void Renderer::renderFrame(VkCommandBuffer cmd,
 	    m_pointShadowLightIndex <
 	    static_cast<int>(m_mainDrawContext.m_PointLights.size()))
 	{
-		drawPointShadowPass(cmd);
+		drawPointShadowPass(cmd, shadowRes);
 	}
 
 	// Object ID pass for picking (only runs when picking is requested)

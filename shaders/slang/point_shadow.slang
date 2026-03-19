@@ -1,18 +1,19 @@
 // Point shadow pass shader - outputs linear depth (distance from light)
 // Used for omnidirectional shadow mapping with cube maps
+// Uses indirect draw with BDA-based GPUDrawData lookup
 import input_structures;
 
-// Push constants for point shadow pass
-// Must match C++ struct layout (160 bytes total)
+// Push constants for indirect point shadow pass
+// Per-draw data (worldMatrix, vertexBuffer) moved to GPUDrawData SSBO
+// Per-face data (lightViewProj, lightPos, farPlane) stays in push constants
 struct PointShadowPushConstants
 {
-    float4x4 worldMatrix;      // 64 bytes, offset 0
-    uint64_t vertexBufferPtr;  // 8 bytes, offset 64
-    uint64_t padding;          // 8 bytes padding for alignment
-    float4x4 lightViewProj;    // 64 bytes, offset 80
-    float3   lightPos;         // 12 bytes, offset 144
-    float    farPlane;         // 4 bytes, offset 156
-};                             // Total: 160 bytes
+    uint64_t drawDataBufferPtr;  // 8 bytes, offset 0
+    uint64_t padding;            // 8 bytes, align lightViewProj to 16
+    float4x4 lightViewProj;     // 64 bytes, offset 16
+    float3   lightPos;          // 12 bytes, offset 80
+    float    farPlane;          // 4 bytes, offset 92
+};  // 96 bytes total
 
 [[vk::push_constant]]
 ConstantBuffer<PointShadowPushConstants> pushConstants;
@@ -31,11 +32,18 @@ struct VSOutput
 };
 
 [shader("vertex")]
-VSOutput vertexMain(uint vertexIndex : SV_VertexID)
+VSOutput vertexMain(uint vertexIndex : SV_VertexID,
+                    uint instanceID : SV_InstanceID,
+                    uint baseInstance : SV_StartInstanceLocation)
 {
-    Vertex v = loadVertex(pushConstants.vertexBufferPtr, vertexIndex);
+    uint drawIndex = instanceID + baseInstance;
 
-    float4 worldPos = mul(pushConstants.worldMatrix, float4(v.position, 1.0f));
+    GPUDrawData* drawDataArray = (GPUDrawData*)pushConstants.drawDataBufferPtr;
+    GPUDrawData drawData = drawDataArray[drawIndex];
+
+    Vertex v = loadVertex(drawData.vertexBufferPtr, vertexIndex);
+
+    float4 worldPos = mul(drawData.worldMatrix, float4(v.position, 1.0f));
 
     VSOutput output;
     output.position = mul(pushConstants.lightViewProj, worldPos);

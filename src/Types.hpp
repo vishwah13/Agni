@@ -147,6 +147,17 @@ struct PointShadowPushConstants
 	float           m_farPlane = 0.0f;      // 4 bytes, offset 156 (Far plane for depth normalization)
 }; // Total: 160 bytes
 
+// Push constants for indirect point shadow pass
+// Per-draw data (worldMatrix, vertexBuffer) moved to GPUDrawData SSBO
+struct PointShadowIndirectPushConstants
+{
+	VkDeviceAddress m_drawDataBufferPtr = 0;  // 8 bytes, offset 0
+	uint64_t        m_padding           = 0;  // 8 bytes, align lightViewProj to 16
+	glm::mat4       m_lightViewProj {0.0f};   // 64 bytes, offset 16
+	glm::vec3       m_lightPos {0.0f};        // 12 bytes, offset 80
+	float           m_farPlane = 0.0f;        // 4 bytes, offset 92
+}; // Total: 96 bytes
+
 // Maximum number of lights supported
 constexpr uint32_t MAX_POINT_LIGHTS = 256;
 constexpr uint32_t MAX_SPOT_LIGHTS  = 64;
