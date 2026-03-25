@@ -30,6 +30,7 @@ struct EngineStats
 	int   m_drawcallCount   = 0;
 	float m_sceneUpdateTime = 0.0f;
 	float m_meshDrawTime    = 0.0f;
+	bool  m_gpuCullingActive = false; // true when GPU culling is in use (stats are "submitted", not "visible")
 };
 
 struct ComputePushConstants
@@ -167,6 +168,9 @@ public:
 	const SamplerRegistry& getSamplerRegistry() const { return m_samplerRegistry; }
 	MaterialRegistry& getMaterialRegistry() { return m_materialRegistry; }
 	const MaterialRegistry& getMaterialRegistry() const { return m_materialRegistry; }
+
+	// GPU culling accessor
+	bool& getGpuCullingEnabled() { return m_gpuCullingEnabled; }
 
 	// Multi-draw indirect accessors
 	bool& getMultiDrawIndirectEnabled() { return m_multiDrawIndirectEnabled; }
@@ -314,6 +318,11 @@ private:
 	bool  m_pointShadowPCFEnabled = true;   // Toggle soft shadows
 	int   m_pointShadowLightIndex = 0;      // Which point light casts shadows
 
+	// GPU frustum culling
+	VkPipeline       m_cullPipeline       = VK_NULL_HANDLE;
+	VkPipelineLayout m_cullPipelineLayout = VK_NULL_HANDLE;
+	bool             m_gpuCullingEnabled  = true;
+
 	// Multi-draw indirect support
 	bool m_multiDrawIndirectSupported {false};
 	bool m_multiDrawIndirectEnabled {true};
@@ -348,6 +357,9 @@ private:
 	void initBackgroundPipelines();
 	void initPickingResources(VkExtent2D windowExtent);
 	void initObjectIDPipeline();
+
+	// GPU culling
+	void initCullPipeline();
 
 	// Shadow mapping helpers
 	void initShadowResources();

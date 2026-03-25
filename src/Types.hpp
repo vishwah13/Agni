@@ -117,6 +117,7 @@ struct GPUSceneData
 	float     m_pointShadowPadding = 0.0f;   // Alignment padding
 	glm::vec3 m_cameraPosition {0.0f};
 	float     m_padding = 0.0f;              // Alignment padding
+	glm::vec4 m_frustumPlanes[6] {};         // Gribb-Hartmann frustum planes for GPU culling
 };
 
 // Shadow mapping constants
@@ -157,6 +158,23 @@ struct PointShadowIndirectPushConstants
 	glm::vec3       m_lightPos {0.0f};        // 12 bytes, offset 80
 	float           m_farPlane = 0.0f;        // 4 bytes, offset 92
 }; // Total: 96 bytes
+
+// Per-draw bounds for GPU frustum culling (SSBO via BDA)
+struct GPUBoundsData
+{
+	glm::vec3 m_origin {0.0f};       // 12 — local-space bounding sphere center
+	float     m_sphereRadius {0.0f}; // 4
+	glm::mat4 m_worldMatrix {1.0f};  // 64
+}; // 80 bytes total
+
+// Push constants for cull compute (24 bytes)
+struct CullPushConstants
+{
+	VkDeviceAddress m_boundsBufferPtr = 0;    // 8 — BDA to GPUBoundsData[]
+	VkDeviceAddress m_indirectBufferPtr = 0;  // 8 — BDA to VkDrawIndexedIndirectCommand[]
+	uint32_t        m_drawCount = 0;          // 4
+	uint32_t        m_padding = 0;            // 4
+};
 
 // Maximum number of lights supported
 constexpr uint32_t MAX_POINT_LIGHTS = 256;

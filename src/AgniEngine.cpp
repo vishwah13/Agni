@@ -542,6 +542,7 @@ void AgniEngine::initVulkan()
 	.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
 	features12.bufferDeviceAddress = true;
 	features12.descriptorIndexing  = true;
+	features12.drawIndirectCount   = true;
 	features12.shaderInt8          = true;
 	// Bindless texture indexing features (shader-side only, layout flags
 	// implicit with descriptor buffers)

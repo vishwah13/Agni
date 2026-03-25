@@ -97,6 +97,7 @@ if(AGNI_COMPILE_SHADERS)
         "${PROJECT_SOURCE_DIR}/shaders/slang/gradient_color.slang"
         "${PROJECT_SOURCE_DIR}/shaders/slang/sky.slang"
         "${PROJECT_SOURCE_DIR}/shaders/slang/raymarching.slang"
+        "${PROJECT_SOURCE_DIR}/shaders/slang/frustum_cull.slang"
     )
 
     # Compile graphics shaders (vertex + fragment)
@@ -177,7 +178,7 @@ if(AGNI_COMPILE_SHADERS)
         add_custom_command(
             OUTPUT ${SPIRV_COMP}
             COMMAND $<TARGET_FILE:slangc> -target spirv -profile glsl_450 -entry computeMain -stage compute -I "${PROJECT_SOURCE_DIR}/shaders/slang" -o ${SPIRV_COMP} ${SLANG_FILE}
-            DEPENDS ${SLANG_FILE} slangc
+            DEPENDS ${SLANG_FILE} "${PROJECT_SOURCE_DIR}/shaders/slang/input_structures.slang" slangc
             COMMENT "Compiling Slang compute shader ${FILE_NAME_WE}"
             VERBATIM
         )

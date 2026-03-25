@@ -113,6 +113,7 @@ void Renderer::init(VkDevice                          device,
 	initBackgroundPipelines();
 	initShadowPipeline();
 	initPointShadowPipeline();
+	initCullPipeline();
 	initPickingResources(windowExtent);
 	initObjectIDPipeline();
 }
@@ -172,6 +173,12 @@ void Renderer::cleanup()
 		vkDestroyPipeline(m_device, m_pointShadowPipeline, nullptr);
 	if (m_pointShadowPipelineLayout != VK_NULL_HANDLE)
 		vkDestroyPipelineLayout(m_device, m_pointShadowPipelineLayout, nullptr);
+
+	// Cleanup GPU culling pipeline
+	if (m_cullPipeline != VK_NULL_HANDLE)
+		vkDestroyPipeline(m_device, m_cullPipeline, nullptr);
+	if (m_cullPipelineLayout != VK_NULL_HANDLE)
+		vkDestroyPipelineLayout(m_device, m_cullPipelineLayout, nullptr);
 
 	// Cleanup pipelines
 	vkDestroyPipelineLayout(m_device, m_gradientPipelineLayout, nullptr);
@@ -455,7 +462,7 @@ void Renderer::initDescriptors()
 		builder.addBinding(
 		4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER); // Point shadow cube map
 		m_gpuSceneDataLayoutInfo = builder.buildForDescriptorBuffer(
-		m_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+		m_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT);
 		m_gpuSceneDataDescriptorLayout = m_gpuSceneDataLayoutInfo.layout;
 	}
 
@@ -696,6 +703,51 @@ void Renderer::initPointShadowPipeline()
 	vkDestroyShaderModule(m_device, pointShadowFragShader, nullptr);
 
 	AGNI_PRINT("Point shadow pipeline created successfully\n");
+}
+
+void Renderer::initCullPipeline()
+{
+	VkShaderModule cullShader;
+	if (!vkutil::loadShaderModule(resPath("shaders/slang/frustum_cull.comp.spv").c_str(),
+	                              m_device,
+	                              &cullShader))
+	{
+		AGNI_PRINT("Failed to load frustum cull compute shader — GPU culling disabled\n");
+		m_gpuCullingEnabled = false;
+		return;
+	}
+
+	// Pipeline layout: 1 descriptor set (scene data), push constants for CullPushConstants
+	VkPushConstantRange pushConstantRange {};
+	pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	pushConstantRange.offset     = 0;
+	pushConstantRange.size       = sizeof(CullPushConstants);
+
+	VkPipelineLayoutCreateInfo layoutInfo {};
+	layoutInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	layoutInfo.setLayoutCount         = 1;
+	layoutInfo.pSetLayouts            = &m_gpuSceneDataDescriptorLayout;
+	layoutInfo.pushConstantRangeCount = 1;
+	layoutInfo.pPushConstantRanges    = &pushConstantRange;
+
+	VK_CHECK(vkCreatePipelineLayout(m_device, &layoutInfo, nullptr, &m_cullPipelineLayout));
+
+	VkPipelineShaderStageCreateInfo stageInfo {};
+	stageInfo.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stageInfo.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
+	stageInfo.module = cullShader;
+	stageInfo.pName  = "main";
+
+	VkComputePipelineCreateInfo pipelineInfo {};
+	pipelineInfo.sType  = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	pipelineInfo.flags  = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+	pipelineInfo.layout = m_cullPipelineLayout;
+	pipelineInfo.stage  = stageInfo;
+
+	VK_CHECK(vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_cullPipeline));
+
+	vkDestroyShaderModule(m_device, cullShader, nullptr);
+	AGNI_PRINT("Frustum cull compute pipeline created successfully\n");
 }
 
 glm::mat4 Renderer::calculateLightSpaceMatrix(const glm::vec3& lightDir)
@@ -1514,10 +1566,13 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 #endif
 
 	// reset counters
-	m_stats.m_drawcallCount = 0;
-	m_stats.m_triangleCount = 0;
+	m_stats.m_drawcallCount  = 0;
+	m_stats.m_triangleCount  = 0;
+	m_stats.m_gpuCullingActive = false;
 	// begin clock
 	auto start = std::chrono::system_clock::now();
+
+	const bool gpuCulling = m_gpuCullingEnabled && m_cullPipeline != VK_NULL_HANDLE;
 
 	std::vector<uint32_t> opaqueDraws;
 	opaqueDraws.reserve(m_mainDrawContext.m_OpaqueSurfaces.size());
@@ -1528,14 +1583,24 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 #ifdef TRACY_ENABLE
 		ZoneScopedN("Frustum Culling");
 #endif
-		for (uint32_t i = 0; i < m_mainDrawContext.m_OpaqueSurfaces.size(); i++)
+		if (gpuCulling)
 		{
-			if (isVisible(m_mainDrawContext.m_OpaqueSurfaces[i],
-			              m_sceneData.m_viewproj))
-			{
+			// GPU culling — include ALL opaques, compute shader does the culling
+			for (uint32_t i = 0; i < m_mainDrawContext.m_OpaqueSurfaces.size(); i++)
 				opaqueDraws.push_back(i);
+		}
+		else
+		{
+			for (uint32_t i = 0; i < m_mainDrawContext.m_OpaqueSurfaces.size(); i++)
+			{
+				if (isVisible(m_mainDrawContext.m_OpaqueSurfaces[i],
+				              m_sceneData.m_viewproj))
+				{
+					opaqueDraws.push_back(i);
+				}
 			}
 		}
+		// Transparent surfaces always use CPU culling
 		for (uint32_t i = 0; i < m_mainDrawContext.m_TransparentSurfaces.size();
 		     i++)
 		{
@@ -1597,18 +1662,10 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 		});
 	}
 
-	// begin a render pass with MSAA images that resolve to draw image
-	VkRenderingAttachmentInfo colorAttachment =
-	vkinit::attachmentInfoMsaa(m_msaaColorImage.m_imageView,
-	                           m_drawImage.m_imageView,
-	                           nullptr,
-	                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	VkRenderingAttachmentInfo depthAttachment = vkinit::depthAttachmentInfo(
-	m_depthImage.m_imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-
-	VkRenderingInfo renderInfo =
-	vkinit::renderingInfo(m_drawExtent, &colorAttachment, &depthAttachment);
-	vkCmdBeginRendering(cmd, &renderInfo);
+	// =========================================================
+	// Scene UBO setup (before render pass for compute access)
+	// =========================================================
+	ResourceManager* rm = m_resourceManager;
 
 	//  allocate a new uniform buffer for the scene data
 	AllocatedBuffer gpuSceneDataBuffer =
@@ -1626,7 +1683,6 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 
 	// add buffers to the deletion queue of this frame so they get deleted once
 	// used
-	ResourceManager* rm = m_resourceManager;
 	currentFrame.m_deletionQueue.push_function(
 	[rm, gpuSceneDataBuffer, gpuLightDataBuffer]()
 	{
@@ -1756,7 +1812,9 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	VkDeviceSize samplerOffset  = 0;
 	VkDeviceSize materialOffset = 0;
 
-	// === Build indirect command buffer + draw data SSBO ===
+	// =========================================================
+	// Build indirect command buffer + draw data SSBO
+	// =========================================================
 	const uint32_t totalDraws =
 	static_cast<uint32_t>(opaqueDraws.size() + transparentDraws.size());
 
@@ -1790,19 +1848,33 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 		}
 	};
 
+	AllocatedBuffer indirectBuffer {};
+	AllocatedBuffer drawDataBuffer {};
+	AllocatedBuffer drawCountBuffer {};
+	VkDeviceAddress drawDataBDA = 0;
+	std::vector<IndirectBatch> opaqueBatches;
+	std::vector<IndirectBatch> transparentBatches;
+	uint32_t transparentBase = 0;
+
 	if (totalDraws > 0)
 	{
-		// Allocate indirect command buffer
+		// Allocate indirect command buffer (extra flags for GPU culling compute access)
 		const VkDeviceSize indirectBufSize =
 		totalDraws * sizeof(VkDrawIndexedIndirectCommand);
-		AllocatedBuffer indirectBuffer = m_resourceManager->createBuffer(
+
+		VkBufferUsageFlags indirectUsage = VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+		if (gpuCulling)
+			indirectUsage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+			                 VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+
+		indirectBuffer = m_resourceManager->createBuffer(
 		indirectBufSize,
-		VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
+		indirectUsage,
 		VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 		// Allocate draw data SSBO
 		const VkDeviceSize drawDataBufSize = totalDraws * sizeof(GPUDrawData);
-		AllocatedBuffer    drawDataBuffer  = m_resourceManager->createBuffer(
+		drawDataBuffer = m_resourceManager->createBuffer(
         drawDataBufSize,
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
         VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
@@ -1829,8 +1901,7 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 		             0);
 
 		// Fill transparent draws (starting after opaques)
-		const uint32_t transparentBase =
-		static_cast<uint32_t>(opaqueDraws.size());
+		transparentBase = static_cast<uint32_t>(opaqueDraws.size());
 		fillDrawData(transparentDraws,
 		             m_mainDrawContext.m_TransparentSurfaces,
 		             indirectCmds,
@@ -1841,8 +1912,7 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 		VkBufferDeviceAddressInfo drawDataAddrInfo {};
 		drawDataAddrInfo.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
 		drawDataAddrInfo.buffer = drawDataBuffer.m_buffer;
-		VkDeviceAddress drawDataBDA =
-		vkGetBufferDeviceAddress(m_device, &drawDataAddrInfo);
+		drawDataBDA = vkGetBufferDeviceAddress(m_device, &drawDataAddrInfo);
 
 		// Build batches by index buffer for a range of draws
 		auto buildBatches = [&](uint32_t rangeStart,
@@ -1879,6 +1949,139 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 			return batches;
 		};
 
+		// Build batches (needed before GPU cull for drawCountBuffer)
+		opaqueBatches = buildBatches(
+		0,
+		static_cast<uint32_t>(opaqueDraws.size()),
+		opaqueDraws,
+		m_mainDrawContext.m_OpaqueSurfaces);
+
+		transparentBatches = buildBatches(
+		transparentBase,
+		static_cast<uint32_t>(transparentDraws.size()),
+		transparentDraws,
+		m_mainDrawContext.m_TransparentSurfaces);
+
+		// =========================================================
+		// GPU frustum culling dispatch (before render pass)
+		// =========================================================
+		if (gpuCulling && !opaqueDraws.empty())
+		{
+#ifdef TRACY_ENABLE
+			ZoneScopedN("GPU Frustum Cull Dispatch");
+#endif
+			const uint32_t opaqueCount = static_cast<uint32_t>(opaqueDraws.size());
+			m_stats.m_gpuCullingActive = true;
+
+			// Allocate bounds buffer (per-opaque draw)
+			AllocatedBuffer boundsBuffer = m_resourceManager->createBuffer(
+			opaqueCount * sizeof(GPUBoundsData),
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+			VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+			// Fill bounds data
+			auto* boundsPtr = static_cast<GPUBoundsData*>(boundsBuffer.m_info.pMappedData);
+			for (uint32_t i = 0; i < opaqueCount; i++)
+			{
+				const RenderObject& r = m_mainDrawContext.m_OpaqueSurfaces[opaqueDraws[i]];
+				boundsPtr[i].m_origin       = r.m_bounds.m_origin;
+				boundsPtr[i].m_sphereRadius = r.m_bounds.m_sphereRadius;
+				boundsPtr[i].m_worldMatrix  = r.m_transform;
+			}
+
+			// Allocate draw count buffer (one uint32_t per opaque batch)
+			const uint32_t numOpaqueBatches = static_cast<uint32_t>(opaqueBatches.size());
+			drawCountBuffer = m_resourceManager->createBuffer(
+			numOpaqueBatches * sizeof(uint32_t),
+			VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
+			VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+			auto* countPtr = static_cast<uint32_t*>(drawCountBuffer.m_info.pMappedData);
+			for (uint32_t i = 0; i < numOpaqueBatches; i++)
+				countPtr[i] = opaqueBatches[i].commandCount;
+
+			// Add to frame deletion queue
+			currentFrame.m_deletionQueue.push_function(
+			[rm, boundsBuffer, drawCountBuffer]()
+			{
+				rm->destroyBuffer(boundsBuffer);
+				rm->destroyBuffer(drawCountBuffer);
+			});
+
+			// Get BDAs
+			VkBufferDeviceAddressInfo bdaInfo {};
+			bdaInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+
+			bdaInfo.buffer = boundsBuffer.m_buffer;
+			VkDeviceAddress boundsBDA = vkGetBufferDeviceAddress(m_device, &bdaInfo);
+
+			bdaInfo.buffer = indirectBuffer.m_buffer;
+			VkDeviceAddress indirectBDA = vkGetBufferDeviceAddress(m_device, &bdaInfo);
+
+			// Bind cull compute pipeline
+			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_cullPipeline);
+
+			// Set descriptor buffer offsets for compute bind point (set 0 = scene data)
+			uint32_t     cullBufferIndex = 0;
+			VkDeviceSize cullOffset      = sceneDescriptorOffset;
+			vkCmdSetDescriptorBufferOffsetsEXT(
+			cmd,
+			VK_PIPELINE_BIND_POINT_COMPUTE,
+			m_cullPipelineLayout,
+			0, 1,
+			&cullBufferIndex,
+			&cullOffset);
+
+			// Push constants
+			CullPushConstants cullPC {};
+			cullPC.m_boundsBufferPtr   = boundsBDA;
+			cullPC.m_indirectBufferPtr = indirectBDA;
+			cullPC.m_drawCount         = opaqueCount;
+			vkCmdPushConstants(cmd,
+			                   m_cullPipelineLayout,
+			                   VK_SHADER_STAGE_COMPUTE_BIT,
+			                   0,
+			                   sizeof(CullPushConstants),
+			                   &cullPC);
+
+			// Dispatch
+			vkCmdDispatch(cmd, (opaqueCount + 63) / 64, 1, 1);
+
+			// Memory barrier: compute write -> indirect command read
+			VkMemoryBarrier2 barrier {};
+			barrier.sType         = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+			barrier.srcStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+			barrier.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT;
+			barrier.dstStageMask  = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
+			barrier.dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
+
+			VkDependencyInfo depInfo {};
+			depInfo.sType              = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+			depInfo.memoryBarrierCount = 1;
+			depInfo.pMemoryBarriers    = &barrier;
+
+			vkCmdPipelineBarrier2(cmd, &depInfo);
+		}
+	}
+
+	// =========================================================
+	// Begin render pass
+	// =========================================================
+	VkRenderingAttachmentInfo colorAttachment =
+	vkinit::attachmentInfoMsaa(m_msaaColorImage.m_imageView,
+	                           m_drawImage.m_imageView,
+	                           nullptr,
+	                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	VkRenderingAttachmentInfo depthAttachment = vkinit::depthAttachmentInfo(
+	m_depthImage.m_imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
+	VkRenderingInfo renderInfo =
+	vkinit::renderingInfo(m_drawExtent, &colorAttachment, &depthAttachment);
+	vkCmdBeginRendering(cmd, &renderInfo);
+
+	if (totalDraws > 0)
+	{
 		// Helper: bind pipeline state once per pass
 		auto bindPipelineState = [&](MaterialPipeline* pipeline)
 		{
@@ -1929,18 +2132,32 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 		};
 
 		// Helper: issue draws for batches
-		auto issueBatchDraws = [&](const std::vector<IndirectBatch>& batches)
+		auto issueBatchDraws = [&](const std::vector<IndirectBatch>& batches,
+		                           bool useIndirectCount,
+		                           uint32_t batchIndexOffset)
 		{
 			constexpr uint32_t stride = sizeof(VkDrawIndexedIndirectCommand);
-			for (const auto& batch : batches)
+			for (uint32_t bIdx = 0; bIdx < batches.size(); bIdx++)
 			{
+				const auto& batch = batches[bIdx];
 				vkCmdBindIndexBuffer(
 				cmd, batch.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
 				VkDeviceSize bufferOffset =
 				batch.firstCommandIndex * stride;
 
-				if (m_multiDrawIndirectSupported && m_multiDrawIndirectEnabled)
+				if (useIndirectCount)
+				{
+					vkCmdDrawIndexedIndirectCount(cmd,
+					                              indirectBuffer.m_buffer,
+					                              bufferOffset,
+					                              drawCountBuffer.m_buffer,
+					                              (batchIndexOffset + bIdx) * sizeof(uint32_t),
+					                              batch.commandCount,
+					                              stride);
+					m_stats.m_drawcallCount++;
+				}
+				else if (m_multiDrawIndirectSupported && m_multiDrawIndirectEnabled)
 				{
 					vkCmdDrawIndexedIndirect(cmd,
 					                         indirectBuffer.m_buffer,
@@ -1975,12 +2192,7 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 			m_mainDrawContext.m_OpaqueSurfaces[opaqueDraws[0]];
 			bindPipelineState(firstOpaque.m_material->m_pipeline);
 
-			auto opaqueBatches = buildBatches(
-			0,
-			static_cast<uint32_t>(opaqueDraws.size()),
-			opaqueDraws,
-			m_mainDrawContext.m_OpaqueSurfaces);
-			issueBatchDraws(opaqueBatches);
+			issueBatchDraws(opaqueBatches, gpuCulling, 0);
 		}
 
 		// === Draw transparent ===
@@ -1993,12 +2205,8 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 			m_mainDrawContext.m_TransparentSurfaces[transparentDraws[0]];
 			bindPipelineState(firstTransparent.m_material->m_pipeline);
 
-			auto transparentBatches = buildBatches(
-			transparentBase,
-			static_cast<uint32_t>(transparentDraws.size()),
-			transparentDraws,
-			m_mainDrawContext.m_TransparentSurfaces);
-			issueBatchDraws(transparentBatches);
+			// Transparent always uses regular indirect draws (CPU-culled)
+			issueBatchDraws(transparentBatches, false, 0);
 		}
 	}
 
@@ -2191,6 +2399,32 @@ void Renderer::updateScene(float deltaTime, VkExtent2D windowExtent)
 	}
 
 	m_sceneData.m_cameraPosition = m_camera->m_position;
+
+	// Gribb-Hartmann: extract + normalize 6 frustum planes from viewProj
+	// Each plane stored as (nx, ny, nz, d) where nx*x + ny*y + nz*z + d = 0
+	{
+		const glm::mat4& m = viewProj;
+		// Left
+		m_sceneData.m_frustumPlanes[0] = glm::vec4(m[0][3] + m[0][0], m[1][3] + m[1][0], m[2][3] + m[2][0], m[3][3] + m[3][0]);
+		// Right
+		m_sceneData.m_frustumPlanes[1] = glm::vec4(m[0][3] - m[0][0], m[1][3] - m[1][0], m[2][3] - m[2][0], m[3][3] - m[3][0]);
+		// Bottom
+		m_sceneData.m_frustumPlanes[2] = glm::vec4(m[0][3] + m[0][1], m[1][3] + m[1][1], m[2][3] + m[2][1], m[3][3] + m[3][1]);
+		// Top
+		m_sceneData.m_frustumPlanes[3] = glm::vec4(m[0][3] - m[0][1], m[1][3] - m[1][1], m[2][3] - m[2][1], m[3][3] - m[3][1]);
+		// Near (reverse-Z: w+z for near plane)
+		m_sceneData.m_frustumPlanes[4] = glm::vec4(m[0][3] + m[0][2], m[1][3] + m[1][2], m[2][3] + m[2][2], m[3][3] + m[3][2]);
+		// Far (reverse-Z: w-z for far plane)
+		m_sceneData.m_frustumPlanes[5] = glm::vec4(m[0][3] - m[0][2], m[1][3] - m[1][2], m[2][3] - m[2][2], m[3][3] - m[3][2]);
+
+		// Normalize each plane
+		for (int i = 0; i < 6; i++)
+		{
+			float len = glm::length(glm::vec3(m_sceneData.m_frustumPlanes[i]));
+			if (len > 0.0f)
+				m_sceneData.m_frustumPlanes[i] /= len;
+		}
+	}
 
 	// Calculate shadow mapping data for directional light
 	if (m_shadowsEnabled && m_mainDrawContext.m_DirectionalLight.active)

@@ -18,6 +18,7 @@ struct SceneData
     float  pointShadowPadding;       // Alignment padding
     float3 camPos;                   // camera position for view vector
     float  padding;                  // alignment padding
+    float4 frustumPlanes[6];         // Gribb-Hartmann frustum planes for GPU culling
 };
 
 // Legacy material data uniform buffer (unused with bindless)
@@ -85,6 +86,13 @@ struct GPUDrawData
     uint64_t vertexBufferPtr;
     uint     materialIndex;
     uint     padding;
+};
+
+// Per-draw bounds for GPU frustum culling (matches C++ GPUBoundsData)
+struct BoundsData {
+    float3   origin;
+    float    sphereRadius;
+    float4x4 worldMatrix;
 };
 
 // Light data buffer structure (matches C++ GPULightData)

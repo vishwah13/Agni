@@ -215,7 +215,8 @@ void EditorUI::renderPerformanceWindow()
 
 			widgets::StatDisplay("Draw Time", drawTimeStr);
 			widgets::StatDisplay("Update Time", updateTimeStr);
-			widgets::StatDisplay("Triangles", trisStr);
+			const bool gpuCull = m_engine.getRenderer().getStats().m_gpuCullingActive;
+			widgets::StatDisplay(gpuCull ? "Triangles (submitted)" : "Triangles", trisStr);
 			widgets::StatDisplay("Draw Calls", drawsStr);
 		}
 		}
@@ -259,6 +260,14 @@ void EditorUI::renderRenderingWindow()
 					m_engine.getSwapchainManager().requestResize();
 				}
 			}
+			ImGui::PopID();
+		}
+
+		// Culling
+		if (widgets::CollapsibleSection("Culling", icons::Quality))
+		{
+			ImGui::PushID("Culling");
+			widgets::PropertyCheckbox("GPU Frustum Culling", &m_engine.getRenderer().getGpuCullingEnabled());
 			ImGui::PopID();
 		}
 
