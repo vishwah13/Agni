@@ -528,6 +528,7 @@ void AgniEngine::initVulkan()
 	.sampleRateShading          = VK_TRUE,
 	.multiDrawIndirect          = VK_TRUE,
 	.drawIndirectFirstInstance  = VK_TRUE, // Required: indirect draws use firstInstance as draw index
+	.pipelineStatisticsQuery    = VK_TRUE, // Required for GPU-side rendered triangle counting
 	.shaderInt64                = VK_TRUE  // Required for uint64_t buffer device addresses in shaders
 	};
 
@@ -543,6 +544,7 @@ void AgniEngine::initVulkan()
 	features12.bufferDeviceAddress = true;
 	features12.descriptorIndexing  = true;
 	features12.drawIndirectCount   = true;
+	features12.hostQueryReset      = true;
 	features12.shaderInt8          = true;
 	// Bindless texture indexing features (shader-side only, layout flags
 	// implicit with descriptor buffers)

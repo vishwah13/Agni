@@ -26,11 +26,12 @@ class World;
 struct EngineStats
 {
 	float m_frametime       = 0.0f;
-	int   m_triangleCount   = 0;
+	int   m_triangleCount   = 0;   // Submitted triangles (CPU-side count)
 	int   m_drawcallCount   = 0;
 	float m_sceneUpdateTime = 0.0f;
 	float m_meshDrawTime    = 0.0f;
-	bool  m_gpuCullingActive = false; // true when GPU culling is in use (stats are "submitted", not "visible")
+	bool  m_gpuCullingActive   = false;
+	int   m_renderedTriangles  = 0; // GPU-reported primitives (from pipeline statistics query)
 };
 
 struct ComputePushConstants
@@ -322,6 +323,11 @@ private:
 	VkPipeline       m_cullPipeline       = VK_NULL_HANDLE;
 	VkPipelineLayout m_cullPipelineLayout = VK_NULL_HANDLE;
 	bool             m_gpuCullingEnabled  = true;
+
+	// Pipeline statistics query (GPU-side rendered triangle count)
+	static constexpr uint32_t STATS_FRAME_OVERLAP = 2;
+	VkQueryPool m_statsQueryPool[STATS_FRAME_OVERLAP] = {VK_NULL_HANDLE, VK_NULL_HANDLE};
+	uint32_t    m_statsFrameIndex = 0; // alternates 0/1 each frame
 
 	// Multi-draw indirect support
 	bool m_multiDrawIndirectSupported {false};

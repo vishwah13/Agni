@@ -114,6 +114,19 @@ void Renderer::init(VkDevice                          device,
 	initShadowPipeline();
 	initPointShadowPipeline();
 	initCullPipeline();
+
+	// Create pipeline statistics query pools (one per frame-in-flight)
+	for (uint32_t i = 0; i < STATS_FRAME_OVERLAP; i++)
+	{
+		VkQueryPoolCreateInfo queryInfo {};
+		queryInfo.sType      = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+		queryInfo.queryType  = VK_QUERY_TYPE_PIPELINE_STATISTICS;
+		queryInfo.queryCount = 1;
+		queryInfo.pipelineStatistics = VK_QUERY_PIPELINE_STATISTIC_CLIPPING_INVOCATIONS_BIT;
+		VK_CHECK(vkCreateQueryPool(m_device, &queryInfo, nullptr, &m_statsQueryPool[i]));
+		vkResetQueryPool(m_device, m_statsQueryPool[i], 0, 1);
+	}
+
 	initPickingResources(windowExtent);
 	initObjectIDPipeline();
 }
@@ -173,6 +186,13 @@ void Renderer::cleanup()
 		vkDestroyPipeline(m_device, m_pointShadowPipeline, nullptr);
 	if (m_pointShadowPipelineLayout != VK_NULL_HANDLE)
 		vkDestroyPipelineLayout(m_device, m_pointShadowPipelineLayout, nullptr);
+
+	// Cleanup pipeline statistics query pools
+	for (uint32_t i = 0; i < STATS_FRAME_OVERLAP; i++)
+	{
+		if (m_statsQueryPool[i] != VK_NULL_HANDLE)
+			vkDestroyQueryPool(m_device, m_statsQueryPool[i], nullptr);
+	}
 
 	// Cleanup GPU culling pipeline
 	if (m_cullPipeline != VK_NULL_HANDLE)
@@ -1569,6 +1589,20 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	m_stats.m_drawcallCount  = 0;
 	m_stats.m_triangleCount  = 0;
 	m_stats.m_gpuCullingActive = false;
+
+	// Read back pipeline statistics from the PREVIOUS frame's query
+	{
+		uint32_t readIdx = (m_statsFrameIndex + 1) % STATS_FRAME_OVERLAP;
+		uint64_t statsResult = 0;
+		VkResult qr = vkGetQueryPoolResults(
+		m_device, m_statsQueryPool[readIdx], 0, 1,
+		sizeof(uint64_t), &statsResult, sizeof(uint64_t),
+		VK_QUERY_RESULT_64_BIT);
+		if (qr == VK_SUCCESS)
+			m_stats.m_renderedTriangles = static_cast<int>(statsResult);
+		// VK_NOT_READY means previous frame not done yet — keep old value
+	}
+
 	// begin clock
 	auto start = std::chrono::system_clock::now();
 
@@ -2078,6 +2112,11 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 
 	VkRenderingInfo renderInfo =
 	vkinit::renderingInfo(m_drawExtent, &colorAttachment, &depthAttachment);
+	// Begin pipeline statistics query (must be outside render pass)
+	uint32_t writeIdx = m_statsFrameIndex;
+	vkCmdResetQueryPool(cmd, m_statsQueryPool[writeIdx], 0, 1);
+	vkCmdBeginQuery(cmd, m_statsQueryPool[writeIdx], 0, 0);
+
 	vkCmdBeginRendering(cmd, &renderInfo);
 
 	if (totalDraws > 0)
@@ -2224,6 +2263,10 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	}
 
 	vkCmdEndRendering(cmd);
+
+	// End pipeline statistics query and advance frame index (must be outside render pass)
+	vkCmdEndQuery(cmd, m_statsQueryPool[writeIdx], 0);
+	m_statsFrameIndex = (m_statsFrameIndex + 1) % STATS_FRAME_OVERLAP;
 
 	auto end = std::chrono::system_clock::now();
 

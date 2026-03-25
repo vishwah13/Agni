@@ -213,10 +213,13 @@ void EditorUI::renderPerformanceWindow()
 			snprintf(trisStr, sizeof(trisStr), "%d", m_engine.getRenderer().getStats().m_triangleCount);
 			snprintf(drawsStr, sizeof(drawsStr), "%d", m_engine.getRenderer().getStats().m_drawcallCount);
 
+			char renderedTrisStr[32];
+			snprintf(renderedTrisStr, sizeof(renderedTrisStr), "%d", m_engine.getRenderer().getStats().m_renderedTriangles);
+
 			widgets::StatDisplay("Draw Time", drawTimeStr);
 			widgets::StatDisplay("Update Time", updateTimeStr);
-			const bool gpuCull = m_engine.getRenderer().getStats().m_gpuCullingActive;
-			widgets::StatDisplay(gpuCull ? "Triangles (submitted)" : "Triangles", trisStr);
+			widgets::StatDisplay("Triangles (submitted)", trisStr);
+			widgets::StatDisplay("Triangles (rendered)", renderedTrisStr);
 			widgets::StatDisplay("Draw Calls", drawsStr);
 		}
 		}
