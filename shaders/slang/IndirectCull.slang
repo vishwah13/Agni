@@ -2,7 +2,7 @@
 // Reads per-draw bounds via BDA, tests sphere-vs-6-planes,
 // optionally tests against Hi-Z depth pyramid,
 // writes instanceCount=0 for culled draws via BDA.
-import input_structures;
+import InputStructures;
 
 // Scene data (set 0, binding 0)
 [[vk::binding(0, 0)]]

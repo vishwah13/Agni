@@ -76,27 +76,27 @@ if(AGNI_COMPILE_SHADERS)
     # Graphics shaders (mesh, skybox, tex_image) have vertex/fragment entry points
     # Compute shaders (gradient, gradient_color, sky, raymarching) have compute entry points
     set(SLANG_GRAPHICS_SHADERS
-        "${PROJECT_SOURCE_DIR}/shaders/slang/mesh.slang"
-        "${PROJECT_SOURCE_DIR}/shaders/slang/skybox.slang"
-        "${PROJECT_SOURCE_DIR}/shaders/slang/objectid.slang"
-        "${PROJECT_SOURCE_DIR}/shaders/slang/point_shadow.slang"
+        "${PROJECT_SOURCE_DIR}/shaders/slang/Mesh.slang"
+        "${PROJECT_SOURCE_DIR}/shaders/slang/Skybox.slang"
+        "${PROJECT_SOURCE_DIR}/shaders/slang/ObjectId.slang"
+        "${PROJECT_SOURCE_DIR}/shaders/slang/PointShadow.slang"
         "${PROJECT_SOURCE_DIR}/shaders/slang/MeshFallback.slang"
         "${PROJECT_SOURCE_DIR}/shaders/slang/SkyboxFallback.slang"
     )
 
     set(SLANG_FRAGMENT_ONLY_SHADERS
-        "${PROJECT_SOURCE_DIR}/shaders/slang/tex_image.slang"
+        "${PROJECT_SOURCE_DIR}/shaders/slang/TexImage.slang"
     )
 
     set(SLANG_VERTEX_ONLY_SHADERS
-        "${PROJECT_SOURCE_DIR}/shaders/slang/shadow.slang"
+        "${PROJECT_SOURCE_DIR}/shaders/slang/Shadow.slang"
     )
 
     set(SLANG_COMPUTE_SHADERS
-        "${PROJECT_SOURCE_DIR}/shaders/slang/gradient.slang"
-        "${PROJECT_SOURCE_DIR}/shaders/slang/gradient_color.slang"
-        "${PROJECT_SOURCE_DIR}/shaders/slang/sky.slang"
-        "${PROJECT_SOURCE_DIR}/shaders/slang/raymarching.slang"
+        "${PROJECT_SOURCE_DIR}/shaders/slang/Gradient.slang"
+        "${PROJECT_SOURCE_DIR}/shaders/slang/GradientColor.slang"
+        "${PROJECT_SOURCE_DIR}/shaders/slang/Sky.slang"
+        "${PROJECT_SOURCE_DIR}/shaders/slang/Raymarching.slang"
         "${PROJECT_SOURCE_DIR}/shaders/slang/IndirectCull.slang"
         "${PROJECT_SOURCE_DIR}/shaders/slang/HiZDownsample.slang"
     )
@@ -113,7 +113,7 @@ if(AGNI_COMPILE_SHADERS)
         add_custom_command(
             OUTPUT ${SPIRV_VERT}
             COMMAND $<TARGET_FILE:slangc> -target spirv -profile glsl_450 -entry vertexMain -stage vertex -I "${PROJECT_SOURCE_DIR}/shaders/slang" -o ${SPIRV_VERT} ${SLANG_FILE}
-            DEPENDS ${SLANG_FILE} "${PROJECT_SOURCE_DIR}/shaders/slang/input_structures.slang" slangc
+            DEPENDS ${SLANG_FILE} "${PROJECT_SOURCE_DIR}/shaders/slang/InputStructures.slang" slangc
             COMMENT "Compiling Slang vertex shader ${FILE_NAME_WE}"
             VERBATIM
         )
@@ -122,7 +122,7 @@ if(AGNI_COMPILE_SHADERS)
         add_custom_command(
             OUTPUT ${SPIRV_FRAG}
             COMMAND $<TARGET_FILE:slangc> -target spirv -profile glsl_450 -entry fragmentMain -stage fragment -I "${PROJECT_SOURCE_DIR}/shaders/slang" -o ${SPIRV_FRAG} ${SLANG_FILE}
-            DEPENDS ${SLANG_FILE} "${PROJECT_SOURCE_DIR}/shaders/slang/input_structures.slang" slangc
+            DEPENDS ${SLANG_FILE} "${PROJECT_SOURCE_DIR}/shaders/slang/InputStructures.slang" slangc
             COMMENT "Compiling Slang fragment shader ${FILE_NAME_WE}"
             VERBATIM
         )
@@ -160,7 +160,7 @@ if(AGNI_COMPILE_SHADERS)
         add_custom_command(
             OUTPUT ${SPIRV_VERT}
             COMMAND $<TARGET_FILE:slangc> -target spirv -profile glsl_450 -entry vertexMain -stage vertex -I "${PROJECT_SOURCE_DIR}/shaders/slang" -o ${SPIRV_VERT} ${SLANG_FILE}
-            DEPENDS ${SLANG_FILE} "${PROJECT_SOURCE_DIR}/shaders/slang/input_structures.slang" slangc
+            DEPENDS ${SLANG_FILE} "${PROJECT_SOURCE_DIR}/shaders/slang/InputStructures.slang" slangc
             COMMENT "Compiling Slang vertex shader ${FILE_NAME_WE}"
             VERBATIM
         )
@@ -179,7 +179,7 @@ if(AGNI_COMPILE_SHADERS)
         add_custom_command(
             OUTPUT ${SPIRV_COMP}
             COMMAND $<TARGET_FILE:slangc> -target spirv -profile glsl_450 -entry computeMain -stage compute -I "${PROJECT_SOURCE_DIR}/shaders/slang" -o ${SPIRV_COMP} ${SLANG_FILE}
-            DEPENDS ${SLANG_FILE} "${PROJECT_SOURCE_DIR}/shaders/slang/input_structures.slang" slangc
+            DEPENDS ${SLANG_FILE} "${PROJECT_SOURCE_DIR}/shaders/slang/InputStructures.slang" slangc
             COMMENT "Compiling Slang compute shader ${FILE_NAME_WE}"
             VERBATIM
         )

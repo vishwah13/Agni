@@ -49,7 +49,7 @@ void Skybox::buildPipelines(AgniEngine* engine)
 {
 	VkShaderModule skyFragShader;
 	if (!vkutil::loadShaderModuleWithFallback(
-	    resPath("shaders/slang/skybox.frag.spv").c_str(),
+	    resPath("shaders/slang/Skybox.frag.spv").c_str(),
 	    engine->m_device,
 	    &skyFragShader,
 	    FallbackShaders::skyboxFragSpv,
@@ -60,7 +60,7 @@ void Skybox::buildPipelines(AgniEngine* engine)
 
 	VkShaderModule skyVertexShader;
 	if (!vkutil::loadShaderModuleWithFallback(
-	    resPath("shaders/slang/skybox.vert.spv").c_str(),
+	    resPath("shaders/slang/Skybox.vert.spv").c_str(),
 	    engine->m_device,
 	    &skyVertexShader,
 	    FallbackShaders::skyboxVertSpv,

@@ -1,6 +1,6 @@
 // Shadow pass shader - depth-only rendering from light's perspective
 // Uses indirect draw with BDA-based GPUDrawData lookup
-import input_structures;
+import InputStructures;
 
 // Scene data (set 0, binding 0) - contains lightSpaceMatrix
 [[vk::binding(0, 0)]]

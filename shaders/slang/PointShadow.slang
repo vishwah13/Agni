@@ -1,7 +1,7 @@
 // Point shadow pass shader - outputs linear depth (distance from light)
 // Used for omnidirectional shadow mapping with cube maps
 // Uses indirect draw with BDA-based GPUDrawData lookup
-import input_structures;
+import InputStructures;
 
 // Push constants for indirect point shadow pass
 // Per-draw data (worldMatrix, vertexBuffer) moved to GPUDrawData SSBO

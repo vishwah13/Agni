@@ -554,7 +554,7 @@ void Renderer::initBackgroundPipelines()
 	m_device, &computeLayout, nullptr, &m_gradientPipelineLayout));
 
 	VkShaderModule gradientShader;
-	if (!vkutil::loadShaderModule(resPath("shaders/slang/gradient_color.comp.spv").c_str(),
+	if (!vkutil::loadShaderModule(resPath("shaders/slang/GradientColor.comp.spv").c_str(),
 	                              m_device,
 	                              &gradientShader))
 	{
@@ -563,7 +563,7 @@ void Renderer::initBackgroundPipelines()
 
 	VkShaderModule skyShader;
 	if (!vkutil::loadShaderModule(
-	    resPath("shaders/slang/sky.comp.spv").c_str(), m_device, &skyShader))
+	    resPath("shaders/slang/Sky.comp.spv").c_str(), m_device, &skyShader))
 	{
 		AGNI_PRINT("Error when building the compute shader \n");
 	}
@@ -631,7 +631,7 @@ void Renderer::initShadowPipeline()
 	// Load shadow pass shader (vertex only, no fragment for depth-only pass)
 	VkShaderModule shadowVertShader;
 	if (!vkutil::loadShaderModule(
-	    resPath("shaders/slang/shadow.vert.spv").c_str(), m_device, &shadowVertShader))
+	    resPath("shaders/slang/Shadow.vert.spv").c_str(), m_device, &shadowVertShader))
 	{
 		AGNI_PRINT("Failed to load shadow vertex shader\n");
 		return;
@@ -692,7 +692,7 @@ void Renderer::initPointShadowPipeline()
 	// Load point shadow pass shaders (vertex + fragment for linear depth
 	// output)
 	VkShaderModule pointShadowVertShader;
-	if (!vkutil::loadShaderModule(resPath("shaders/slang/point_shadow.vert.spv").c_str(),
+	if (!vkutil::loadShaderModule(resPath("shaders/slang/PointShadow.vert.spv").c_str(),
 	                              m_device,
 	                              &pointShadowVertShader))
 	{
@@ -701,7 +701,7 @@ void Renderer::initPointShadowPipeline()
 	}
 
 	VkShaderModule pointShadowFragShader;
-	if (!vkutil::loadShaderModule(resPath("shaders/slang/point_shadow.frag.spv").c_str(),
+	if (!vkutil::loadShaderModule(resPath("shaders/slang/PointShadow.frag.spv").c_str(),
 	                              m_device,
 	                              &pointShadowFragShader))
 	{
@@ -2974,14 +2974,14 @@ void Renderer::initObjectIDPipeline()
 	VkShaderModule fragmentShader;
 
 	if (!vkutil::loadShaderModule(
-	    resPath("shaders/slang/objectid.vert.spv").c_str(), m_device, &vertexShader))
+	    resPath("shaders/slang/ObjectId.vert.spv").c_str(), m_device, &vertexShader))
 	{
 		AGNI_PRINT("Failed to load objectid vertex shader\n");
 		return;
 	}
 
 	if (!vkutil::loadShaderModule(
-	    resPath("shaders/slang/objectid.frag.spv").c_str(), m_device, &fragmentShader))
+	    resPath("shaders/slang/ObjectId.frag.spv").c_str(), m_device, &fragmentShader))
 	{
 		AGNI_PRINT("Failed to load objectid fragment shader\n");
 		vkDestroyShaderModule(m_device, vertexShader, nullptr);
