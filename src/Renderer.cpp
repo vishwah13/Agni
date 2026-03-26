@@ -107,6 +107,7 @@ void Renderer::init(VkDevice                          device,
 	// after AssetLoader creates the samplers
 
 	initRenderTargets(windowExtent);
+	initHiZResources();
 	initShadowResources();
 	initPointShadowResources();
 	initDescriptors();
@@ -114,6 +115,7 @@ void Renderer::init(VkDevice                          device,
 	initShadowPipeline();
 	initPointShadowPipeline();
 	initCullPipeline();
+	initHiZPipeline();
 
 	// Create pipeline statistics query pools (one per frame-in-flight)
 	for (uint32_t i = 0; i < STATS_FRAME_OVERLAP; i++)
@@ -194,6 +196,22 @@ void Renderer::cleanup()
 			vkDestroyQueryPool(m_device, m_statsQueryPool[i], nullptr);
 	}
 
+	// Cleanup Hi-Z resources
+	for (auto& view : m_hizMipViews)
+		if (view != VK_NULL_HANDLE)
+			vkDestroyImageView(m_device, view, nullptr);
+	m_hizMipViews.clear();
+	m_resourceManager->destroyImage(m_hizImage);
+	m_resourceManager->destroyImage(m_depthResolveImage);
+	if (m_hizSampler != VK_NULL_HANDLE)
+		vkDestroySampler(m_device, m_hizSampler, nullptr);
+	if (m_hizDownsamplePipeline != VK_NULL_HANDLE)
+		vkDestroyPipeline(m_device, m_hizDownsamplePipeline, nullptr);
+	if (m_hizDownsamplePipelineLayout != VK_NULL_HANDLE)
+		vkDestroyPipelineLayout(m_device, m_hizDownsamplePipelineLayout, nullptr);
+	if (m_hizDownsampleDescriptorLayout != VK_NULL_HANDLE)
+		vkDestroyDescriptorSetLayout(m_device, m_hizDownsampleDescriptorLayout, nullptr);
+
 	// Cleanup GPU culling pipeline
 	if (m_cullPipeline != VK_NULL_HANDLE)
 		vkDestroyPipeline(m_device, m_cullPipeline, nullptr);
@@ -249,6 +267,7 @@ void Renderer::resize(VkExtent2D newExtent, VkSampleCountFlagBits msaaSamples)
 
 	VkImageUsageFlags depthImageUsages {};
 	depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	depthImageUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT; // For Hi-Z depth resolve
 
 	m_drawImage = m_resourceManager->createImage(
 	drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageUsages);
@@ -265,6 +284,21 @@ void Renderer::resize(VkExtent2D newExtent, VkSampleCountFlagBits msaaSamples)
 	                                              depthImageUsages,
 	                                              false,
 	                                              m_msaaSamples);
+
+	// Recreate Hi-Z resources with new extent
+	for (auto& view : m_hizMipViews)
+		if (view != VK_NULL_HANDLE)
+			vkDestroyImageView(m_device, view, nullptr);
+	m_hizMipViews.clear();
+	m_resourceManager->destroyImage(m_hizImage);
+	m_resourceManager->destroyImage(m_depthResolveImage);
+	if (m_hizSampler != VK_NULL_HANDLE)
+	{
+		vkDestroySampler(m_device, m_hizSampler, nullptr);
+		m_hizSampler = VK_NULL_HANDLE;
+	}
+	m_hizReady = false;
+	initHiZResources();
 
 	// Recreate object ID image for picking (64-bit entity ID)
 	VkImageUsageFlags pickingColorUsages =
@@ -312,6 +346,7 @@ void Renderer::initRenderTargets(VkExtent2D windowExtent)
 
 	VkImageUsageFlags depthImageUsages {};
 	depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	depthImageUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT; // For Hi-Z depth resolve
 
 	m_drawImage = m_resourceManager->createImage(
 	drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageUsages);
@@ -481,6 +516,8 @@ void Renderer::initDescriptors()
 		3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER); // Spot shadow map
 		builder.addBinding(
 		4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER); // Point shadow cube map
+		builder.addBinding(
+		5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER); // Hi-Z depth pyramid
 		m_gpuSceneDataLayoutInfo = builder.buildForDescriptorBuffer(
 		m_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT);
 		m_gpuSceneDataDescriptorLayout = m_gpuSceneDataLayoutInfo.layout;
@@ -768,6 +805,314 @@ void Renderer::initCullPipeline()
 
 	vkDestroyShaderModule(m_device, cullShader, nullptr);
 	AGNI_PRINT("Frustum cull compute pipeline created successfully\n");
+}
+
+void Renderer::initHiZResources()
+{
+	uint32_t hizWidth  = m_drawImage.m_imageExtent.width;
+	uint32_t hizHeight = m_drawImage.m_imageExtent.height;
+
+	m_hizMipLevels = static_cast<uint32_t>(
+	std::floor(std::log2(std::max(hizWidth, hizHeight)))) + 1;
+
+	// Create Hi-Z image: R32_SFLOAT with full mip chain
+	VkExtent3D hizExtent = {hizWidth, hizHeight, 1};
+	VkImageUsageFlags hizUsage =
+	VK_IMAGE_USAGE_STORAGE_BIT |
+	VK_IMAGE_USAGE_SAMPLED_BIT |
+	VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+	m_hizImage = m_resourceManager->createImage(hizExtent,
+	                                            VK_FORMAT_R32_SFLOAT,
+	                                            hizUsage,
+	                                            true, // mipmapped
+	                                            VK_SAMPLE_COUNT_1_BIT);
+
+	// Create per-mip image views for compute storage writes
+	m_hizMipViews.resize(m_hizMipLevels);
+	for (uint32_t mip = 0; mip < m_hizMipLevels; mip++)
+	{
+		VkImageViewCreateInfo viewInfo = vkinit::imageViewCreateInfo(
+		VK_FORMAT_R32_SFLOAT, m_hizImage.m_image, VK_IMAGE_ASPECT_COLOR_BIT);
+		viewInfo.subresourceRange.baseMipLevel = mip;
+		viewInfo.subresourceRange.levelCount   = 1;
+		VK_CHECK(vkCreateImageView(m_device, &viewInfo, nullptr, &m_hizMipViews[mip]));
+	}
+
+	// Create depth resolve target (non-MSAA D32_SFLOAT)
+	VkImageUsageFlags depthResolveUsage =
+	VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+	VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+
+	m_depthResolveImage = m_resourceManager->createImage(hizExtent,
+	                                                     VK_FORMAT_D32_SFLOAT,
+	                                                     depthResolveUsage,
+	                                                     false,
+	                                                     VK_SAMPLE_COUNT_1_BIT);
+
+	// Create Hi-Z sampler: NEAREST filter, clamp to edge
+	VkSamplerCreateInfo samplerInfo {};
+	samplerInfo.sType         = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	samplerInfo.magFilter     = VK_FILTER_NEAREST;
+	samplerInfo.minFilter     = VK_FILTER_NEAREST;
+	samplerInfo.mipmapMode    = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+	samplerInfo.addressModeU  = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeV  = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeW  = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.minLod        = 0.0f;
+	samplerInfo.maxLod        = static_cast<float>(m_hizMipLevels);
+	samplerInfo.compareEnable = VK_FALSE;
+
+	VK_CHECK(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_hizSampler));
+
+	AGNI_PRINT("Hi-Z resources created: {}x{}, {} mip levels\n", hizWidth, hizHeight, m_hizMipLevels);
+}
+
+void Renderer::initHiZPipeline()
+{
+	// Descriptor layout: 2 storage images (src mip, dst mip)
+	{
+		DescriptorLayoutBuilder builder;
+		builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		builder.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		m_hizDownsampleLayoutInfo = builder.buildForDescriptorBuffer(
+		m_device, VK_SHADER_STAGE_COMPUTE_BIT);
+		m_hizDownsampleDescriptorLayout = m_hizDownsampleLayoutInfo.layout;
+	}
+
+	// Pipeline layout
+	VkPushConstantRange pushConstantRange {};
+	pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	pushConstantRange.offset     = 0;
+	pushConstantRange.size       = sizeof(HiZPushConstants);
+
+	VkPipelineLayoutCreateInfo layoutInfo {};
+	layoutInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	layoutInfo.setLayoutCount         = 1;
+	layoutInfo.pSetLayouts            = &m_hizDownsampleDescriptorLayout;
+	layoutInfo.pushConstantRangeCount = 1;
+	layoutInfo.pPushConstantRanges    = &pushConstantRange;
+
+	VK_CHECK(vkCreatePipelineLayout(m_device, &layoutInfo, nullptr, &m_hizDownsamplePipelineLayout));
+
+	VkShaderModule hizShader;
+	if (!vkutil::loadShaderModule(resPath("shaders/slang/hiz_downsample.comp.spv").c_str(),
+	                              m_device,
+	                              &hizShader))
+	{
+		AGNI_PRINT("Failed to load Hi-Z downsample shader — Hi-Z occlusion disabled\n");
+		m_hizOcclusionEnabled = false;
+		return;
+	}
+
+	VkPipelineShaderStageCreateInfo stageInfo {};
+	stageInfo.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stageInfo.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
+	stageInfo.module = hizShader;
+	stageInfo.pName  = "main";
+
+	VkComputePipelineCreateInfo pipelineInfo {};
+	pipelineInfo.sType  = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	pipelineInfo.flags  = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+	pipelineInfo.layout = m_hizDownsamplePipelineLayout;
+	pipelineInfo.stage  = stageInfo;
+
+	VK_CHECK(vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_hizDownsamplePipeline));
+
+	vkDestroyShaderModule(m_device, hizShader, nullptr);
+	AGNI_PRINT("Hi-Z downsample pipeline created successfully\n");
+}
+
+void Renderer::buildHiZPyramid(VkCommandBuffer cmd, FrameData& currentFrame)
+{
+	// --- Step A: Copy resolved depth -> Hi-Z mip0 ---
+	// m_depthResolveImage has resolved non-MSAA depth from geometry pass (depth resolve attachment)
+
+	// Transition resolved depth: DEPTH_ATTACHMENT -> TRANSFER_SRC
+	{
+		VkImageMemoryBarrier2 barrier {};
+		barrier.sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+		barrier.srcStageMask  = VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+		barrier.srcAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+		barrier.dstStageMask  = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+		barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+		barrier.oldLayout     = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+		barrier.newLayout     = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+		barrier.image         = m_depthResolveImage.m_image;
+		barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT;
+		barrier.subresourceRange.baseMipLevel   = 0;
+		barrier.subresourceRange.levelCount     = 1;
+		barrier.subresourceRange.baseArrayLayer = 0;
+		barrier.subresourceRange.layerCount     = 1;
+
+		VkDependencyInfo depInfo {};
+		depInfo.sType                    = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+		depInfo.imageMemoryBarrierCount  = 1;
+		depInfo.pImageMemoryBarriers     = &barrier;
+		vkCmdPipelineBarrier2(cmd, &depInfo);
+	}
+
+	// Transition Hi-Z mip0: UNDEFINED -> TRANSFER_DST
+	{
+		VkImageMemoryBarrier2 barrier {};
+		barrier.sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+		barrier.srcStageMask  = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+		barrier.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
+		barrier.dstStageMask  = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+		barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+		barrier.oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
+		barrier.newLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		barrier.image         = m_hizImage.m_image;
+		barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+		barrier.subresourceRange.baseMipLevel   = 0;
+		barrier.subresourceRange.levelCount     = 1;
+		barrier.subresourceRange.baseArrayLayer = 0;
+		barrier.subresourceRange.layerCount     = 1;
+
+		VkDependencyInfo depInfo {};
+		depInfo.sType                    = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+		depInfo.imageMemoryBarrierCount  = 1;
+		depInfo.pImageMemoryBarriers     = &barrier;
+		vkCmdPipelineBarrier2(cmd, &depInfo);
+	}
+
+	// Copy: depthResolve (D32_SFLOAT) -> Hi-Z mip0 (R32_SFLOAT)
+	// Legal because both are 32-bit per texel
+	VkImageCopy2 copyRegion {};
+	copyRegion.sType = VK_STRUCTURE_TYPE_IMAGE_COPY_2;
+	copyRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+	copyRegion.srcSubresource.layerCount = 1;
+	copyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	copyRegion.dstSubresource.layerCount = 1;
+	copyRegion.extent = {m_drawExtent.width, m_drawExtent.height, 1};
+
+	VkCopyImageInfo2 copyInfo {};
+	copyInfo.sType          = VK_STRUCTURE_TYPE_COPY_IMAGE_INFO_2;
+	copyInfo.srcImage       = m_depthResolveImage.m_image;
+	copyInfo.srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+	copyInfo.dstImage       = m_hizImage.m_image;
+	copyInfo.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+	copyInfo.regionCount    = 1;
+	copyInfo.pRegions       = &copyRegion;
+
+	vkCmdCopyImage2(cmd, &copyInfo);
+
+	// --- Step B: Downsample mip chain via compute ---
+
+	// Transition all Hi-Z mips to GENERAL for compute read/write
+	{
+		VkImageMemoryBarrier2 barrier {};
+		barrier.sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+		barrier.srcStageMask  = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+		barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+		barrier.dstStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+		barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
+		barrier.oldLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		barrier.newLayout     = VK_IMAGE_LAYOUT_GENERAL;
+		barrier.image         = m_hizImage.m_image;
+		barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+		barrier.subresourceRange.baseMipLevel   = 0;
+		barrier.subresourceRange.levelCount     = VK_REMAINING_MIP_LEVELS;
+		barrier.subresourceRange.baseArrayLayer = 0;
+		barrier.subresourceRange.layerCount     = 1;
+
+		VkDependencyInfo depInfo {};
+		depInfo.sType                    = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+		depInfo.imageMemoryBarrierCount  = 1;
+		depInfo.pImageMemoryBarriers     = &barrier;
+		vkCmdPipelineBarrier2(cmd, &depInfo);
+	}
+
+	// Bind downsample pipeline and descriptor buffer
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_hizDownsamplePipeline);
+
+	VkDescriptorBufferBindingInfoEXT bufBinding {};
+	bufBinding.sType   = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT;
+	bufBinding.address = currentFrame.m_descriptorBuffer.getDeviceAddress();
+	bufBinding.usage   = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
+	vkCmdBindDescriptorBuffersEXT(cmd, 1, &bufBinding);
+
+	uint32_t mipWidth  = m_drawExtent.width;
+	uint32_t mipHeight = m_drawExtent.height;
+
+	for (uint32_t mip = 0; mip < m_hizMipLevels - 1; mip++)
+	{
+		// Allocate descriptor buffer space for this mip pair
+		VkDeviceSize descOffset =
+		currentFrame.m_descriptorBuffer.allocate(m_hizDownsampleLayoutInfo);
+		void* descPtr =
+		currentFrame.m_descriptorBuffer.getPtrAtOffset(descOffset);
+
+		// Binding 0: src mip (storage image)
+		m_descriptorBufferWriter.writeStorageImage(
+		descPtr, m_hizDownsampleLayoutInfo.bindingOffsets[0], m_hizMipViews[mip]);
+
+		// Binding 1: dst mip (storage image)
+		m_descriptorBufferWriter.writeStorageImage(
+		descPtr, m_hizDownsampleLayoutInfo.bindingOffsets[1], m_hizMipViews[mip + 1]);
+
+		// Set descriptor buffer offset
+		uint32_t bufferIndex = 0;
+		vkCmdSetDescriptorBufferOffsetsEXT(
+		cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+		m_hizDownsamplePipelineLayout,
+		0, 1, &bufferIndex, &descOffset);
+
+		// Push constants
+		HiZPushConstants hizPC {};
+		hizPC.m_srcWidth  = mipWidth;
+		hizPC.m_srcHeight = mipHeight;
+		vkCmdPushConstants(cmd, m_hizDownsamplePipelineLayout,
+		                   VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(HiZPushConstants), &hizPC);
+
+		// Dispatch
+		uint32_t dstW = std::max(mipWidth / 2, 1u);
+		uint32_t dstH = std::max(mipHeight / 2, 1u);
+		vkCmdDispatch(cmd, (dstW + 7) / 8, (dstH + 7) / 8, 1);
+
+		// Barrier between mip levels
+		VkMemoryBarrier2 memBarrier {};
+		memBarrier.sType         = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+		memBarrier.srcStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+		memBarrier.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT;
+		memBarrier.dstStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+		memBarrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
+
+		VkDependencyInfo depInfo {};
+		depInfo.sType              = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+		depInfo.memoryBarrierCount = 1;
+		depInfo.pMemoryBarriers    = &memBarrier;
+		vkCmdPipelineBarrier2(cmd, &depInfo);
+
+		mipWidth  = dstW;
+		mipHeight = dstH;
+	}
+
+	// --- Step C: Transition Hi-Z to SHADER_READ_ONLY for next frame's cull pass ---
+	{
+		VkImageMemoryBarrier2 barrier {};
+		barrier.sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+		barrier.srcStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+		barrier.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT;
+		barrier.dstStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+		barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
+		barrier.oldLayout     = VK_IMAGE_LAYOUT_GENERAL;
+		barrier.newLayout     = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		barrier.image         = m_hizImage.m_image;
+		barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+		barrier.subresourceRange.baseMipLevel   = 0;
+		barrier.subresourceRange.levelCount     = VK_REMAINING_MIP_LEVELS;
+		barrier.subresourceRange.baseArrayLayer = 0;
+		barrier.subresourceRange.layerCount     = 1;
+
+		VkDependencyInfo depInfo {};
+		depInfo.sType                    = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+		depInfo.imageMemoryBarrierCount  = 1;
+		depInfo.pImageMemoryBarriers     = &barrier;
+		vkCmdPipelineBarrier2(cmd, &depInfo);
+	}
+
+	m_hizReady = true;
 }
 
 glm::mat4 Renderer::calculateLightSpaceMatrix(const glm::vec3& lightDir)
@@ -1444,6 +1789,15 @@ void Renderer::renderFrame(VkCommandBuffer cmd,
 	                        VK_IMAGE_LAYOUT_UNDEFINED,
 	                        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
+	// Transition depth resolve target for Hi-Z
+	if (m_hizOcclusionEnabled && m_depthResolveImage.m_image != VK_NULL_HANDLE)
+	{
+		vkutil::transitionImage(cmd,
+		                        m_depthResolveImage.m_image,
+		                        VK_IMAGE_LAYOUT_UNDEFINED,
+		                        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+	}
+
 	// Transition resolve target (draw image) for resolve operation
 	vkutil::transitionImage(cmd,
 	                        m_drawImage.m_image,
@@ -1485,6 +1839,13 @@ void Renderer::renderFrame(VkCommandBuffer cmd,
 	drawObjectIDPass(cmd, currentFrame);
 
 	drawGeometry(cmd, currentFrame);
+
+	// Build Hi-Z pyramid for next frame's occlusion culling
+	if (m_gpuCullingEnabled && m_hizOcclusionEnabled &&
+	    m_hizDownsamplePipeline != VK_NULL_HANDLE)
+	{
+		buildHiZPyramid(cmd, currentFrame);
+	}
 
 	// transtion the draw image and the swapchain image into their correct
 	// transfer layouts
@@ -1805,6 +2166,27 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	m_pointShadowSampler,
 	VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
 
+	// Binding 5: Hi-Z depth pyramid (for GPU occlusion culling)
+	if (m_hizReady && m_hizSampler != VK_NULL_HANDLE)
+	{
+		m_descriptorBufferWriter.writeImageSampler(
+		sceneDescriptorPtr,
+		m_gpuSceneDataLayoutInfo.bindingOffsets[5],
+		m_hizImage.m_imageView,
+		m_hizSampler,
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	}
+	else
+	{
+		// Placeholder when Hi-Z not yet built (first frame)
+		m_descriptorBufferWriter.writeImageSampler(
+		sceneDescriptorPtr,
+		m_gpuSceneDataLayoutInfo.bindingOffsets[5],
+		m_shadowMap.m_imageView,
+		m_shadowSampler,
+		VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+	}
+
 	// Bind descriptor buffers once before any draws (bindless architecture)
 	VkDescriptorBufferBindingInfoEXT bufferBindings[4] = {};
 
@@ -2072,6 +2454,9 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 			cullPC.m_boundsBufferPtr   = boundsBDA;
 			cullPC.m_indirectBufferPtr = indirectBDA;
 			cullPC.m_drawCount         = opaqueCount;
+			cullPC.m_hizEnabled        = (m_hizReady && m_hizOcclusionEnabled) ? 1 : 0;
+			cullPC.m_hizWidth          = m_hizImage.m_imageExtent.width;
+			cullPC.m_hizHeight         = m_hizImage.m_imageExtent.height;
 			vkCmdPushConstants(cmd,
 			                   m_cullPipelineLayout,
 			                   VK_SHADER_STAGE_COMPUTE_BIT,
@@ -2109,6 +2494,15 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	VkRenderingAttachmentInfo depthAttachment = vkinit::depthAttachmentInfo(
 	m_depthImage.m_imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
+	// Add MSAA depth resolve for Hi-Z pyramid
+	if (m_hizOcclusionEnabled && m_hizDownsamplePipeline != VK_NULL_HANDLE &&
+	    m_depthResolveImage.m_image != VK_NULL_HANDLE)
+	{
+		depthAttachment.resolveMode       = VK_RESOLVE_MODE_MIN_BIT;
+		depthAttachment.resolveImageView  = m_depthResolveImage.m_imageView;
+		depthAttachment.resolveImageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+	}
 
 	VkRenderingInfo renderInfo =
 	vkinit::renderingInfo(m_drawExtent, &colorAttachment, &depthAttachment);

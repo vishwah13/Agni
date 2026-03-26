@@ -167,13 +167,22 @@ struct GPUBoundsData
 	glm::mat4 m_worldMatrix {1.0f};  // 64
 }; // 80 bytes total
 
-// Push constants for cull compute (24 bytes)
+// Push constants for cull compute (32 bytes)
 struct CullPushConstants
 {
 	VkDeviceAddress m_boundsBufferPtr = 0;    // 8 — BDA to GPUBoundsData[]
 	VkDeviceAddress m_indirectBufferPtr = 0;  // 8 — BDA to VkDrawIndexedIndirectCommand[]
 	uint32_t        m_drawCount = 0;          // 4
-	uint32_t        m_padding = 0;            // 4
+	uint32_t        m_hizEnabled = 0;         // 4 — 0=frustum only, 1=frustum+Hi-Z
+	uint32_t        m_hizWidth = 0;           // 4 — Hi-Z mip0 width
+	uint32_t        m_hizHeight = 0;          // 4 — Hi-Z mip0 height
+};
+
+// Push constants for Hi-Z downsample compute (8 bytes)
+struct HiZPushConstants
+{
+	uint32_t m_srcWidth = 0;
+	uint32_t m_srcHeight = 0;
 };
 
 // Maximum number of lights supported

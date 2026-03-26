@@ -170,8 +170,9 @@ public:
 	MaterialRegistry& getMaterialRegistry() { return m_materialRegistry; }
 	const MaterialRegistry& getMaterialRegistry() const { return m_materialRegistry; }
 
-	// GPU culling accessor
+	// GPU culling accessors
 	bool& getGpuCullingEnabled() { return m_gpuCullingEnabled; }
+	bool& getHiZOcclusionEnabled() { return m_hizOcclusionEnabled; }
 
 	// Multi-draw indirect accessors
 	bool& getMultiDrawIndirectEnabled() { return m_multiDrawIndirectEnabled; }
@@ -324,6 +325,19 @@ private:
 	VkPipelineLayout m_cullPipelineLayout = VK_NULL_HANDLE;
 	bool             m_gpuCullingEnabled  = true;
 
+	// Hi-Z occlusion culling
+	AllocatedImage               m_hizImage;
+	AllocatedImage               m_depthResolveImage;
+	std::vector<VkImageView>     m_hizMipViews;
+	VkSampler                    m_hizSampler                    = VK_NULL_HANDLE;
+	VkPipeline                   m_hizDownsamplePipeline         = VK_NULL_HANDLE;
+	VkPipelineLayout             m_hizDownsamplePipelineLayout   = VK_NULL_HANDLE;
+	VkDescriptorSetLayout        m_hizDownsampleDescriptorLayout = VK_NULL_HANDLE;
+	DescriptorLayoutInfo         m_hizDownsampleLayoutInfo;
+	uint32_t                     m_hizMipLevels       = 0;
+	bool                         m_hizReady           = false;
+	bool                         m_hizOcclusionEnabled = true;
+
 	// Pipeline statistics query (GPU-side rendered triangle count)
 	static constexpr uint32_t STATS_FRAME_OVERLAP = 2;
 	VkQueryPool m_statsQueryPool[STATS_FRAME_OVERLAP] = {VK_NULL_HANDLE, VK_NULL_HANDLE};
@@ -366,6 +380,9 @@ private:
 
 	// GPU culling
 	void initCullPipeline();
+	void initHiZResources();
+	void initHiZPipeline();
+	void buildHiZPyramid(VkCommandBuffer cmd, FrameData& currentFrame);
 
 	// Shadow mapping helpers
 	void initShadowResources();

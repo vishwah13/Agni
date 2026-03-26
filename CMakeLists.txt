@@ -98,6 +98,7 @@ if(AGNI_COMPILE_SHADERS)
         "${PROJECT_SOURCE_DIR}/shaders/slang/sky.slang"
         "${PROJECT_SOURCE_DIR}/shaders/slang/raymarching.slang"
         "${PROJECT_SOURCE_DIR}/shaders/slang/frustum_cull.slang"
+        "${PROJECT_SOURCE_DIR}/shaders/slang/hiz_downsample.slang"
     )
 
     # Compile graphics shaders (vertex + fragment)

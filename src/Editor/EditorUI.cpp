@@ -271,6 +271,7 @@ void EditorUI::renderRenderingWindow()
 		{
 			ImGui::PushID("Culling");
 			widgets::PropertyCheckbox("GPU Frustum Culling", &m_engine.getRenderer().getGpuCullingEnabled());
+			widgets::PropertyCheckbox("Hi-Z Occlusion", &m_engine.getRenderer().getHiZOcclusionEnabled());
 			ImGui::PopID();
 		}
 
