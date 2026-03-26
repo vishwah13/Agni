@@ -404,3 +404,61 @@ vkinit::pipelineShaderStageCreateInfo(VkShaderStageFlagBits stage,
 	info.pName = entry;
 	return info;
 }
+
+void vkinit::imageBarrier(VkCommandBuffer        cmd,
+                          VkImage                image,
+                          VkPipelineStageFlags2  srcStage,
+                          VkAccessFlags2         srcAccess,
+                          VkPipelineStageFlags2  dstStage,
+                          VkAccessFlags2         dstAccess,
+                          VkImageLayout          oldLayout,
+                          VkImageLayout          newLayout,
+                          VkImageAspectFlags     aspect,
+                          uint32_t               baseMipLevel,
+                          uint32_t               levelCount,
+                          uint32_t               baseArrayLayer,
+                          uint32_t               layerCount)
+{
+	VkImageMemoryBarrier2 barrier {};
+	barrier.sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+	barrier.srcStageMask  = srcStage;
+	barrier.srcAccessMask = srcAccess;
+	barrier.dstStageMask  = dstStage;
+	barrier.dstAccessMask = dstAccess;
+	barrier.oldLayout     = oldLayout;
+	barrier.newLayout     = newLayout;
+	barrier.image         = image;
+	barrier.subresourceRange.aspectMask     = aspect;
+	barrier.subresourceRange.baseMipLevel   = baseMipLevel;
+	barrier.subresourceRange.levelCount     = levelCount;
+	barrier.subresourceRange.baseArrayLayer = baseArrayLayer;
+	barrier.subresourceRange.layerCount     = layerCount;
+
+	VkDependencyInfo depInfo {};
+	depInfo.sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	depInfo.imageMemoryBarrierCount = 1;
+	depInfo.pImageMemoryBarriers    = &barrier;
+
+	vkCmdPipelineBarrier2(cmd, &depInfo);
+}
+
+void vkinit::memoryBarrier(VkCommandBuffer        cmd,
+                           VkPipelineStageFlags2  srcStage,
+                           VkAccessFlags2         srcAccess,
+                           VkPipelineStageFlags2  dstStage,
+                           VkAccessFlags2         dstAccess)
+{
+	VkMemoryBarrier2 barrier {};
+	barrier.sType         = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+	barrier.srcStageMask  = srcStage;
+	barrier.srcAccessMask = srcAccess;
+	barrier.dstStageMask  = dstStage;
+	barrier.dstAccessMask = dstAccess;
+
+	VkDependencyInfo depInfo {};
+	depInfo.sType              = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	depInfo.memoryBarrierCount = 1;
+	depInfo.pMemoryBarriers    = &barrier;
+
+	vkCmdPipelineBarrier2(cmd, &depInfo);
+}

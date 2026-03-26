@@ -779,52 +779,17 @@ void Renderer::buildHiZPyramid(VkCommandBuffer cmd, FrameData& currentFrame)
 	// --- Step A: Transition images for compute ---
 
 	// Transition resolved depth: DEPTH_ATTACHMENT -> DEPTH_READ_ONLY (for sampling)
-	{
-		VkImageMemoryBarrier2 barrier {};
-		barrier.sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-		barrier.srcStageMask  = VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
-		barrier.srcAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-		barrier.dstStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-		barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
-		barrier.oldLayout     = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-		barrier.newLayout     = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-		barrier.image         = m_depthResolveImage.m_image;
-		barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT;
-		barrier.subresourceRange.baseMipLevel   = 0;
-		barrier.subresourceRange.levelCount     = 1;
-		barrier.subresourceRange.baseArrayLayer = 0;
-		barrier.subresourceRange.layerCount     = 1;
-
-		VkDependencyInfo depInfo {};
-		depInfo.sType                    = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-		depInfo.imageMemoryBarrierCount  = 1;
-		depInfo.pImageMemoryBarriers     = &barrier;
-		vkCmdPipelineBarrier2(cmd, &depInfo);
-	}
+	vkinit::imageBarrier(cmd, m_depthResolveImage.m_image,
+	    VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+	    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT,
+	    VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+	    VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1);
 
 	// Transition all Hi-Z mips to GENERAL for compute read/write
-	{
-		VkImageMemoryBarrier2 barrier {};
-		barrier.sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-		barrier.srcStageMask  = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-		barrier.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
-		barrier.dstStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-		barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
-		barrier.oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
-		barrier.newLayout     = VK_IMAGE_LAYOUT_GENERAL;
-		barrier.image         = m_hizImage.m_image;
-		barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-		barrier.subresourceRange.baseMipLevel   = 0;
-		barrier.subresourceRange.levelCount     = VK_REMAINING_MIP_LEVELS;
-		barrier.subresourceRange.baseArrayLayer = 0;
-		barrier.subresourceRange.layerCount     = 1;
-
-		VkDependencyInfo depInfo {};
-		depInfo.sType                    = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-		depInfo.imageMemoryBarrierCount  = 1;
-		depInfo.pImageMemoryBarriers     = &barrier;
-		vkCmdPipelineBarrier2(cmd, &depInfo);
-	}
+	vkinit::imageBarrier(cmd, m_hizImage.m_image,
+	    VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT,
+	    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT,
+	    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
 	// --- Step B: Downsample mip chain via compute ---
 	// First pass (mip=0): reads from depth resolve texture (binding 2) -> writes Hi-Z mip0 (binding 1)
@@ -919,43 +884,16 @@ void Renderer::buildHiZPyramid(VkCommandBuffer cmd, FrameData& currentFrame)
 		}
 
 		// Barrier between passes
-		VkMemoryBarrier2 memBarrier {};
-		memBarrier.sType         = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
-		memBarrier.srcStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-		memBarrier.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT;
-		memBarrier.dstStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-		memBarrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
-
-		VkDependencyInfo depInfo {};
-		depInfo.sType              = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-		depInfo.memoryBarrierCount = 1;
-		depInfo.pMemoryBarriers    = &memBarrier;
-		vkCmdPipelineBarrier2(cmd, &depInfo);
+		vkinit::memoryBarrier(cmd,
+		    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT,
+		    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT);
 	}
 
 	// --- Step C: Transition Hi-Z to SHADER_READ_ONLY for next frame's cull pass ---
-	{
-		VkImageMemoryBarrier2 barrier {};
-		barrier.sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-		barrier.srcStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-		barrier.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT;
-		barrier.dstStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-		barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
-		barrier.oldLayout     = VK_IMAGE_LAYOUT_GENERAL;
-		barrier.newLayout     = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		barrier.image         = m_hizImage.m_image;
-		barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-		barrier.subresourceRange.baseMipLevel   = 0;
-		barrier.subresourceRange.levelCount     = VK_REMAINING_MIP_LEVELS;
-		barrier.subresourceRange.baseArrayLayer = 0;
-		barrier.subresourceRange.layerCount     = 1;
-
-		VkDependencyInfo depInfo {};
-		depInfo.sType                    = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-		depInfo.imageMemoryBarrierCount  = 1;
-		depInfo.pImageMemoryBarriers     = &barrier;
-		vkCmdPipelineBarrier2(cmd, &depInfo);
-	}
+	vkinit::imageBarrier(cmd, m_hizImage.m_image,
+	    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT,
+	    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT,
+	    VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	m_hizReady = true;
 }
@@ -1500,26 +1438,11 @@ void Renderer::drawPointShadowPass(VkCommandBuffer cmd, const ShadowIndirectReso
 	for (uint32_t face = 0; face < 6; face++)
 	{
 		// Transition this cube face to depth attachment
-		VkImageMemoryBarrier2 barrier {};
-		barrier.sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-		barrier.srcStageMask  = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-		barrier.srcAccessMask = 0;
-		barrier.dstStageMask  = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT;
-		barrier.dstAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-		barrier.oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
-		barrier.newLayout     = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-		barrier.image         = m_pointShadowCubeMap.m_image;
-		barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT;
-		barrier.subresourceRange.baseMipLevel   = 0;
-		barrier.subresourceRange.levelCount     = 1;
-		barrier.subresourceRange.baseArrayLayer = face;
-		barrier.subresourceRange.layerCount     = 1;
-
-		VkDependencyInfo depInfo {};
-		depInfo.sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-		depInfo.imageMemoryBarrierCount = 1;
-		depInfo.pImageMemoryBarriers    = &barrier;
-		vkCmdPipelineBarrier2(cmd, &depInfo);
+		vkinit::imageBarrier(cmd, m_pointShadowCubeMap.m_image,
+		    VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, 0,
+		    VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+		    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+		    VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, face, 1);
 
 		// Setup depth attachment for this face
 		VkRenderingAttachmentInfo depthAttachment {};
@@ -1585,26 +1508,11 @@ void Renderer::drawPointShadowPass(VkCommandBuffer cmd, const ShadowIndirectReso
 	}
 
 	// Transition entire cube map to shader read optimal for sampling
-	VkImageMemoryBarrier2 finalBarrier {};
-	finalBarrier.sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-	finalBarrier.srcStageMask  = VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
-	finalBarrier.srcAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-	finalBarrier.dstStageMask  = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-	finalBarrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
-	finalBarrier.oldLayout     = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-	finalBarrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-	finalBarrier.image     = m_pointShadowCubeMap.m_image;
-	finalBarrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT;
-	finalBarrier.subresourceRange.baseMipLevel   = 0;
-	finalBarrier.subresourceRange.levelCount     = 1;
-	finalBarrier.subresourceRange.baseArrayLayer = 0;
-	finalBarrier.subresourceRange.layerCount     = 6; // All 6 faces
-
-	VkDependencyInfo finalDepInfo {};
-	finalDepInfo.sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-	finalDepInfo.imageMemoryBarrierCount = 1;
-	finalDepInfo.pImageMemoryBarriers    = &finalBarrier;
-	vkCmdPipelineBarrier2(cmd, &finalDepInfo);
+	vkinit::imageBarrier(cmd, m_pointShadowCubeMap.m_image,
+	    VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+	    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT,
+	    VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+	    VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 6);
 }
 
 void Renderer::renderFrame(VkCommandBuffer cmd,
@@ -2280,19 +2188,9 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 			vkCmdDispatch(cmd, (opaqueCount + 63) / 64, 1, 1);
 
 			// Memory barrier: compute write -> indirect command read
-			VkMemoryBarrier2 barrier {};
-			barrier.sType         = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
-			barrier.srcStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-			barrier.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT;
-			barrier.dstStageMask  = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
-			barrier.dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
-
-			VkDependencyInfo depInfo {};
-			depInfo.sType              = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-			depInfo.memoryBarrierCount = 1;
-			depInfo.pMemoryBarriers    = &barrier;
-
-			vkCmdPipelineBarrier2(cmd, &depInfo);
+			vkinit::memoryBarrier(cmd,
+			    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT,
+			    VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT);
 		}
 	}
 
