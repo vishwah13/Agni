@@ -765,7 +765,7 @@ void Renderer::initPointShadowPipeline()
 void Renderer::initCullPipeline()
 {
 	VkShaderModule cullShader;
-	if (!vkutil::loadShaderModule(resPath("shaders/slang/frustum_cull.comp.spv").c_str(),
+	if (!vkutil::loadShaderModule(resPath("shaders/slang/IndirectCull.comp.spv").c_str(),
 	                              m_device,
 	                              &cullShader))
 	{
@@ -839,10 +839,10 @@ void Renderer::initHiZResources()
 		VK_CHECK(vkCreateImageView(m_device, &viewInfo, nullptr, &m_hizMipViews[mip]));
 	}
 
-	// Create depth resolve target (non-MSAA D32_SFLOAT)
+	// Create depth resolve target (non-MSAA D32_SFLOAT, sampled for Hi-Z mip0 read)
 	VkImageUsageFlags depthResolveUsage =
 	VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-	VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	VK_IMAGE_USAGE_SAMPLED_BIT;
 
 	m_depthResolveImage = m_resourceManager->createImage(hizExtent,
 	                                                     VK_FORMAT_D32_SFLOAT,
@@ -865,16 +865,26 @@ void Renderer::initHiZResources()
 
 	VK_CHECK(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_hizSampler));
 
+	// Transition Hi-Z image to SHADER_READ_ONLY_OPTIMAL so the placeholder descriptor is valid
+	m_resourceManager->immediateSubmit(
+	[&](VkCommandBuffer cmd)
+	{
+		vkutil::transitionImage(cmd, m_hizImage.m_image,
+		                        VK_IMAGE_LAYOUT_UNDEFINED,
+		                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	});
+
 	AGNI_PRINT("Hi-Z resources created: {}x{}, {} mip levels\n", hizWidth, hizHeight, m_hizMipLevels);
 }
 
 void Renderer::initHiZPipeline()
 {
-	// Descriptor layout: 2 storage images (src mip, dst mip)
+	// Descriptor layout: 2 storage images + 1 sampled depth texture (for first mip pass)
 	{
 		DescriptorLayoutBuilder builder;
-		builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-		builder.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);          // src mip (read)
+		builder.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);          // dst mip (write)
+		builder.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER); // depth source (first pass only)
 		m_hizDownsampleLayoutInfo = builder.buildForDescriptorBuffer(
 		m_device, VK_SHADER_STAGE_COMPUTE_BIT);
 		m_hizDownsampleDescriptorLayout = m_hizDownsampleLayoutInfo.layout;
@@ -896,7 +906,7 @@ void Renderer::initHiZPipeline()
 	VK_CHECK(vkCreatePipelineLayout(m_device, &layoutInfo, nullptr, &m_hizDownsamplePipelineLayout));
 
 	VkShaderModule hizShader;
-	if (!vkutil::loadShaderModule(resPath("shaders/slang/hiz_downsample.comp.spv").c_str(),
+	if (!vkutil::loadShaderModule(resPath("shaders/slang/HiZDownsample.comp.spv").c_str(),
 	                              m_device,
 	                              &hizShader))
 	{
@@ -925,19 +935,18 @@ void Renderer::initHiZPipeline()
 
 void Renderer::buildHiZPyramid(VkCommandBuffer cmd, FrameData& currentFrame)
 {
-	// --- Step A: Copy resolved depth -> Hi-Z mip0 ---
-	// m_depthResolveImage has resolved non-MSAA depth from geometry pass (depth resolve attachment)
+	// --- Step A: Transition images for compute ---
 
-	// Transition resolved depth: DEPTH_ATTACHMENT -> TRANSFER_SRC
+	// Transition resolved depth: DEPTH_ATTACHMENT -> DEPTH_READ_ONLY (for sampling)
 	{
 		VkImageMemoryBarrier2 barrier {};
 		barrier.sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
 		barrier.srcStageMask  = VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
 		barrier.srcAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-		barrier.dstStageMask  = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-		barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+		barrier.dstStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+		barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
 		barrier.oldLayout     = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-		barrier.newLayout     = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+		barrier.newLayout     = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
 		barrier.image         = m_depthResolveImage.m_image;
 		barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT;
 		barrier.subresourceRange.baseMipLevel   = 0;
@@ -952,62 +961,15 @@ void Renderer::buildHiZPyramid(VkCommandBuffer cmd, FrameData& currentFrame)
 		vkCmdPipelineBarrier2(cmd, &depInfo);
 	}
 
-	// Transition Hi-Z mip0: UNDEFINED -> TRANSFER_DST
+	// Transition all Hi-Z mips to GENERAL for compute read/write
 	{
 		VkImageMemoryBarrier2 barrier {};
 		barrier.sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
 		barrier.srcStageMask  = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
 		barrier.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
-		barrier.dstStageMask  = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-		barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-		barrier.oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
-		barrier.newLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		barrier.image         = m_hizImage.m_image;
-		barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-		barrier.subresourceRange.baseMipLevel   = 0;
-		barrier.subresourceRange.levelCount     = 1;
-		barrier.subresourceRange.baseArrayLayer = 0;
-		barrier.subresourceRange.layerCount     = 1;
-
-		VkDependencyInfo depInfo {};
-		depInfo.sType                    = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-		depInfo.imageMemoryBarrierCount  = 1;
-		depInfo.pImageMemoryBarriers     = &barrier;
-		vkCmdPipelineBarrier2(cmd, &depInfo);
-	}
-
-	// Copy: depthResolve (D32_SFLOAT) -> Hi-Z mip0 (R32_SFLOAT)
-	// Legal because both are 32-bit per texel
-	VkImageCopy2 copyRegion {};
-	copyRegion.sType = VK_STRUCTURE_TYPE_IMAGE_COPY_2;
-	copyRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-	copyRegion.srcSubresource.layerCount = 1;
-	copyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	copyRegion.dstSubresource.layerCount = 1;
-	copyRegion.extent = {m_drawExtent.width, m_drawExtent.height, 1};
-
-	VkCopyImageInfo2 copyInfo {};
-	copyInfo.sType          = VK_STRUCTURE_TYPE_COPY_IMAGE_INFO_2;
-	copyInfo.srcImage       = m_depthResolveImage.m_image;
-	copyInfo.srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-	copyInfo.dstImage       = m_hizImage.m_image;
-	copyInfo.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-	copyInfo.regionCount    = 1;
-	copyInfo.pRegions       = &copyRegion;
-
-	vkCmdCopyImage2(cmd, &copyInfo);
-
-	// --- Step B: Downsample mip chain via compute ---
-
-	// Transition all Hi-Z mips to GENERAL for compute read/write
-	{
-		VkImageMemoryBarrier2 barrier {};
-		barrier.sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-		barrier.srcStageMask  = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-		barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
 		barrier.dstStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
 		barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
-		barrier.oldLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		barrier.oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
 		barrier.newLayout     = VK_IMAGE_LAYOUT_GENERAL;
 		barrier.image         = m_hizImage.m_image;
 		barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -1023,33 +985,67 @@ void Renderer::buildHiZPyramid(VkCommandBuffer cmd, FrameData& currentFrame)
 		vkCmdPipelineBarrier2(cmd, &depInfo);
 	}
 
-	// Bind downsample pipeline and descriptor buffer
+	// --- Step B: Downsample mip chain via compute ---
+	// First pass (mip=0): reads from depth resolve texture (binding 2) -> writes Hi-Z mip0 (binding 1)
+	// Subsequent passes: reads Hi-Z mip N (binding 0) -> writes Hi-Z mip N+1 (binding 1)
+
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_hizDownsamplePipeline);
 
 	VkDescriptorBufferBindingInfoEXT bufBinding {};
 	bufBinding.sType   = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT;
 	bufBinding.address = currentFrame.m_descriptorBuffer.getDeviceAddress();
-	bufBinding.usage   = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
+	bufBinding.usage   = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
+	                     VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT;
 	vkCmdBindDescriptorBuffersEXT(cmd, 1, &bufBinding);
 
 	uint32_t mipWidth  = m_drawExtent.width;
 	uint32_t mipHeight = m_drawExtent.height;
 
-	for (uint32_t mip = 0; mip < m_hizMipLevels - 1; mip++)
+	// The loop generates mipLevels total mip levels:
+	// Pass 0: depth texture -> mip0 (isFirstMip=1)
+	// Pass 1..N-1: mip[i-1] -> mip[i] (isFirstMip=0)
+	for (uint32_t pass = 0; pass < m_hizMipLevels; pass++)
 	{
-		// Allocate descriptor buffer space for this mip pair
+		const bool isFirstPass = (pass == 0);
+
+		// Allocate descriptor buffer space
 		VkDeviceSize descOffset =
 		currentFrame.m_descriptorBuffer.allocate(m_hizDownsampleLayoutInfo);
 		void* descPtr =
 		currentFrame.m_descriptorBuffer.getPtrAtOffset(descOffset);
 
-		// Binding 0: src mip (storage image)
-		m_descriptorBufferWriter.writeStorageImage(
-		descPtr, m_hizDownsampleLayoutInfo.bindingOffsets[0], m_hizMipViews[mip]);
+		if (isFirstPass)
+		{
+			// Binding 0: unused but must be valid — use mip0 as placeholder
+			m_descriptorBufferWriter.writeStorageImage(
+			descPtr, m_hizDownsampleLayoutInfo.bindingOffsets[0], m_hizMipViews[0]);
 
-		// Binding 1: dst mip (storage image)
-		m_descriptorBufferWriter.writeStorageImage(
-		descPtr, m_hizDownsampleLayoutInfo.bindingOffsets[1], m_hizMipViews[mip + 1]);
+			// Binding 1: dst = mip0 (storage image)
+			m_descriptorBufferWriter.writeStorageImage(
+			descPtr, m_hizDownsampleLayoutInfo.bindingOffsets[1], m_hizMipViews[0]);
+
+			// Binding 2: depth resolve texture (combined image sampler)
+			m_descriptorBufferWriter.writeImageSampler(
+			descPtr, m_hizDownsampleLayoutInfo.bindingOffsets[2],
+			m_depthResolveImage.m_imageView, m_hizSampler,
+			VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+		}
+		else
+		{
+			// Binding 0: src = previous mip (storage image)
+			m_descriptorBufferWriter.writeStorageImage(
+			descPtr, m_hizDownsampleLayoutInfo.bindingOffsets[0], m_hizMipViews[pass - 1]);
+
+			// Binding 1: dst = current mip (storage image)
+			m_descriptorBufferWriter.writeStorageImage(
+			descPtr, m_hizDownsampleLayoutInfo.bindingOffsets[1], m_hizMipViews[pass]);
+
+			// Binding 2: placeholder (unused but must be valid)
+			m_descriptorBufferWriter.writeImageSampler(
+			descPtr, m_hizDownsampleLayoutInfo.bindingOffsets[2],
+			m_depthResolveImage.m_imageView, m_hizSampler,
+			VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+		}
 
 		// Set descriptor buffer offset
 		uint32_t bufferIndex = 0;
@@ -1060,17 +1056,28 @@ void Renderer::buildHiZPyramid(VkCommandBuffer cmd, FrameData& currentFrame)
 
 		// Push constants
 		HiZPushConstants hizPC {};
-		hizPC.m_srcWidth  = mipWidth;
-		hizPC.m_srcHeight = mipHeight;
+		hizPC.m_srcWidth    = mipWidth;
+		hizPC.m_srcHeight   = mipHeight;
+		hizPC.m_isFirstMip  = isFirstPass ? 1 : 0;
 		vkCmdPushConstants(cmd, m_hizDownsamplePipelineLayout,
 		                   VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(HiZPushConstants), &hizPC);
 
-		// Dispatch
-		uint32_t dstW = std::max(mipWidth / 2, 1u);
-		uint32_t dstH = std::max(mipHeight / 2, 1u);
-		vkCmdDispatch(cmd, (dstW + 7) / 8, (dstH + 7) / 8, 1);
+		// Dispatch — first pass writes full-res mip0, subsequent passes halve
+		if (isFirstPass)
+		{
+			// First pass: copy depth to mip0 at full resolution
+			vkCmdDispatch(cmd, (mipWidth + 7) / 8, (mipHeight + 7) / 8, 1);
+		}
+		else
+		{
+			uint32_t dstW = std::max(mipWidth / 2, 1u);
+			uint32_t dstH = std::max(mipHeight / 2, 1u);
+			vkCmdDispatch(cmd, (dstW + 7) / 8, (dstH + 7) / 8, 1);
+			mipWidth  = dstW;
+			mipHeight = dstH;
+		}
 
-		// Barrier between mip levels
+		// Barrier between passes
 		VkMemoryBarrier2 memBarrier {};
 		memBarrier.sType         = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
 		memBarrier.srcStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
@@ -1083,9 +1090,6 @@ void Renderer::buildHiZPyramid(VkCommandBuffer cmd, FrameData& currentFrame)
 		depInfo.memoryBarrierCount = 1;
 		depInfo.pMemoryBarriers    = &memBarrier;
 		vkCmdPipelineBarrier2(cmd, &depInfo);
-
-		mipWidth  = dstW;
-		mipHeight = dstH;
 	}
 
 	// --- Step C: Transition Hi-Z to SHADER_READ_ONLY for next frame's cull pass ---

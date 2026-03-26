@@ -178,11 +178,12 @@ struct CullPushConstants
 	uint32_t        m_hizHeight = 0;          // 4 — Hi-Z mip0 height
 };
 
-// Push constants for Hi-Z downsample compute (8 bytes)
+// Push constants for Hi-Z downsample compute (12 bytes)
 struct HiZPushConstants
 {
 	uint32_t m_srcWidth = 0;
 	uint32_t m_srcHeight = 0;
+	uint32_t m_isFirstMip = 0;  // 1 = read from depth texture (binding 2), 0 = read from storage (binding 0)
 };
 
 // Maximum number of lights supported
