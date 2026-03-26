@@ -91,6 +91,104 @@ bool vkutil::loadShaderModuleWithFallback(const char*          filePath,
 	return true;
 }
 
+ComputePipelineBuilder::ComputePipelineBuilder(VkDevice device)
+: m_device(device)
+{
+}
+
+ComputePipelineBuilder& ComputePipelineBuilder::setShader(const char* spvPath)
+{
+	m_shaderPath = spvPath;
+	return *this;
+}
+
+ComputePipelineBuilder& ComputePipelineBuilder::addDescriptorSetLayout(VkDescriptorSetLayout layout)
+{
+	m_setLayouts.push_back(layout);
+	return *this;
+}
+
+ComputePipelineBuilder& ComputePipelineBuilder::setPushConstantSize(uint32_t size)
+{
+	m_pushConstantSize = size;
+	return *this;
+}
+
+ComputePipelineBuilder& ComputePipelineBuilder::setLayout(VkPipelineLayout layout)
+{
+	m_existingLayout = layout;
+	return *this;
+}
+
+ComputePipelineResult ComputePipelineBuilder::build()
+{
+	ComputePipelineResult result {};
+
+	// Load shader module
+	VkShaderModule shaderModule;
+	if (!vkutil::loadShaderModule(m_shaderPath, m_device, &shaderModule))
+	{
+		AGNI_PRINT("ComputePipelineBuilder: failed to load shader {}\n", m_shaderPath);
+		return result;
+	}
+
+	// Create or reuse pipeline layout
+	VkPipelineLayout layout = m_existingLayout;
+	if (layout == VK_NULL_HANDLE)
+	{
+		VkPipelineLayoutCreateInfo layoutInfo {};
+		layoutInfo.sType          = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		layoutInfo.setLayoutCount = static_cast<uint32_t>(m_setLayouts.size());
+		layoutInfo.pSetLayouts    = m_setLayouts.empty() ? nullptr : m_setLayouts.data();
+
+		VkPushConstantRange pushConstantRange {};
+		if (m_pushConstantSize > 0)
+		{
+			pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+			pushConstantRange.offset     = 0;
+			pushConstantRange.size       = m_pushConstantSize;
+			layoutInfo.pushConstantRangeCount = 1;
+			layoutInfo.pPushConstantRanges    = &pushConstantRange;
+		}
+
+		if (vkCreatePipelineLayout(m_device, &layoutInfo, nullptr, &layout) != VK_SUCCESS)
+		{
+			AGNI_PRINT("ComputePipelineBuilder: failed to create pipeline layout\n");
+			vkDestroyShaderModule(m_device, shaderModule, nullptr);
+			return result;
+		}
+	}
+
+	// Create compute pipeline
+	VkPipelineShaderStageCreateInfo stageInfo {};
+	stageInfo.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stageInfo.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
+	stageInfo.module = shaderModule;
+	stageInfo.pName  = "main";
+
+	VkComputePipelineCreateInfo pipelineInfo {};
+	pipelineInfo.sType  = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	pipelineInfo.flags  = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+	pipelineInfo.layout = layout;
+	pipelineInfo.stage  = stageInfo;
+
+	VkPipeline pipeline;
+	if (vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline) != VK_SUCCESS)
+	{
+		AGNI_PRINT("ComputePipelineBuilder: failed to create compute pipeline\n");
+		vkDestroyShaderModule(m_device, shaderModule, nullptr);
+		if (m_existingLayout == VK_NULL_HANDLE)
+			vkDestroyPipelineLayout(m_device, layout, nullptr);
+		return result;
+	}
+
+	vkDestroyShaderModule(m_device, shaderModule, nullptr);
+
+	result.m_pipeline = pipeline;
+	result.m_layout   = layout;
+	return result;
+}
+
 void PipelineBuilder::clear()
 {
 	// clear all of the structs we need back to 0 with their correct stype

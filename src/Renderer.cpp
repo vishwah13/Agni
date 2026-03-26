@@ -486,94 +486,38 @@ void Renderer::initDescriptors()
 
 void Renderer::initBackgroundPipelines()
 {
-	VkPipelineLayoutCreateInfo computeLayout {};
-	computeLayout.sType       = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	computeLayout.pNext       = nullptr;
-	computeLayout.pSetLayouts = &m_drawImageDescriptorLayout;
-	computeLayout.setLayoutCount = 1;
+	// Build gradient pipeline (creates the shared layout)
+	auto gradientResult = ComputePipelineBuilder(m_device)
+	.setShader(resPath("shaders/slang/GradientColor.comp.spv").c_str())
+	.addDescriptorSetLayout(m_drawImageDescriptorLayout)
+	.setPushConstantSize(sizeof(ComputePushConstants))
+	.build();
 
-	VkPushConstantRange pushConstant {};
-	pushConstant.offset     = 0;
-	pushConstant.size       = sizeof(ComputePushConstants);
-	pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	m_gradientPipelineLayout = gradientResult.m_layout;
 
-	computeLayout.pPushConstantRanges    = &pushConstant;
-	computeLayout.pushConstantRangeCount = 1;
-
-	VK_CHECK(vkCreatePipelineLayout(
-	m_device, &computeLayout, nullptr, &m_gradientPipelineLayout));
-
-	VkShaderModule gradientShader;
-	if (!vkutil::loadShaderModule(resPath("shaders/slang/GradientColor.comp.spv").c_str(),
-	                              m_device,
-	                              &gradientShader))
-	{
-		AGNI_PRINT("Error when building the compute shader \n");
-	}
-
-	VkShaderModule skyShader;
-	if (!vkutil::loadShaderModule(
-	    resPath("shaders/slang/Sky.comp.spv").c_str(), m_device, &skyShader))
-	{
-		AGNI_PRINT("Error when building the compute shader \n");
-	}
-
-	VkPipelineShaderStageCreateInfo stageinfo {};
-	stageinfo.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	stageinfo.pNext  = nullptr;
-	stageinfo.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
-	stageinfo.module = gradientShader;
-	stageinfo.pName  = "main";
-
-	VkComputePipelineCreateInfo computePipelineCreateInfo {};
-	computePipelineCreateInfo.sType =
-	VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-	computePipelineCreateInfo.pNext = nullptr;
-	computePipelineCreateInfo.flags =
-	VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-	computePipelineCreateInfo.layout             = m_gradientPipelineLayout;
-	computePipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
-	computePipelineCreateInfo.stage              = stageinfo;
+	// Build sky pipeline (reuses the same layout)
+	auto skyResult = ComputePipelineBuilder(m_device)
+	.setShader(resPath("shaders/slang/Sky.comp.spv").c_str())
+	.setLayout(m_gradientPipelineLayout)
+	.build();
 
 	ComputeEffect gradient;
 	gradient.m_layout = m_gradientPipelineLayout;
 	gradient.m_name   = "gradient";
 	gradient.m_data   = {};
-
-	// default colors
 	gradient.m_data.m_data1 = glm::vec4(1, 0, 0, 1);
 	gradient.m_data.m_data2 = glm::vec4(0, 0, 1, 1);
-
-	VK_CHECK(vkCreateComputePipelines(m_device,
-	                                  VK_NULL_HANDLE,
-	                                  1,
-	                                  &computePipelineCreateInfo,
-	                                  nullptr,
-	                                  &gradient.m_pipeline));
-
-	// change the shader module only to create the sky shader
-	computePipelineCreateInfo.stage.module = skyShader;
+	gradient.m_pipeline     = gradientResult.m_pipeline;
 
 	ComputeEffect sky;
 	sky.m_layout = m_gradientPipelineLayout;
 	sky.m_name   = "sky";
 	sky.m_data   = {};
-	// default sky parameters
 	sky.m_data.m_data1 = glm::vec4(0.1, 0.2, 0.4, 0.97);
+	sky.m_pipeline     = skyResult.m_pipeline;
 
-	VK_CHECK(vkCreateComputePipelines(m_device,
-	                                  VK_NULL_HANDLE,
-	                                  1,
-	                                  &computePipelineCreateInfo,
-	                                  nullptr,
-	                                  &sky.m_pipeline));
-
-	// add the 2 background effects into the array
 	m_backgroundEffects.push_back(gradient);
 	m_backgroundEffects.push_back(sky);
-
-	vkDestroyShaderModule(m_device, gradientShader, nullptr);
-	vkDestroyShaderModule(m_device, skyShader, nullptr);
 }
 
 void Renderer::initShadowPipeline()
@@ -714,46 +658,20 @@ void Renderer::initPointShadowPipeline()
 
 void Renderer::initCullPipeline()
 {
-	VkShaderModule cullShader;
-	if (!vkutil::loadShaderModule(resPath("shaders/slang/IndirectCull.comp.spv").c_str(),
-	                              m_device,
-	                              &cullShader))
+	auto result = ComputePipelineBuilder(m_device)
+	.setShader(resPath("shaders/slang/IndirectCull.comp.spv").c_str())
+	.addDescriptorSetLayout(m_gpuSceneDataDescriptorLayout)
+	.setPushConstantSize(sizeof(CullPushConstants))
+	.build();
+
+	if (result.m_pipeline == VK_NULL_HANDLE)
 	{
-		AGNI_PRINT("Failed to load indirect cull compute shader\n");
+		AGNI_PRINT("Failed to create indirect cull compute pipeline\n");
 		return;
 	}
-
-	// Pipeline layout: 1 descriptor set (scene data), push constants for CullPushConstants
-	VkPushConstantRange pushConstantRange {};
-	pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-	pushConstantRange.offset     = 0;
-	pushConstantRange.size       = sizeof(CullPushConstants);
-
-	VkPipelineLayoutCreateInfo layoutInfo {};
-	layoutInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	layoutInfo.setLayoutCount         = 1;
-	layoutInfo.pSetLayouts            = &m_gpuSceneDataDescriptorLayout;
-	layoutInfo.pushConstantRangeCount = 1;
-	layoutInfo.pPushConstantRanges    = &pushConstantRange;
-
-	VK_CHECK(vkCreatePipelineLayout(m_device, &layoutInfo, nullptr, &m_cullPipelineLayout));
-
-	VkPipelineShaderStageCreateInfo stageInfo {};
-	stageInfo.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	stageInfo.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
-	stageInfo.module = cullShader;
-	stageInfo.pName  = "main";
-
-	VkComputePipelineCreateInfo pipelineInfo {};
-	pipelineInfo.sType  = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-	pipelineInfo.flags  = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-	pipelineInfo.layout = m_cullPipelineLayout;
-	pipelineInfo.stage  = stageInfo;
-
-	VK_CHECK(vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_cullPipeline));
-
-	vkDestroyShaderModule(m_device, cullShader, nullptr);
-	AGNI_PRINT("Frustum cull compute pipeline created successfully\n");
+	m_cullPipeline       = result.m_pipeline;
+	m_cullPipelineLayout = result.m_layout;
+	AGNI_PRINT("Indirect cull compute pipeline created successfully\n");
 }
 
 void Renderer::initHiZResources()
@@ -839,46 +757,20 @@ void Renderer::initHiZPipeline()
 		m_hizDownsampleDescriptorLayout = m_hizDownsampleLayoutInfo.layout;
 	}
 
-	// Pipeline layout
-	VkPushConstantRange pushConstantRange {};
-	pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-	pushConstantRange.offset     = 0;
-	pushConstantRange.size       = sizeof(HiZPushConstants);
+	auto result = ComputePipelineBuilder(m_device)
+	.setShader(resPath("shaders/slang/HiZDownsample.comp.spv").c_str())
+	.addDescriptorSetLayout(m_hizDownsampleDescriptorLayout)
+	.setPushConstantSize(sizeof(HiZPushConstants))
+	.build();
 
-	VkPipelineLayoutCreateInfo layoutInfo {};
-	layoutInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	layoutInfo.setLayoutCount         = 1;
-	layoutInfo.pSetLayouts            = &m_hizDownsampleDescriptorLayout;
-	layoutInfo.pushConstantRangeCount = 1;
-	layoutInfo.pPushConstantRanges    = &pushConstantRange;
-
-	VK_CHECK(vkCreatePipelineLayout(m_device, &layoutInfo, nullptr, &m_hizDownsamplePipelineLayout));
-
-	VkShaderModule hizShader;
-	if (!vkutil::loadShaderModule(resPath("shaders/slang/HiZDownsample.comp.spv").c_str(),
-	                              m_device,
-	                              &hizShader))
+	if (result.m_pipeline == VK_NULL_HANDLE)
 	{
-		AGNI_PRINT("Failed to load Hi-Z downsample shader — Hi-Z occlusion disabled\n");
+		AGNI_PRINT("Failed to create Hi-Z downsample pipeline — Hi-Z occlusion disabled\n");
 		m_hizOcclusionEnabled = false;
 		return;
 	}
-
-	VkPipelineShaderStageCreateInfo stageInfo {};
-	stageInfo.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	stageInfo.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
-	stageInfo.module = hizShader;
-	stageInfo.pName  = "main";
-
-	VkComputePipelineCreateInfo pipelineInfo {};
-	pipelineInfo.sType  = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-	pipelineInfo.flags  = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-	pipelineInfo.layout = m_hizDownsamplePipelineLayout;
-	pipelineInfo.stage  = stageInfo;
-
-	VK_CHECK(vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_hizDownsamplePipeline));
-
-	vkDestroyShaderModule(m_device, hizShader, nullptr);
+	m_hizDownsamplePipeline       = result.m_pipeline;
+	m_hizDownsamplePipelineLayout = result.m_layout;
 	AGNI_PRINT("Hi-Z downsample pipeline created successfully\n");
 }
 
