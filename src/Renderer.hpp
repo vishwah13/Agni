@@ -30,7 +30,6 @@ struct EngineStats
 	int   m_drawcallCount   = 0;
 	float m_sceneUpdateTime = 0.0f;
 	float m_meshDrawTime    = 0.0f;
-	bool  m_gpuCullingActive   = false;
 	int   m_renderedTriangles  = 0; // GPU-reported primitives (from pipeline statistics query)
 };
 
@@ -170,8 +169,7 @@ public:
 	MaterialRegistry& getMaterialRegistry() { return m_materialRegistry; }
 	const MaterialRegistry& getMaterialRegistry() const { return m_materialRegistry; }
 
-	// GPU culling accessors
-	bool& getGpuCullingEnabled() { return m_gpuCullingEnabled; }
+	// GPU culling accessor
 	bool& getHiZOcclusionEnabled() { return m_hizOcclusionEnabled; }
 
 	// Multi-draw indirect accessors
@@ -323,7 +321,6 @@ private:
 	// GPU frustum culling
 	VkPipeline       m_cullPipeline       = VK_NULL_HANDLE;
 	VkPipelineLayout m_cullPipelineLayout = VK_NULL_HANDLE;
-	bool             m_gpuCullingEnabled  = true;
 
 	// Hi-Z occlusion culling
 	AllocatedImage               m_hizImage;

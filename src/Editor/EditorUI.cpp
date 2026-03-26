@@ -219,7 +219,7 @@ void EditorUI::renderPerformanceWindow()
 			widgets::StatDisplay("Draw Time", drawTimeStr);
 			widgets::StatDisplay("Update Time", updateTimeStr);
 			widgets::StatDisplay("Triangles (submitted)", trisStr);
-			widgets::StatDisplay("Triangles (rendered)", renderedTrisStr);
+			widgets::StatDisplay("Triangles (GPU rendered)", renderedTrisStr);
 			widgets::StatDisplay("Draw Calls", drawsStr);
 		}
 		}
@@ -270,7 +270,6 @@ void EditorUI::renderRenderingWindow()
 		if (widgets::CollapsibleSection("Culling", icons::Quality))
 		{
 			ImGui::PushID("Culling");
-			widgets::PropertyCheckbox("GPU Frustum Culling", &m_engine.getRenderer().getGpuCullingEnabled());
 			widgets::PropertyCheckbox("Hi-Z Occlusion", &m_engine.getRenderer().getHiZOcclusionEnabled());
 			ImGui::PopID();
 		}

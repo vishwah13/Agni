@@ -19,56 +19,6 @@
 #include <tracy/Tracy.hpp>
 #endif
 
-static bool isVisible(const RenderObject& obj, const glm::mat4& viewproj)
-{
-#ifdef TRACY_ENABLE
-	ZoneScoped;
-#endif
-
-	std::array<glm::vec3, 8> corners {
-	glm::vec3 {1, 1, 1},
-	glm::vec3 {1, 1, -1},
-	glm::vec3 {1, -1, 1},
-	glm::vec3 {1, -1, -1},
-	glm::vec3 {-1, 1, 1},
-	glm::vec3 {-1, 1, -1},
-	glm::vec3 {-1, -1, 1},
-	glm::vec3 {-1, -1, -1},
-	};
-
-	glm::mat4 matrix = viewproj * obj.m_transform;
-
-	glm::vec3 min = {1.5, 1.5, 1.5};
-	glm::vec3 max = {-1.5, -1.5, -1.5};
-
-	for (int c = 0; c < 8; c++)
-	{
-		// project each corner into clip space
-		glm::vec4 v = matrix * glm::vec4(obj.m_bounds.m_origin +
-		                                 (corners[c] * obj.m_bounds.m_extents),
-		                                 1.f);
-
-		// perspective correction
-		v.x = v.x / v.w;
-		v.y = v.y / v.w;
-		v.z = v.z / v.w;
-
-		min = glm::min(glm::vec3 {v.x, v.y, v.z}, min);
-		max = glm::max(glm::vec3 {v.x, v.y, v.z}, max);
-	}
-
-	// check the clip space box is within the view
-	if (min.z > 1.f || max.z < 0.f || min.x > 1.f || max.x < -1.f ||
-	    min.y > 1.f || max.y < -1.f)
-	{
-		return false;
-	}
-	else
-	{
-		return true;
-	}
-}
-
 void Renderer::init(VkDevice                          device,
                     ResourceManager*                  resourceManager,
                     SwapchainManager*                 swapchainManager,
@@ -769,8 +719,7 @@ void Renderer::initCullPipeline()
 	                              m_device,
 	                              &cullShader))
 	{
-		AGNI_PRINT("Failed to load frustum cull compute shader — GPU culling disabled\n");
-		m_gpuCullingEnabled = false;
+		AGNI_PRINT("Failed to load indirect cull compute shader\n");
 		return;
 	}
 
@@ -1845,8 +1794,7 @@ void Renderer::renderFrame(VkCommandBuffer cmd,
 	drawGeometry(cmd, currentFrame);
 
 	// Build Hi-Z pyramid for next frame's occlusion culling
-	if (m_gpuCullingEnabled && m_hizOcclusionEnabled &&
-	    m_hizDownsamplePipeline != VK_NULL_HANDLE)
+	if (m_hizOcclusionEnabled && m_hizDownsamplePipeline != VK_NULL_HANDLE)
 	{
 		buildHiZPyramid(cmd, currentFrame);
 	}
@@ -1953,7 +1901,6 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	// reset counters
 	m_stats.m_drawcallCount  = 0;
 	m_stats.m_triangleCount  = 0;
-	m_stats.m_gpuCullingActive = false;
 
 	// Read back pipeline statistics from the PREVIOUS frame's query
 	{
@@ -1971,45 +1918,16 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	// begin clock
 	auto start = std::chrono::system_clock::now();
 
-	const bool gpuCulling = m_gpuCullingEnabled && m_cullPipeline != VK_NULL_HANDLE;
-
 	std::vector<uint32_t> opaqueDraws;
 	opaqueDraws.reserve(m_mainDrawContext.m_OpaqueSurfaces.size());
 	std::vector<uint32_t> transparentDraws;
 	transparentDraws.reserve(m_mainDrawContext.m_TransparentSurfaces.size());
 
-	{
-#ifdef TRACY_ENABLE
-		ZoneScopedN("Frustum Culling");
-#endif
-		if (gpuCulling)
-		{
-			// GPU culling — include ALL opaques, compute shader does the culling
-			for (uint32_t i = 0; i < m_mainDrawContext.m_OpaqueSurfaces.size(); i++)
-				opaqueDraws.push_back(i);
-		}
-		else
-		{
-			for (uint32_t i = 0; i < m_mainDrawContext.m_OpaqueSurfaces.size(); i++)
-			{
-				if (isVisible(m_mainDrawContext.m_OpaqueSurfaces[i],
-				              m_sceneData.m_viewproj))
-				{
-					opaqueDraws.push_back(i);
-				}
-			}
-		}
-		// Transparent surfaces always use CPU culling
-		for (uint32_t i = 0; i < m_mainDrawContext.m_TransparentSurfaces.size();
-		     i++)
-		{
-			if (isVisible(m_mainDrawContext.m_TransparentSurfaces[i],
-			              m_sceneData.m_viewproj))
-			{
-				transparentDraws.push_back(i);
-			}
-		}
-	}
+	// Include all surfaces — GPU compute shader handles frustum + occlusion culling
+	for (uint32_t i = 0; i < m_mainDrawContext.m_OpaqueSurfaces.size(); i++)
+		opaqueDraws.push_back(i);
+	for (uint32_t i = 0; i < m_mainDrawContext.m_TransparentSurfaces.size(); i++)
+		transparentDraws.push_back(i);
 
 	{
 #ifdef TRACY_ENABLE
@@ -2282,10 +2200,9 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 		const VkDeviceSize indirectBufSize =
 		totalDraws * sizeof(VkDrawIndexedIndirectCommand);
 
-		VkBufferUsageFlags indirectUsage = VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
-		if (gpuCulling)
-			indirectUsage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-			                 VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+		VkBufferUsageFlags indirectUsage = VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT |
+		                                   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+		                                   VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
 		indirectBuffer = m_resourceManager->createBuffer(
 		indirectBufSize,
@@ -2385,13 +2302,12 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 		// =========================================================
 		// GPU frustum culling dispatch (before render pass)
 		// =========================================================
-		if (gpuCulling && !opaqueDraws.empty())
+		if (m_cullPipeline != VK_NULL_HANDLE && !opaqueDraws.empty())
 		{
 #ifdef TRACY_ENABLE
-			ZoneScopedN("GPU Frustum Cull Dispatch");
+			ZoneScopedN("GPU Cull Dispatch");
 #endif
 			const uint32_t opaqueCount = static_cast<uint32_t>(opaqueDraws.size());
-			m_stats.m_gpuCullingActive = true;
 
 			// Allocate bounds buffer (per-opaque draw)
 			AllocatedBuffer boundsBuffer = m_resourceManager->createBuffer(
@@ -2629,7 +2545,7 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 			m_mainDrawContext.m_OpaqueSurfaces[opaqueDraws[0]];
 			bindPipelineState(firstOpaque.m_material->m_pipeline);
 
-			issueBatchDraws(opaqueBatches, gpuCulling, 0);
+			issueBatchDraws(opaqueBatches, true, 0);
 		}
 
 		// === Draw transparent ===
