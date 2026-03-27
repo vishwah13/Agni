@@ -13,6 +13,7 @@
 #include <volk.h>
 
 #include <fmt/core.h>
+#include <IndexPageAllocator.hpp>
 
 // Resolve resource paths relative to the project root (dev) or working directory (production).
 inline std::string resPath(const char* relativePath) {
@@ -58,6 +59,7 @@ struct GPUMeshBuffers
 	VkDeviceAddress m_vertexBufferAddress = 0;
 	uint32_t        m_globalIndexOffset = 0; // global firstIndex into global index buffer
 	uint32_t        m_indexCount = 0;
+	IndexAllocation m_indexAllocation {};     // page allocation handle for freeing
 };
 
 // bounding volume for frustum culling

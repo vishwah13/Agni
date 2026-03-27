@@ -159,8 +159,9 @@ void Skybox::cleanup(AgniEngine* engine)
 		m_skyboxMaterialLayout = VK_NULL_HANDLE;
 	}
 
-	// Cleanup mesh buffers (index data lives in global index buffer)
+	// Cleanup mesh buffers
 	engine->m_resourceManager.destroyBuffer(m_meshBuffers.m_vertexBuffer);
+	engine->m_resourceManager.freeIndexAllocation(m_meshBuffers.m_indexAllocation);
 
 	// Cleanup material
 	if (m_skyboxMaterial)

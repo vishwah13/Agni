@@ -78,6 +78,7 @@ public:
 	// Global index buffer — single shared buffer for all mesh indices
 	void     initGlobalIndexBuffer();
 	VkBuffer getGlobalIndexBuffer() const { return m_globalIndexBuffer.m_buffer; }
+	void     freeIndexAllocation(const IndexAllocation& alloc);
 
 	// Accessors
 	VmaAllocator getAllocator() const
@@ -105,9 +106,9 @@ private:
 
 	// Global index buffer: all mesh indices in a single VkBuffer
 	static constexpr uint32_t GLOBAL_INDEX_INITIAL_CAPACITY = 16 * 1024 * 1024; // 16M indices = 64 MB
-	AllocatedBuffer m_globalIndexBuffer {};
-	uint32_t        m_globalIndexOffset = 0;   // next free slot (in indices)
-	uint32_t        m_globalIndexCapacity = 0; // total capacity (in indices)
+	AllocatedBuffer    m_globalIndexBuffer {};
+	uint32_t           m_globalIndexCapacity = 0; // total capacity (in indices)
+	IndexPageAllocator m_indexAllocator;
 
 	void growGlobalIndexBuffer(uint32_t requiredCapacity);
 
