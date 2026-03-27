@@ -317,10 +317,8 @@ void ResourceManager::growGlobalIndexBuffer(uint32_t requiredCapacity)
 	// Copy existing data from old buffer to new.
 	// immediateSubmit does a fence wait, so no in-flight frames reference the old buffer.
 	// This is a load-time-only operation — never called mid-frame.
-	const uint32_t usedPages = m_indexAllocator.usedPages();
-	if (usedPages > 0)
+	if (m_indexAllocator.usedPages() > 0)
 	{
-		// Copy the entire used region (conservative: up to capacity, since pages may be sparse)
 		immediateSubmit(
 		[&](VkCommandBuffer cmd)
 		{
@@ -331,15 +329,15 @@ void ResourceManager::growGlobalIndexBuffer(uint32_t requiredCapacity)
 		});
 	}
 
+	// Destroy old buffer inline. The deletion queue entry from initGlobalIndexBuffer
+	// captures `this->m_globalIndexBuffer` by reference — it will destroy whatever
+	// m_globalIndexBuffer points to at shutdown, which will be the final buffer.
+	// No new deletion queue entry needed here.
 	destroyBuffer(m_globalIndexBuffer);
 	m_globalIndexBuffer   = newBuffer;
 	m_globalIndexCapacity = newCapacity;
 
-	// Inform allocator about new pages
 	m_indexAllocator.grow(newCapacity >> IndexPageAllocator::PAGE_SHIFT);
-
-	m_mainDeletionQueue.push_function(
-	    [this]() { destroyBuffer(m_globalIndexBuffer); });
 
 	AGNI_PRINT("[ResourceManager] Global index buffer grown to {} MB ({} indices)\n",
 	           (newCapacity * sizeof(uint32_t)) / (1024 * 1024), newCapacity);
