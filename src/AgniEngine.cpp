@@ -666,7 +666,11 @@ void AgniEngine::initSyncStructures()
 
 void AgniEngine::initRenderDocAPI()
 {
-#ifdef _WIN32
+#ifdef AGNI_DISABLE_RENDERDOC
+	// RenderDoc disabled (e.g., when using Nsight Graphics for shader debugging).
+	// RenderDoc and Nsight conflict when both hook the Vulkan layer.
+	return;
+#elif defined(_WIN32)
 	if (HMODULE mod = GetModuleHandleA("renderdoc.dll"))
 	{
 		pRENDERDOC_GetAPI RENDERDOC_GetAPI =

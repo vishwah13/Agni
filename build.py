@@ -10,6 +10,7 @@ Usage:
     python build.py --tracy         # Also build Tracy profiler
     python build.py --no-shaders    # Skip shader compilation
     python build.py --no-tracy      # Disable Tracy profiling
+    python build.py --no-nsight     # Disable Nsight shader debug info (re-enables RenderDoc)
     python build.py -G vs2022       # Use Visual Studio 2022
     python build.py -G vs2026       # Use Visual Studio 2026
     python build.py -G make         # Use Unix Makefiles (Linux/macOS)
@@ -111,7 +112,7 @@ def clean_build(build_dir):
         print_info("Build directory doesn't exist, nothing to clean")
 
 
-def configure_cmake(build_dir, source_dir, build_type, compile_shaders, enable_tracy, generator=None):
+def configure_cmake(build_dir, source_dir, build_type, compile_shaders, enable_tracy, enable_nsight=True, generator=None):
     """Configure CMake project"""
     print_header(f"Configuring CMake ({build_type} build)")
 
@@ -153,6 +154,12 @@ def configure_cmake(build_dir, source_dir, build_type, compile_shaders, enable_t
         print_info("Tracy profiling: DISABLED")
     else:
         print_info("Tracy profiling: ENABLED")
+
+    if not enable_nsight:
+        cmake_args.append("-DAGNI_SHADER_DEBUG=OFF")
+        print_info("Nsight shader debug: DISABLED")
+    else:
+        print_info("Nsight shader debug: ENABLED (RenderDoc disabled)")
 
     # Run CMake configuration
     if run_command(cmake_args, description=f"Running CMake configure..."):
@@ -261,6 +268,7 @@ Examples:
   python build.py --release --tracy  # Release build + Tracy profiler
   python build.py --no-shaders       # Skip shader compilation (faster CI builds)
   python build.py --no-tracy         # Skip Tracy profiler build
+  python build.py --no-nsight        # Disable Nsight shader debug (re-enables RenderDoc)
   python build.py -G vs2022          # Use Visual Studio 2022
   python build.py -G vs2026          # Use Visual Studio 2026
   python build.py -G make            # Use Unix Makefiles (Linux/macOS)
@@ -295,6 +303,12 @@ Examples:
         "--no-tracy",
         action="store_true",
         help="Disable Tracy profiling integration"
+    )
+
+    parser.add_argument(
+        "--no-nsight",
+        action="store_true",
+        help="Disable shader debug info (smaller .spv files, re-enables RenderDoc)"
     )
 
     parser.add_argument(
@@ -343,6 +357,7 @@ Examples:
         build_type,
         compile_shaders=not args.no_shaders,
         enable_tracy=not args.no_tracy,
+        enable_nsight=not args.no_nsight,
         generator=args.generator
     ):
         elapsed = time.time() - start_time
