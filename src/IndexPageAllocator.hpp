@@ -121,7 +121,7 @@ public:
 
 	void printStats() const
 	{
-		const uint32_t used = usedPages();
+		[[maybe_unused]] const uint32_t used = usedPages();
 		AGNI_PRINT("[IndexPageAllocator] {}/{} pages used ({} free, {:.1f}% utilization)\n",
 		           used, m_totalPages, m_totalPages - used,
 		           m_totalPages > 0 ? 100.0f * used / m_totalPages : 0.0f);
