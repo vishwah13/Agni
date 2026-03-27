@@ -71,9 +71,13 @@ public:
 
 	void destroyImage(const AllocatedImage& img);
 
-	// Mesh upload (creates vertex + index buffers and uploads data)
+	// Mesh upload (creates vertex buffer, appends indices to global index buffer)
 	GPUMeshBuffers uploadMesh(std::span<uint32_t> indices,
 	                          std::span<Vertex>   vertices);
+
+	// Global index buffer — single shared buffer for all mesh indices
+	void     initGlobalIndexBuffer();
+	VkBuffer getGlobalIndexBuffer() const { return m_globalIndexBuffer.m_buffer; }
 
 	// Accessors
 	VmaAllocator getAllocator() const
@@ -98,6 +102,14 @@ private:
 	VkFence         m_immFence {VK_NULL_HANDLE};
 	VkCommandBuffer m_immCommandBuffer {VK_NULL_HANDLE};
 	VkCommandPool   m_immCommandPool {VK_NULL_HANDLE};
+
+	// Global index buffer: all mesh indices in a single VkBuffer
+	static constexpr uint32_t GLOBAL_INDEX_INITIAL_CAPACITY = 16 * 1024 * 1024; // 16M indices = 64 MB
+	AllocatedBuffer m_globalIndexBuffer {};
+	uint32_t        m_globalIndexOffset = 0;   // next free slot (in indices)
+	uint32_t        m_globalIndexCapacity = 0; // total capacity (in indices)
+
+	void growGlobalIndexBuffer(uint32_t requiredCapacity);
 
 	DeletionQueue m_mainDeletionQueue;
 };

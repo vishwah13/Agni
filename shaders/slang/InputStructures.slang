@@ -88,10 +88,12 @@ struct GPUDrawData
     uint     padding;
 };
 
-// Per-draw bounds for GPU frustum culling (matches C++ GPUBoundsData)
+// Per-draw bounds for GPU frustum + occlusion culling (matches C++ GPUBoundsData)
 struct BoundsData {
-    float3   origin;
-    float    sphereRadius;
+    float3   aabbMin;
+    float    padding0;
+    float3   aabbMax;
+    float    padding1;
     float4x4 worldMatrix;
 };
 

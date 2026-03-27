@@ -605,6 +605,7 @@ void AgniEngine::initVulkan()
 	// initializing ResourceManager
 	m_resourceManager.init(
 	m_instance, m_chosenGPU, m_device, m_graphicsQueue, m_graphicsQueueFamily);
+	m_resourceManager.initGlobalIndexBuffer();
 }
 
 void AgniEngine::initSwapchain()

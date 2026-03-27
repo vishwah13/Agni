@@ -159,8 +159,7 @@ void Skybox::cleanup(AgniEngine* engine)
 		m_skyboxMaterialLayout = VK_NULL_HANDLE;
 	}
 
-	// Cleanup mesh buffers
-	engine->m_resourceManager.destroyBuffer(m_meshBuffers.m_indexBuffer);
+	// Cleanup mesh buffers (index data lives in global index buffer)
 	engine->m_resourceManager.destroyBuffer(m_meshBuffers.m_vertexBuffer);
 
 	// Cleanup material
@@ -181,7 +180,8 @@ void Skybox::cleanup(AgniEngine* engine)
 void Skybox::draw(VkCommandBuffer cmd,
                   VkDeviceSize    sceneDescriptorOffset,
                   VkDeviceAddress frameBufferAddress,
-                  VkExtent2D      drawExtent)
+                  VkExtent2D      drawExtent,
+                  VkBuffer        globalIndexBuffer)
 {
 #ifdef TRACY_ENABLE
 	ZoneScoped;
@@ -251,9 +251,8 @@ void Skybox::draw(VkCommandBuffer cmd,
 	                                    &skyboxMaterialBufferIndex,
 	                                    &skyboxMaterialOffset);
 
-	// Bind index buffer
-	vkCmdBindIndexBuffer(
-	cmd, m_meshBuffers.m_indexBuffer.m_buffer, 0, VK_INDEX_TYPE_UINT32);
+	// Bind global index buffer (skybox indices are at m_firstIndex)
+	vkCmdBindIndexBuffer(cmd, globalIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
 	// Push constants for vertex buffer address
 	SkyBoxPushConstants skyboxPush;
@@ -319,7 +318,7 @@ void Skybox::createCubeMesh(AgniEngine* engine)
 	m_meshBuffers =
 	engine->m_resourceManager.uploadMesh(cubeIndices, cubeVertices);
 	m_indexCount = static_cast<uint32_t>(cubeIndices.size());
-	m_firstIndex = 0;
+	m_firstIndex = m_meshBuffers.m_globalIndexOffset;
 }
 
 void Skybox::createMaterial(AgniEngine* engine)

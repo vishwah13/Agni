@@ -54,8 +54,7 @@ struct ComputeEffect
 struct RenderObject
 {
 	uint32_t m_indexCount = 0;
-	uint32_t m_firstIndex = 0;
-	VkBuffer m_indexBuffer = VK_NULL_HANDLE;
+	uint32_t m_firstIndex = 0; // global offset into global index buffer
 
 	MaterialInstance* m_material            = nullptr;
 	Bounds            m_bounds {};
@@ -345,21 +344,13 @@ private:
 	bool m_multiDrawIndirectEnabled {true};
 
 	// Batch of consecutive indirect draw commands sharing the same index buffer
-	struct IndirectBatch
-	{
-		VkBuffer indexBuffer        = VK_NULL_HANDLE;
-		uint32_t firstCommandIndex  = 0;
-		uint32_t commandCount       = 0;
-	};
-
 	// Shared indirect draw resources for all shadow passes
 	struct ShadowIndirectResources
 	{
-		AllocatedBuffer            indirectBuffer {};
-		AllocatedBuffer            drawDataBuffer {};
-		VkDeviceAddress            drawDataBDA = 0;
-		std::vector<IndirectBatch> batches;
-		uint32_t                   totalDraws = 0;
+		AllocatedBuffer indirectBuffer {};
+		AllocatedBuffer drawDataBuffer {};
+		VkDeviceAddress drawDataBDA = 0;
+		uint32_t        totalDraws = 0;
 	};
 
 	// Private rendering functions

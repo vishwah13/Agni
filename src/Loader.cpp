@@ -1044,7 +1044,7 @@ void LoadedGLTF::clearAll()
 	{
 		if (v)
 		{
-			m_creator->m_resourceManager.destroyBuffer(v->m_meshBuffers.m_indexBuffer);
+			// Index data lives in the global index buffer — only destroy vertex buffer
 			m_creator->m_resourceManager.destroyBuffer(v->m_meshBuffers.m_vertexBuffer);
 		}
 	}

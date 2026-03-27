@@ -36,7 +36,8 @@ public:
 	void draw(VkCommandBuffer cmd,
 	          VkDeviceSize    sceneDescriptorOffset,
 	          VkDeviceAddress frameBufferAddress,
-	          VkExtent2D      drawExtent);
+	          VkExtent2D      drawExtent,
+	          VkBuffer        globalIndexBuffer);
 
 	// Clear only pipeline resources (for rebuilding pipelines)
 	void clearPipelineResources(VkDevice device);

@@ -54,10 +54,10 @@ struct Vertex
 // holds the resources needed for a mesh
 struct GPUMeshBuffers
 {
-
-	AllocatedBuffer m_indexBuffer {};
 	AllocatedBuffer m_vertexBuffer {};
 	VkDeviceAddress m_vertexBufferAddress = 0;
+	uint32_t        m_globalIndexOffset = 0; // global firstIndex into global index buffer
+	uint32_t        m_indexCount = 0;
 };
 
 // bounding volume for frustum culling
@@ -159,24 +159,30 @@ struct PointShadowIndirectPushConstants
 	float           m_farPlane = 0.0f;        // 4 bytes, offset 92
 }; // Total: 96 bytes
 
-// Per-draw bounds for GPU frustum culling (SSBO via BDA)
+// Per-draw bounds for GPU frustum + occlusion culling (SSBO via BDA)
 struct GPUBoundsData
 {
-	glm::vec3 m_origin {0.0f};       // 12 — local-space bounding sphere center
-	float     m_sphereRadius {0.0f}; // 4
-	glm::mat4 m_worldMatrix {1.0f};  // 64
-}; // 80 bytes total
+	glm::vec3 m_aabbMin {0.0f};   // 12 — local-space AABB minimum
+	float     m_padding0 {0.0f};  // 4  — std430 alignment
+	glm::vec3 m_aabbMax {0.0f};   // 12 — local-space AABB maximum
+	float     m_padding1 {0.0f};  // 4  — std430 alignment
+	glm::mat4 m_worldMatrix {1.0f}; // 64
+}; // 96 bytes total
 
-// Push constants for cull compute (32 bytes)
+// Push constants for cull compute with draw compaction (64 bytes)
 struct CullPushConstants
 {
-	VkDeviceAddress m_boundsBufferPtr = 0;    // 8 — BDA to GPUBoundsData[]
-	VkDeviceAddress m_indirectBufferPtr = 0;  // 8 — BDA to VkDrawIndexedIndirectCommand[]
-	uint32_t        m_drawCount = 0;          // 4
-	uint32_t        m_hizEnabled = 0;         // 4 — 0=frustum only, 1=frustum+Hi-Z
-	uint32_t        m_hizWidth = 0;           // 4 — Hi-Z mip0 width
-	uint32_t        m_hizHeight = 0;          // 4 — Hi-Z mip0 height
-};
+	VkDeviceAddress m_boundsBufferPtr = 0;       // 8  — input: GPUBoundsData[]
+	VkDeviceAddress m_indirectBufferInPtr = 0;   // 8  — input: VkDrawIndexedIndirectCommand[]
+	VkDeviceAddress m_indirectBufferOutPtr = 0;  // 8  — output: compacted commands
+	VkDeviceAddress m_drawDataInPtr = 0;         // 8  — input: GPUDrawData[]
+	VkDeviceAddress m_drawDataOutPtr = 0;        // 8  — output: compacted draw data
+	VkDeviceAddress m_drawCountPtr = 0;          // 8  — output: atomic counter (uint32_t)
+	uint32_t        m_drawCount = 0;             // 4  — total input draws
+	uint32_t        m_hizEnabled = 0;            // 4  — 0=frustum only, 1=frustum+Hi-Z
+	uint32_t        m_hizWidth = 0;              // 4
+	uint32_t        m_hizHeight = 0;             // 4
+}; // 64 bytes total
 
 // Push constants for Hi-Z downsample compute (12 bytes)
 struct HiZPushConstants
