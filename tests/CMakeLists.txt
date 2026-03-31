@@ -11,6 +11,7 @@ add_executable(agni_tests
     # GPU test files (headless Vulkan)
     gpu_test_fixture.hpp
     test_gpu_resource_manager.cpp
+    test_gpu_indirect_cull.cpp
 
     # Engine source files needed by CPU tests
     "${PROJECT_SOURCE_DIR}/src/Editor/CommandHistory.cpp"
@@ -22,6 +23,9 @@ add_executable(agni_tests
     "${PROJECT_SOURCE_DIR}/src/Images.cpp"
     "${PROJECT_SOURCE_DIR}/src/Debug.cpp"
     "${PROJECT_SOURCE_DIR}/src/VulkanTools.cpp"
+    "${PROJECT_SOURCE_DIR}/src/Descriptors.cpp"
+    "${PROJECT_SOURCE_DIR}/src/DescriptorBuffer.cpp"
+    "${PROJECT_SOURCE_DIR}/src/Pipelines.cpp"
     vma_impl.cpp
 )
 

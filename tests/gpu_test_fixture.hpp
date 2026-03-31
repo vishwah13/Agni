@@ -81,6 +81,7 @@ protected:
 		    .set_required_features_13(features13)
 		    .set_required_features_12(features12)
 		    .set_required_features_11(features11)
+		    .add_required_extension(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME)
 		    .require_present(false)
 		    .select();
 
@@ -95,8 +96,14 @@ protected:
 
 		vkb::PhysicalDevice vkbPhysDevice = physResult.value();
 
+		// Enable descriptor buffer feature
+		VkPhysicalDeviceDescriptorBufferFeaturesEXT descriptorBufferFeatures {
+		    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT};
+		descriptorBufferFeatures.descriptorBuffer = VK_TRUE;
+
 		// Create logical device
 		vkb::DeviceBuilder deviceBuilder {vkbPhysDevice};
+		deviceBuilder.add_pNext(&descriptorBufferFeatures);
 		auto deviceResult = deviceBuilder.build();
 
 		if (!deviceResult)
