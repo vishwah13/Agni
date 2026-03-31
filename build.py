@@ -11,6 +11,7 @@ Usage:
     python build.py --no-shaders    # Skip shader compilation
     python build.py --no-tracy      # Disable Tracy profiling
     python build.py --no-nsight     # Disable Nsight shader debug info (re-enables RenderDoc)
+    python build.py --test          # Build and run unit tests
     python build.py -G vs2022       # Use Visual Studio 2022
     python build.py -G vs2026       # Use Visual Studio 2026
     python build.py -G make         # Use Unix Makefiles (Linux/macOS)
@@ -112,7 +113,7 @@ def clean_build(build_dir):
         print_info("Build directory doesn't exist, nothing to clean")
 
 
-def configure_cmake(build_dir, source_dir, build_type, compile_shaders, enable_tracy, enable_nsight=True, generator=None):
+def configure_cmake(build_dir, source_dir, build_type, compile_shaders, enable_tracy, enable_nsight=True, enable_tests=False, generator=None):
     """Configure CMake project"""
     print_header(f"Configuring CMake ({build_type} build)")
 
@@ -161,6 +162,10 @@ def configure_cmake(build_dir, source_dir, build_type, compile_shaders, enable_t
     else:
         print_info("Nsight shader debug: ENABLED (RenderDoc disabled)")
 
+    if enable_tests:
+        cmake_args.append("-DAGNI_BUILD_TESTS=ON")
+        print_info("Unit tests: ENABLED")
+
     # Run CMake configuration
     if run_command(cmake_args, description=f"Running CMake configure..."):
         print_success("CMake configuration complete")
@@ -193,6 +198,39 @@ def build_project(build_dir, build_type, jobs=None):
         return True
     else:
         print_error("Build failed")
+        return False
+
+
+def build_and_run_tests(build_dir, build_type):
+    """Build and run the unit test suite"""
+    print_header("Building and Running Tests")
+
+    # Build only the test target
+    cmake_args = [
+        "cmake",
+        "--build", str(build_dir),
+        "--config", build_type,
+        "--target", "agni_tests",
+        "--parallel"
+    ]
+
+    if not run_command(cmake_args, description="Building test target..."):
+        print_error("Test build failed")
+        return False
+
+    # Run tests via CTest
+    ctest_args = [
+        "ctest",
+        "--test-dir", str(build_dir),
+        "--build-config", build_type,
+        "--output-on-failure"
+    ]
+
+    if run_command(ctest_args, description="Running tests..."):
+        print_success("All tests passed!")
+        return True
+    else:
+        print_error("Some tests failed")
         return False
 
 
@@ -269,6 +307,7 @@ Examples:
   python build.py --no-shaders       # Skip shader compilation (faster CI builds)
   python build.py --no-tracy         # Skip Tracy profiler build
   python build.py --no-nsight        # Disable Nsight shader debug (re-enables RenderDoc)
+  python build.py --test             # Build and run unit tests
   python build.py -G vs2022          # Use Visual Studio 2022
   python build.py -G vs2026          # Use Visual Studio 2026
   python build.py -G make            # Use Unix Makefiles (Linux/macOS)
@@ -309,6 +348,12 @@ Examples:
         "--no-nsight",
         action="store_true",
         help="Disable shader debug info (smaller .spv files, re-enables RenderDoc)"
+    )
+
+    parser.add_argument(
+        "--test",
+        action="store_true",
+        help="Build and run unit tests"
     )
 
     parser.add_argument(
@@ -358,6 +403,7 @@ Examples:
         compile_shaders=not args.no_shaders,
         enable_tracy=not args.no_tracy,
         enable_nsight=not args.no_nsight,
+        enable_tests=args.test,
         generator=args.generator
     ):
         elapsed = time.time() - start_time
@@ -373,6 +419,15 @@ Examples:
         print_error(f"Compilation failed after {elapsed:.2f}s")
         input("\nPress Enter to exit...")
         return 1
+
+    # Build and run tests if requested
+    if args.test:
+        if not build_and_run_tests(build_dir, build_type):
+            elapsed = time.time() - start_time
+            print_header("Tests FAILED")
+            print_error(f"Tests failed after {elapsed:.2f}s")
+            input("\nPress Enter to exit...")
+            return 1
 
     # Build Tracy profiler if requested or if Debug build (for development)
     should_build_tracy = (args.tracy or build_type == "Debug") and not args.no_tracy

@@ -36,6 +36,7 @@ add_executable (engine
   Camera.hpp
   Skybox.hpp
   Skybox.cpp
+  AgniLog.hpp
   Debug.hpp
   Debug.cpp
   ThreadPool.hpp

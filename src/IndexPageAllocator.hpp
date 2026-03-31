@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <vector>
 
-#include <Debug.hpp>
+#include <AgniLog.hpp>
 
 // Handle returned by the page allocator, stored in GPUMeshBuffers for freeing.
 struct IndexAllocation
