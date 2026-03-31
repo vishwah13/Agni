@@ -192,12 +192,23 @@ void EditorUI::renderPerformanceWindow()
 		{
 			if (widgets::CollapsibleSection("Frame Statistics"))
 		{
-			float frametime = m_engine.getRenderer().getStats().m_frametime;
-			float fps = (frametime > 0.0f) ? 1000.0f / frametime : 0.0f;
+			static float displayedFps       = 0.0f;
+			static float displayedFrametime = 0.0f;
+			static float timeSinceLastUpdate = 1.0f; // start > threshold so first frame updates
+
+			float rawFrametime = m_engine.getRenderer().getStats().m_frametime;
+			timeSinceLastUpdate += rawFrametime / 1000.0f; // frametime is in ms, convert to seconds
+
+			if (timeSinceLastUpdate > 0.5f)
+			{
+				displayedFrametime = rawFrametime;
+				displayedFps = (rawFrametime > 0.0f) ? 1000.0f / rawFrametime : 0.0f;
+				timeSinceLastUpdate = 0.0f;
+			}
 
 			char fpsStr[32], frametimeStr[32];
-			snprintf(fpsStr, sizeof(fpsStr), "%.1f", fps);
-			snprintf(frametimeStr, sizeof(frametimeStr), "%.2f ms", frametime);
+			snprintf(fpsStr, sizeof(fpsStr), "%.1f", displayedFps);
+			snprintf(frametimeStr, sizeof(frametimeStr), "%.2f ms", displayedFrametime);
 
 			widgets::StatDisplay("FPS", fpsStr);
 			widgets::StatDisplay("Frame Time", frametimeStr);
@@ -213,9 +224,13 @@ void EditorUI::renderPerformanceWindow()
 			snprintf(trisStr, sizeof(trisStr), "%d", m_engine.getRenderer().getStats().m_triangleCount);
 			snprintf(drawsStr, sizeof(drawsStr), "%d", m_engine.getRenderer().getStats().m_drawcallCount);
 
+			char renderedTrisStr[32];
+			snprintf(renderedTrisStr, sizeof(renderedTrisStr), "%d", m_engine.getRenderer().getStats().m_renderedTriangles);
+
 			widgets::StatDisplay("Draw Time", drawTimeStr);
 			widgets::StatDisplay("Update Time", updateTimeStr);
-			widgets::StatDisplay("Triangles", trisStr);
+			widgets::StatDisplay("Triangles (submitted)", trisStr);
+			widgets::StatDisplay("Triangles (GPU rendered)", renderedTrisStr);
 			widgets::StatDisplay("Draw Calls", drawsStr);
 		}
 		}
@@ -259,6 +274,14 @@ void EditorUI::renderRenderingWindow()
 					m_engine.getSwapchainManager().requestResize();
 				}
 			}
+			ImGui::PopID();
+		}
+
+		// Culling
+		if (widgets::CollapsibleSection("Culling", icons::Quality))
+		{
+			ImGui::PushID("Culling");
+			widgets::PropertyCheckbox("Hi-Z Occlusion", &m_engine.getRenderer().getHiZOcclusionEnabled());
 			ImGui::PopID();
 		}
 

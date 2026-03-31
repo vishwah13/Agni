@@ -86,4 +86,24 @@ namespace vkinit
 	pipelineShaderStageCreateInfo(VkShaderStageFlagBits stage,
 	                              VkShaderModule        shaderModule,
 	                              const char*           entry = "main");
+	// Barrier helpers
+	void imageBarrier(VkCommandBuffer        cmd,
+	                  VkImage                image,
+	                  VkPipelineStageFlags2  srcStage,
+	                  VkAccessFlags2         srcAccess,
+	                  VkPipelineStageFlags2  dstStage,
+	                  VkAccessFlags2         dstAccess,
+	                  VkImageLayout          oldLayout,
+	                  VkImageLayout          newLayout,
+	                  VkImageAspectFlags     aspect         = VK_IMAGE_ASPECT_COLOR_BIT,
+	                  uint32_t               baseMipLevel   = 0,
+	                  uint32_t               levelCount     = VK_REMAINING_MIP_LEVELS,
+	                  uint32_t               baseArrayLayer = 0,
+	                  uint32_t               layerCount     = 1);
+
+	void memoryBarrier(VkCommandBuffer        cmd,
+	                   VkPipelineStageFlags2  srcStage,
+	                   VkAccessFlags2         srcAccess,
+	                   VkPipelineStageFlags2  dstStage,
+	                   VkAccessFlags2         dstAccess);
 } // namespace vkinit

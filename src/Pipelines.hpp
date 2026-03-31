@@ -15,6 +15,32 @@ namespace vkutil
 	                                   unsigned int         fallbackSize);
 };
 
+struct ComputePipelineResult
+{
+	VkPipeline       m_pipeline = VK_NULL_HANDLE;
+	VkPipelineLayout m_layout   = VK_NULL_HANDLE;
+};
+
+class ComputePipelineBuilder
+{
+public:
+	explicit ComputePipelineBuilder(VkDevice device);
+
+	ComputePipelineBuilder& setShader(const char* spvPath);
+	ComputePipelineBuilder& addDescriptorSetLayout(VkDescriptorSetLayout layout);
+	ComputePipelineBuilder& setPushConstantSize(uint32_t size);
+	ComputePipelineBuilder& setLayout(VkPipelineLayout layout);
+
+	ComputePipelineResult build();
+
+private:
+	VkDevice                           m_device;
+	const char*                        m_shaderPath       = nullptr;
+	std::vector<VkDescriptorSetLayout> m_setLayouts;
+	uint32_t                           m_pushConstantSize = 0;
+	VkPipelineLayout                   m_existingLayout   = VK_NULL_HANDLE;
+};
+
 class PipelineBuilder
 {
 public:

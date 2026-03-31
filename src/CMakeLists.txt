@@ -113,6 +113,10 @@ if(AGNI_PRODUCTION_BUILD)
 else()
     target_compile_definitions(engine PUBLIC RESOURCES_PATH="${CMAKE_SOURCE_DIR}/")
 endif()
+if(AGNI_SHADER_DEBUG OR AGNI_PRODUCTION_BUILD)
+    target_compile_definitions(engine PUBLIC AGNI_DISABLE_RENDERDOC=1)
+endif()
+
 target_include_directories(engine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
 # ============================================================================

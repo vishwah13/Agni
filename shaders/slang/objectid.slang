@@ -1,5 +1,5 @@
 // Object ID shader for GPU-based picking
-import input_structures;
+import InputStructures;
 
 // Scene data (set 0, binding 0)
 [[vk::binding(0, 0)]]

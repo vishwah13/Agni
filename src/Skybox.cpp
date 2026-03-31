@@ -49,7 +49,7 @@ void Skybox::buildPipelines(AgniEngine* engine)
 {
 	VkShaderModule skyFragShader;
 	if (!vkutil::loadShaderModuleWithFallback(
-	    resPath("shaders/slang/skybox.frag.spv").c_str(),
+	    resPath("shaders/slang/Skybox.frag.spv").c_str(),
 	    engine->m_device,
 	    &skyFragShader,
 	    FallbackShaders::skyboxFragSpv,
@@ -60,7 +60,7 @@ void Skybox::buildPipelines(AgniEngine* engine)
 
 	VkShaderModule skyVertexShader;
 	if (!vkutil::loadShaderModuleWithFallback(
-	    resPath("shaders/slang/skybox.vert.spv").c_str(),
+	    resPath("shaders/slang/Skybox.vert.spv").c_str(),
 	    engine->m_device,
 	    &skyVertexShader,
 	    FallbackShaders::skyboxVertSpv,
@@ -160,8 +160,8 @@ void Skybox::cleanup(AgniEngine* engine)
 	}
 
 	// Cleanup mesh buffers
-	engine->m_resourceManager.destroyBuffer(m_meshBuffers.m_indexBuffer);
 	engine->m_resourceManager.destroyBuffer(m_meshBuffers.m_vertexBuffer);
+	engine->m_resourceManager.freeIndexAllocation(m_meshBuffers.m_indexAllocation);
 
 	// Cleanup material
 	if (m_skyboxMaterial)
@@ -181,7 +181,8 @@ void Skybox::cleanup(AgniEngine* engine)
 void Skybox::draw(VkCommandBuffer cmd,
                   VkDeviceSize    sceneDescriptorOffset,
                   VkDeviceAddress frameBufferAddress,
-                  VkExtent2D      drawExtent)
+                  VkExtent2D      drawExtent,
+                  VkBuffer        globalIndexBuffer)
 {
 #ifdef TRACY_ENABLE
 	ZoneScoped;
@@ -251,9 +252,8 @@ void Skybox::draw(VkCommandBuffer cmd,
 	                                    &skyboxMaterialBufferIndex,
 	                                    &skyboxMaterialOffset);
 
-	// Bind index buffer
-	vkCmdBindIndexBuffer(
-	cmd, m_meshBuffers.m_indexBuffer.m_buffer, 0, VK_INDEX_TYPE_UINT32);
+	// Bind global index buffer (skybox indices are at m_firstIndex)
+	vkCmdBindIndexBuffer(cmd, globalIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
 	// Push constants for vertex buffer address
 	SkyBoxPushConstants skyboxPush;
@@ -319,7 +319,7 @@ void Skybox::createCubeMesh(AgniEngine* engine)
 	m_meshBuffers =
 	engine->m_resourceManager.uploadMesh(cubeIndices, cubeVertices);
 	m_indexCount = static_cast<uint32_t>(cubeIndices.size());
-	m_firstIndex = 0;
+	m_firstIndex = m_meshBuffers.m_globalIndexOffset;
 }
 
 void Skybox::createMaterial(AgniEngine* engine)

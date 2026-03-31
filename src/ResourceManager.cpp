@@ -280,76 +280,148 @@ std::function<void(VkCommandBuffer cmd)>&& function)
 	VK_CHECK(vkWaitForFences(m_device, 1, &m_immFence, true, 9999999999));
 }
 
-// Note that this pattern is not very efficient, as we are waiting for the GPU
-// command to fully execute before continuing with our CPU side logic. This is
-// something people generally put on a background thread, whose sole job is to
-// execute uploads like this one, and deleting/reusing the staging buffers.
+void ResourceManager::initGlobalIndexBuffer()
+{
+	m_globalIndexCapacity = GLOBAL_INDEX_INITIAL_CAPACITY;
+
+	m_globalIndexBuffer = createBuffer(
+	    m_globalIndexCapacity * sizeof(uint32_t),
+	    VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+	    VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+	    VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+	    VMA_MEMORY_USAGE_GPU_ONLY);
+
+	m_indexAllocator.init(m_globalIndexCapacity);
+
+	m_mainDeletionQueue.push_function(
+	    [this]() { destroyBuffer(m_globalIndexBuffer); });
+
+	AGNI_PRINT("[ResourceManager] Global index buffer created: {} MB ({} indices)\n",
+	           (m_globalIndexCapacity * sizeof(uint32_t)) / (1024 * 1024),
+	           m_globalIndexCapacity);
+}
+
+void ResourceManager::growGlobalIndexBuffer(uint32_t requiredCapacity)
+{
+	uint32_t newCapacity = m_globalIndexCapacity;
+	while (newCapacity < requiredCapacity)
+		newCapacity *= 2;
+
+	AllocatedBuffer newBuffer = createBuffer(
+	    newCapacity * sizeof(uint32_t),
+	    VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+	    VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+	    VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+	    VMA_MEMORY_USAGE_GPU_ONLY);
+
+	// Copy existing data from old buffer to new.
+	// immediateSubmit does a fence wait, so no in-flight frames reference the old buffer.
+	// This is a load-time-only operation — never called mid-frame.
+	if (m_indexAllocator.usedPages() > 0)
+	{
+		immediateSubmit(
+		[&](VkCommandBuffer cmd)
+		{
+			VkBufferCopy copy {};
+			copy.size = m_globalIndexCapacity * sizeof(uint32_t);
+			vkCmdCopyBuffer(cmd, m_globalIndexBuffer.m_buffer,
+			                newBuffer.m_buffer, 1, &copy);
+		});
+	}
+
+	// Destroy old buffer inline. The deletion queue entry from initGlobalIndexBuffer
+	// captures `this->m_globalIndexBuffer` by reference — it will destroy whatever
+	// m_globalIndexBuffer points to at shutdown, which will be the final buffer.
+	// No new deletion queue entry needed here.
+	destroyBuffer(m_globalIndexBuffer);
+	m_globalIndexBuffer   = newBuffer;
+	m_globalIndexCapacity = newCapacity;
+
+	m_indexAllocator.grow(newCapacity >> IndexPageAllocator::PAGE_SHIFT);
+
+	AGNI_PRINT("[ResourceManager] Global index buffer grown to {} MB ({} indices)\n",
+	           (newCapacity * sizeof(uint32_t)) / (1024 * 1024), newCapacity);
+}
+
+void ResourceManager::freeIndexAllocation(const IndexAllocation& alloc)
+{
+	m_indexAllocator.free(alloc);
+}
+
 GPUMeshBuffers ResourceManager::uploadMesh(std::span<uint32_t> indices,
                                            std::span<Vertex>   vertices)
 {
 	const size_t vertexBufferSize = vertices.size() * sizeof(Vertex);
 	const size_t indexBufferSize  = indices.size() * sizeof(uint32_t);
+	const uint32_t indexCount     = static_cast<uint32_t>(indices.size());
+
+	// Allocate pages from the index page allocator
+	IndexAllocation alloc = m_indexAllocator.allocate(indexCount);
+
+	if (alloc.m_firstPageIndex == UINT32_MAX && indexCount > 0)
+	{
+		// No contiguous run found — grow buffer and retry
+		const uint32_t pagesNeeded =
+		    (indexCount + IndexPageAllocator::PAGE_SIZE_INDICES - 1)
+		    >> IndexPageAllocator::PAGE_SHIFT;
+		const uint32_t requiredCapacity =
+		    (m_indexAllocator.totalPages() + pagesNeeded)
+		    << IndexPageAllocator::PAGE_SHIFT;
+		growGlobalIndexBuffer(requiredCapacity);
+		alloc = m_indexAllocator.allocate(indexCount);
+		assert(alloc.m_firstPageIndex != UINT32_MAX && "Allocation failed after grow");
+	}
+
+	const uint32_t globalOffset =
+	    alloc.m_firstPageIndex << IndexPageAllocator::PAGE_SHIFT;
 
 	GPUMeshBuffers newSurface;
+	newSurface.m_globalIndexOffset = globalOffset;
+	newSurface.m_indexCount        = indexCount;
+	newSurface.m_indexAllocation   = alloc;
 
-	// create vertex buffer
+	// Create per-mesh vertex buffer
 	newSurface.m_vertexBuffer = createBuffer(
-	vertexBufferSize,
-	VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-	VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-	VMA_MEMORY_USAGE_GPU_ONLY);
+	    vertexBufferSize,
+	    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+	    VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+	    VMA_MEMORY_USAGE_GPU_ONLY);
 
-	// find the address of the vertex buffer
 	VkBufferDeviceAddressInfo deviceAdressInfo {
-	.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-	.buffer = newSurface.m_vertexBuffer.m_buffer};
+	    .sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+	    .buffer = newSurface.m_vertexBuffer.m_buffer};
 	newSurface.m_vertexBufferAddress =
-	vkGetBufferDeviceAddress(m_device, &deviceAdressInfo);
+	    vkGetBufferDeviceAddress(m_device, &deviceAdressInfo);
 
-	// create index buffer
-	newSurface.m_indexBuffer = createBuffer(indexBufferSize,
-	                                        VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-	                                        VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-	                                        VMA_MEMORY_USAGE_GPU_ONLY);
-
+	// Stage both vertex and index data
 	AllocatedBuffer staging = createBuffer(vertexBufferSize + indexBufferSize,
 	                                       VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 	                                       VMA_MEMORY_USAGE_CPU_ONLY);
 
 	void* data = staging.m_info.pMappedData;
-
-	// copy vertex buffer
 	memcpy(data, vertices.data(), vertexBufferSize);
-	// copy index buffer
 	memcpy((char*) data + vertexBufferSize, indices.data(), indexBufferSize);
+
+	const VkDeviceSize globalByteOffset = globalOffset * sizeof(uint32_t);
 
 	immediateSubmit(
 	[&](VkCommandBuffer cmd)
 	{
-		VkBufferCopy vertexCopy {0};
-		vertexCopy.dstOffset = 0;
+		VkBufferCopy vertexCopy {};
 		vertexCopy.srcOffset = 0;
+		vertexCopy.dstOffset = 0;
 		vertexCopy.size      = vertexBufferSize;
+		vkCmdCopyBuffer(cmd, staging.m_buffer,
+		                newSurface.m_vertexBuffer.m_buffer, 1, &vertexCopy);
 
-		vkCmdCopyBuffer(cmd,
-		                staging.m_buffer,
-		                newSurface.m_vertexBuffer.m_buffer,
-		                1,
-		                &vertexCopy);
-
-		VkBufferCopy indexCopy {0};
-		indexCopy.dstOffset = 0;
+		VkBufferCopy indexCopy {};
 		indexCopy.srcOffset = vertexBufferSize;
+		indexCopy.dstOffset = globalByteOffset;
 		indexCopy.size      = indexBufferSize;
-
-		vkCmdCopyBuffer(cmd,
-		                staging.m_buffer,
-		                newSurface.m_indexBuffer.m_buffer,
-		                1,
-		                &indexCopy);
+		vkCmdCopyBuffer(cmd, staging.m_buffer,
+		                m_globalIndexBuffer.m_buffer, 1, &indexCopy);
 	});
 
 	destroyBuffer(staging);
-
 	return newSurface;
 }

@@ -104,6 +104,9 @@ void AgniEngine::init()
 	                m_chosenGPU,
 	                m_windowExtent);
 
+	// Pass multi-draw indirect support flags to Renderer
+	m_renderer.setMultiDrawIndirect(m_multiDrawIndirectSupported, m_multiDrawIndirectEnabled);
+
 	// Initialize asset loader (creates default textures and samplers)
 	// Must be called before initPipelines() which builds material pipelines
 	m_assetLoader.init(&m_resourceManager, m_device);
@@ -522,9 +525,11 @@ void AgniEngine::initVulkan()
 	SDL_Vulkan_CreateSurface(m_window, m_instance, nullptr, &m_surface);
 
 	VkPhysicalDeviceFeatures deviceFeatures {
-	.sampleRateShading = VK_TRUE,
-	.shaderInt64 =
-	VK_TRUE // Required for uint64_t buffer device addresses in shaders
+	.sampleRateShading          = VK_TRUE,
+	.multiDrawIndirect          = VK_TRUE,
+	.drawIndirectFirstInstance  = VK_TRUE, // Required: indirect draws use firstInstance as draw index
+	.pipelineStatisticsQuery    = VK_TRUE, // Required for GPU-side rendered triangle counting
+	.shaderInt64                = VK_TRUE  // Required for uint64_t buffer device addresses in shaders
 	};
 
 	// vulkan 1.3 features
@@ -538,6 +543,8 @@ void AgniEngine::initVulkan()
 	.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
 	features12.bufferDeviceAddress = true;
 	features12.descriptorIndexing  = true;
+	features12.drawIndirectCount   = true;
+	features12.hostQueryReset      = true;
 	features12.shaderInt8          = true;
 	// Bindless texture indexing features (shader-side only, layout flags
 	// implicit with descriptor buffers)
@@ -584,6 +591,12 @@ void AgniEngine::initVulkan()
 	DescriptorBufferAllocator::queryProperties(m_chosenGPU,
 	                                           m_descriptorBufferProps);
 
+	// Query multi-draw indirect support
+	VkPhysicalDeviceFeatures supportedFeatures {};
+	vkGetPhysicalDeviceFeatures(m_chosenGPU, &supportedFeatures);
+	m_multiDrawIndirectSupported = supportedFeatures.multiDrawIndirect == VK_TRUE;
+	AGNI_PRINT("[GPU] Multi-draw indirect: {}\n", m_multiDrawIndirectSupported ? "supported" : "not supported");
+
 	// use vkbootstrap to get a Graphics queue
 	m_graphicsQueue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
 	m_graphicsQueueFamily =
@@ -592,6 +605,7 @@ void AgniEngine::initVulkan()
 	// initializing ResourceManager
 	m_resourceManager.init(
 	m_instance, m_chosenGPU, m_device, m_graphicsQueue, m_graphicsQueueFamily);
+	m_resourceManager.initGlobalIndexBuffer();
 }
 
 void AgniEngine::initSwapchain()
@@ -653,7 +667,11 @@ void AgniEngine::initSyncStructures()
 
 void AgniEngine::initRenderDocAPI()
 {
-#ifdef _WIN32
+#ifdef AGNI_DISABLE_RENDERDOC
+	// RenderDoc disabled (e.g., when using Nsight Graphics for shader debugging).
+	// RenderDoc and Nsight conflict when both hook the Vulkan layer.
+	return;
+#elif defined(_WIN32)
 	if (HMODULE mod = GetModuleHandleA("renderdoc.dll"))
 	{
 		pRENDERDOC_GetAPI RENDERDOC_GetAPI =

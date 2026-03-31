@@ -19,56 +19,6 @@
 #include <tracy/Tracy.hpp>
 #endif
 
-static bool isVisible(const RenderObject& obj, const glm::mat4& viewproj)
-{
-#ifdef TRACY_ENABLE
-	ZoneScoped;
-#endif
-
-	std::array<glm::vec3, 8> corners {
-	glm::vec3 {1, 1, 1},
-	glm::vec3 {1, 1, -1},
-	glm::vec3 {1, -1, 1},
-	glm::vec3 {1, -1, -1},
-	glm::vec3 {-1, 1, 1},
-	glm::vec3 {-1, 1, -1},
-	glm::vec3 {-1, -1, 1},
-	glm::vec3 {-1, -1, -1},
-	};
-
-	glm::mat4 matrix = viewproj * obj.m_transform;
-
-	glm::vec3 min = {1.5, 1.5, 1.5};
-	glm::vec3 max = {-1.5, -1.5, -1.5};
-
-	for (int c = 0; c < 8; c++)
-	{
-		// project each corner into clip space
-		glm::vec4 v = matrix * glm::vec4(obj.m_bounds.m_origin +
-		                                 (corners[c] * obj.m_bounds.m_extents),
-		                                 1.f);
-
-		// perspective correction
-		v.x = v.x / v.w;
-		v.y = v.y / v.w;
-		v.z = v.z / v.w;
-
-		min = glm::min(glm::vec3 {v.x, v.y, v.z}, min);
-		max = glm::max(glm::vec3 {v.x, v.y, v.z}, max);
-	}
-
-	// check the clip space box is within the view
-	if (min.z > 1.f || max.z < 0.f || min.x > 1.f || max.x < -1.f ||
-	    min.y > 1.f || max.y < -1.f)
-	{
-		return false;
-	}
-	else
-	{
-		return true;
-	}
-}
-
 void Renderer::init(VkDevice                          device,
                     ResourceManager*                  resourceManager,
                     SwapchainManager*                 swapchainManager,
@@ -107,12 +57,28 @@ void Renderer::init(VkDevice                          device,
 	// after AssetLoader creates the samplers
 
 	initRenderTargets(windowExtent);
+	initHiZResources();
 	initShadowResources();
 	initPointShadowResources();
 	initDescriptors();
 	initBackgroundPipelines();
 	initShadowPipeline();
 	initPointShadowPipeline();
+	initCullPipeline();
+	initHiZPipeline();
+
+	// Create pipeline statistics query pools (one per frame-in-flight)
+	for (uint32_t i = 0; i < STATS_FRAME_OVERLAP; i++)
+	{
+		VkQueryPoolCreateInfo queryInfo {};
+		queryInfo.sType      = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+		queryInfo.queryType  = VK_QUERY_TYPE_PIPELINE_STATISTICS;
+		queryInfo.queryCount = 1;
+		queryInfo.pipelineStatistics = VK_QUERY_PIPELINE_STATISTIC_CLIPPING_INVOCATIONS_BIT;
+		VK_CHECK(vkCreateQueryPool(m_device, &queryInfo, nullptr, &m_statsQueryPool[i]));
+		vkResetQueryPool(m_device, m_statsQueryPool[i], 0, 1);
+	}
+
 	initPickingResources(windowExtent);
 	initObjectIDPipeline();
 }
@@ -173,6 +139,35 @@ void Renderer::cleanup()
 	if (m_pointShadowPipelineLayout != VK_NULL_HANDLE)
 		vkDestroyPipelineLayout(m_device, m_pointShadowPipelineLayout, nullptr);
 
+	// Cleanup pipeline statistics query pools
+	for (uint32_t i = 0; i < STATS_FRAME_OVERLAP; i++)
+	{
+		if (m_statsQueryPool[i] != VK_NULL_HANDLE)
+			vkDestroyQueryPool(m_device, m_statsQueryPool[i], nullptr);
+	}
+
+	// Cleanup Hi-Z resources
+	for (auto& view : m_hizMipViews)
+		if (view != VK_NULL_HANDLE)
+			vkDestroyImageView(m_device, view, nullptr);
+	m_hizMipViews.clear();
+	m_resourceManager->destroyImage(m_hizImage);
+	m_resourceManager->destroyImage(m_depthResolveImage);
+	if (m_hizSampler != VK_NULL_HANDLE)
+		vkDestroySampler(m_device, m_hizSampler, nullptr);
+	if (m_hizDownsamplePipeline != VK_NULL_HANDLE)
+		vkDestroyPipeline(m_device, m_hizDownsamplePipeline, nullptr);
+	if (m_hizDownsamplePipelineLayout != VK_NULL_HANDLE)
+		vkDestroyPipelineLayout(m_device, m_hizDownsamplePipelineLayout, nullptr);
+	if (m_hizDownsampleDescriptorLayout != VK_NULL_HANDLE)
+		vkDestroyDescriptorSetLayout(m_device, m_hizDownsampleDescriptorLayout, nullptr);
+
+	// Cleanup GPU culling pipeline
+	if (m_cullPipeline != VK_NULL_HANDLE)
+		vkDestroyPipeline(m_device, m_cullPipeline, nullptr);
+	if (m_cullPipelineLayout != VK_NULL_HANDLE)
+		vkDestroyPipelineLayout(m_device, m_cullPipelineLayout, nullptr);
+
 	// Cleanup pipelines
 	vkDestroyPipelineLayout(m_device, m_gradientPipelineLayout, nullptr);
 	for (auto& effect : m_backgroundEffects)
@@ -222,6 +217,7 @@ void Renderer::resize(VkExtent2D newExtent, VkSampleCountFlagBits msaaSamples)
 
 	VkImageUsageFlags depthImageUsages {};
 	depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	depthImageUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT; // For Hi-Z depth resolve
 
 	m_drawImage = m_resourceManager->createImage(
 	drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageUsages);
@@ -238,6 +234,21 @@ void Renderer::resize(VkExtent2D newExtent, VkSampleCountFlagBits msaaSamples)
 	                                              depthImageUsages,
 	                                              false,
 	                                              m_msaaSamples);
+
+	// Recreate Hi-Z resources with new extent
+	for (auto& view : m_hizMipViews)
+		if (view != VK_NULL_HANDLE)
+			vkDestroyImageView(m_device, view, nullptr);
+	m_hizMipViews.clear();
+	m_resourceManager->destroyImage(m_hizImage);
+	m_resourceManager->destroyImage(m_depthResolveImage);
+	if (m_hizSampler != VK_NULL_HANDLE)
+	{
+		vkDestroySampler(m_device, m_hizSampler, nullptr);
+		m_hizSampler = VK_NULL_HANDLE;
+	}
+	m_hizReady = false;
+	initHiZResources();
 
 	// Recreate object ID image for picking (64-bit entity ID)
 	VkImageUsageFlags pickingColorUsages =
@@ -285,6 +296,7 @@ void Renderer::initRenderTargets(VkExtent2D windowExtent)
 
 	VkImageUsageFlags depthImageUsages {};
 	depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	depthImageUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT; // For Hi-Z depth resolve
 
 	m_drawImage = m_resourceManager->createImage(
 	drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageUsages);
@@ -454,8 +466,10 @@ void Renderer::initDescriptors()
 		3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER); // Spot shadow map
 		builder.addBinding(
 		4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER); // Point shadow cube map
+		builder.addBinding(
+		5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER); // Hi-Z depth pyramid
 		m_gpuSceneDataLayoutInfo = builder.buildForDescriptorBuffer(
-		m_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+		m_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT);
 		m_gpuSceneDataDescriptorLayout = m_gpuSceneDataLayoutInfo.layout;
 	}
 
@@ -472,94 +486,38 @@ void Renderer::initDescriptors()
 
 void Renderer::initBackgroundPipelines()
 {
-	VkPipelineLayoutCreateInfo computeLayout {};
-	computeLayout.sType       = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	computeLayout.pNext       = nullptr;
-	computeLayout.pSetLayouts = &m_drawImageDescriptorLayout;
-	computeLayout.setLayoutCount = 1;
+	// Build gradient pipeline (creates the shared layout)
+	auto gradientResult = ComputePipelineBuilder(m_device)
+	.setShader(resPath("shaders/slang/GradientColor.comp.spv").c_str())
+	.addDescriptorSetLayout(m_drawImageDescriptorLayout)
+	.setPushConstantSize(sizeof(ComputePushConstants))
+	.build();
 
-	VkPushConstantRange pushConstant {};
-	pushConstant.offset     = 0;
-	pushConstant.size       = sizeof(ComputePushConstants);
-	pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	m_gradientPipelineLayout = gradientResult.m_layout;
 
-	computeLayout.pPushConstantRanges    = &pushConstant;
-	computeLayout.pushConstantRangeCount = 1;
-
-	VK_CHECK(vkCreatePipelineLayout(
-	m_device, &computeLayout, nullptr, &m_gradientPipelineLayout));
-
-	VkShaderModule gradientShader;
-	if (!vkutil::loadShaderModule(resPath("shaders/slang/gradient_color.comp.spv").c_str(),
-	                              m_device,
-	                              &gradientShader))
-	{
-		AGNI_PRINT("Error when building the compute shader \n");
-	}
-
-	VkShaderModule skyShader;
-	if (!vkutil::loadShaderModule(
-	    resPath("shaders/slang/sky.comp.spv").c_str(), m_device, &skyShader))
-	{
-		AGNI_PRINT("Error when building the compute shader \n");
-	}
-
-	VkPipelineShaderStageCreateInfo stageinfo {};
-	stageinfo.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	stageinfo.pNext  = nullptr;
-	stageinfo.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
-	stageinfo.module = gradientShader;
-	stageinfo.pName  = "main";
-
-	VkComputePipelineCreateInfo computePipelineCreateInfo {};
-	computePipelineCreateInfo.sType =
-	VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-	computePipelineCreateInfo.pNext = nullptr;
-	computePipelineCreateInfo.flags =
-	VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-	computePipelineCreateInfo.layout             = m_gradientPipelineLayout;
-	computePipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
-	computePipelineCreateInfo.stage              = stageinfo;
+	// Build sky pipeline (reuses the same layout)
+	auto skyResult = ComputePipelineBuilder(m_device)
+	.setShader(resPath("shaders/slang/Sky.comp.spv").c_str())
+	.setLayout(m_gradientPipelineLayout)
+	.build();
 
 	ComputeEffect gradient;
 	gradient.m_layout = m_gradientPipelineLayout;
 	gradient.m_name   = "gradient";
 	gradient.m_data   = {};
-
-	// default colors
 	gradient.m_data.m_data1 = glm::vec4(1, 0, 0, 1);
 	gradient.m_data.m_data2 = glm::vec4(0, 0, 1, 1);
-
-	VK_CHECK(vkCreateComputePipelines(m_device,
-	                                  VK_NULL_HANDLE,
-	                                  1,
-	                                  &computePipelineCreateInfo,
-	                                  nullptr,
-	                                  &gradient.m_pipeline));
-
-	// change the shader module only to create the sky shader
-	computePipelineCreateInfo.stage.module = skyShader;
+	gradient.m_pipeline     = gradientResult.m_pipeline;
 
 	ComputeEffect sky;
 	sky.m_layout = m_gradientPipelineLayout;
 	sky.m_name   = "sky";
 	sky.m_data   = {};
-	// default sky parameters
 	sky.m_data.m_data1 = glm::vec4(0.1, 0.2, 0.4, 0.97);
+	sky.m_pipeline     = skyResult.m_pipeline;
 
-	VK_CHECK(vkCreateComputePipelines(m_device,
-	                                  VK_NULL_HANDLE,
-	                                  1,
-	                                  &computePipelineCreateInfo,
-	                                  nullptr,
-	                                  &sky.m_pipeline));
-
-	// add the 2 background effects into the array
 	m_backgroundEffects.push_back(gradient);
 	m_backgroundEffects.push_back(sky);
-
-	vkDestroyShaderModule(m_device, gradientShader, nullptr);
-	vkDestroyShaderModule(m_device, skyShader, nullptr);
 }
 
 void Renderer::initShadowPipeline()
@@ -567,7 +525,7 @@ void Renderer::initShadowPipeline()
 	// Load shadow pass shader (vertex only, no fragment for depth-only pass)
 	VkShaderModule shadowVertShader;
 	if (!vkutil::loadShaderModule(
-	    resPath("shaders/slang/shadow.vert.spv").c_str(), m_device, &shadowVertShader))
+	    resPath("shaders/slang/Shadow.vert.spv").c_str(), m_device, &shadowVertShader))
 	{
 		AGNI_PRINT("Failed to load shadow vertex shader\n");
 		return;
@@ -577,7 +535,7 @@ void Renderer::initShadowPipeline()
 	VkPushConstantRange pushConstantRange {};
 	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 	pushConstantRange.offset     = 0;
-	pushConstantRange.size       = sizeof(ShadowPushConstants);
+	pushConstantRange.size       = sizeof(IndirectDrawPushConstants);
 
 	VkPipelineLayoutCreateInfo layoutInfo {};
 	layoutInfo.sType          = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -628,7 +586,7 @@ void Renderer::initPointShadowPipeline()
 	// Load point shadow pass shaders (vertex + fragment for linear depth
 	// output)
 	VkShaderModule pointShadowVertShader;
-	if (!vkutil::loadShaderModule(resPath("shaders/slang/point_shadow.vert.spv").c_str(),
+	if (!vkutil::loadShaderModule(resPath("shaders/slang/PointShadow.vert.spv").c_str(),
 	                              m_device,
 	                              &pointShadowVertShader))
 	{
@@ -637,7 +595,7 @@ void Renderer::initPointShadowPipeline()
 	}
 
 	VkShaderModule pointShadowFragShader;
-	if (!vkutil::loadShaderModule(resPath("shaders/slang/point_shadow.frag.spv").c_str(),
+	if (!vkutil::loadShaderModule(resPath("shaders/slang/PointShadow.frag.spv").c_str(),
 	                              m_device,
 	                              &pointShadowFragShader))
 	{
@@ -651,7 +609,7 @@ void Renderer::initPointShadowPipeline()
 	pushConstantRange.stageFlags =
 	VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 	pushConstantRange.offset = 0;
-	pushConstantRange.size   = sizeof(PointShadowPushConstants);
+	pushConstantRange.size   = sizeof(PointShadowIndirectPushConstants);
 
 	VkPipelineLayoutCreateInfo layoutInfo {};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -696,6 +654,248 @@ void Renderer::initPointShadowPipeline()
 	vkDestroyShaderModule(m_device, pointShadowFragShader, nullptr);
 
 	AGNI_PRINT("Point shadow pipeline created successfully\n");
+}
+
+void Renderer::initCullPipeline()
+{
+	auto result = ComputePipelineBuilder(m_device)
+	.setShader(resPath("shaders/slang/IndirectCull.comp.spv").c_str())
+	.addDescriptorSetLayout(m_gpuSceneDataDescriptorLayout)
+	.setPushConstantSize(sizeof(CullPushConstants))
+	.build();
+
+	if (result.m_pipeline == VK_NULL_HANDLE)
+	{
+		AGNI_PRINT("Failed to create indirect cull compute pipeline\n");
+		return;
+	}
+	m_cullPipeline       = result.m_pipeline;
+	m_cullPipelineLayout = result.m_layout;
+	AGNI_PRINT("Indirect cull compute pipeline created successfully\n");
+}
+
+void Renderer::initHiZResources()
+{
+	uint32_t hizWidth  = m_drawImage.m_imageExtent.width;
+	uint32_t hizHeight = m_drawImage.m_imageExtent.height;
+
+	m_hizMipLevels = static_cast<uint32_t>(
+	std::floor(std::log2(std::max(hizWidth, hizHeight)))) + 1;
+
+	// Create Hi-Z image: R32_SFLOAT with full mip chain
+	VkExtent3D hizExtent = {hizWidth, hizHeight, 1};
+	VkImageUsageFlags hizUsage =
+	VK_IMAGE_USAGE_STORAGE_BIT |
+	VK_IMAGE_USAGE_SAMPLED_BIT |
+	VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+	m_hizImage = m_resourceManager->createImage(hizExtent,
+	                                            VK_FORMAT_R32_SFLOAT,
+	                                            hizUsage,
+	                                            true, // mipmapped
+	                                            VK_SAMPLE_COUNT_1_BIT);
+
+	// Create per-mip image views for compute storage writes
+	m_hizMipViews.resize(m_hizMipLevels);
+	for (uint32_t mip = 0; mip < m_hizMipLevels; mip++)
+	{
+		VkImageViewCreateInfo viewInfo = vkinit::imageViewCreateInfo(
+		VK_FORMAT_R32_SFLOAT, m_hizImage.m_image, VK_IMAGE_ASPECT_COLOR_BIT);
+		viewInfo.subresourceRange.baseMipLevel = mip;
+		viewInfo.subresourceRange.levelCount   = 1;
+		VK_CHECK(vkCreateImageView(m_device, &viewInfo, nullptr, &m_hizMipViews[mip]));
+	}
+
+	// Create depth resolve target (non-MSAA D32_SFLOAT, sampled for Hi-Z mip0 read)
+	VkImageUsageFlags depthResolveUsage =
+	VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+	VK_IMAGE_USAGE_SAMPLED_BIT;
+
+	m_depthResolveImage = m_resourceManager->createImage(hizExtent,
+	                                                     VK_FORMAT_D32_SFLOAT,
+	                                                     depthResolveUsage,
+	                                                     false,
+	                                                     VK_SAMPLE_COUNT_1_BIT);
+
+	// Create Hi-Z sampler: NEAREST filter, clamp to edge
+	VkSamplerCreateInfo samplerInfo {};
+	samplerInfo.sType         = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	samplerInfo.magFilter     = VK_FILTER_NEAREST;
+	samplerInfo.minFilter     = VK_FILTER_NEAREST;
+	samplerInfo.mipmapMode    = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+	samplerInfo.addressModeU  = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeV  = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeW  = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.minLod        = 0.0f;
+	samplerInfo.maxLod        = static_cast<float>(m_hizMipLevels);
+	samplerInfo.compareEnable = VK_FALSE;
+
+	VK_CHECK(vkCreateSampler(m_device, &samplerInfo, nullptr, &m_hizSampler));
+
+	// Transition Hi-Z image to SHADER_READ_ONLY_OPTIMAL so the placeholder descriptor is valid
+	m_resourceManager->immediateSubmit(
+	[&](VkCommandBuffer cmd)
+	{
+		vkutil::transitionImage(cmd, m_hizImage.m_image,
+		                        VK_IMAGE_LAYOUT_UNDEFINED,
+		                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	});
+
+	AGNI_PRINT("Hi-Z resources created: {}x{}, {} mip levels\n", hizWidth, hizHeight, m_hizMipLevels);
+}
+
+void Renderer::initHiZPipeline()
+{
+	// Descriptor layout: 2 storage images + 1 sampled depth texture (for first mip pass)
+	{
+		DescriptorLayoutBuilder builder;
+		builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);          // src mip (read)
+		builder.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);          // dst mip (write)
+		builder.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER); // depth source (first pass only)
+		m_hizDownsampleLayoutInfo = builder.buildForDescriptorBuffer(
+		m_device, VK_SHADER_STAGE_COMPUTE_BIT);
+		m_hizDownsampleDescriptorLayout = m_hizDownsampleLayoutInfo.layout;
+	}
+
+	auto result = ComputePipelineBuilder(m_device)
+	.setShader(resPath("shaders/slang/HiZDownsample.comp.spv").c_str())
+	.addDescriptorSetLayout(m_hizDownsampleDescriptorLayout)
+	.setPushConstantSize(sizeof(HiZPushConstants))
+	.build();
+
+	if (result.m_pipeline == VK_NULL_HANDLE)
+	{
+		AGNI_PRINT("Failed to create Hi-Z downsample pipeline — Hi-Z occlusion disabled\n");
+		m_hizOcclusionEnabled = false;
+		return;
+	}
+	m_hizDownsamplePipeline       = result.m_pipeline;
+	m_hizDownsamplePipelineLayout = result.m_layout;
+	AGNI_PRINT("Hi-Z downsample pipeline created successfully\n");
+}
+
+void Renderer::buildHiZPyramid(VkCommandBuffer cmd, FrameData& currentFrame)
+{
+	// --- Step A: Transition images for compute ---
+
+	// Transition resolved depth: DEPTH_ATTACHMENT -> DEPTH_READ_ONLY (for sampling)
+	vkinit::imageBarrier(cmd, m_depthResolveImage.m_image,
+	    VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+	    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT,
+	    VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+	    VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1);
+
+	// Transition all Hi-Z mips to GENERAL for compute read/write
+	vkinit::imageBarrier(cmd, m_hizImage.m_image,
+	    VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT,
+	    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT,
+	    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+
+	// --- Step B: Downsample mip chain via compute ---
+	// First pass (mip=0): reads from depth resolve texture (binding 2) -> writes Hi-Z mip0 (binding 1)
+	// Subsequent passes: reads Hi-Z mip N (binding 0) -> writes Hi-Z mip N+1 (binding 1)
+
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_hizDownsamplePipeline);
+
+	VkDescriptorBufferBindingInfoEXT bufBinding {};
+	bufBinding.sType   = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT;
+	bufBinding.address = currentFrame.m_descriptorBuffer.getDeviceAddress();
+	bufBinding.usage   = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT |
+	                     VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT;
+	vkCmdBindDescriptorBuffersEXT(cmd, 1, &bufBinding);
+
+	uint32_t mipWidth  = m_drawExtent.width;
+	uint32_t mipHeight = m_drawExtent.height;
+
+	// The loop generates mipLevels total mip levels:
+	// Pass 0: depth texture -> mip0 (isFirstMip=1)
+	// Pass 1..N-1: mip[i-1] -> mip[i] (isFirstMip=0)
+	for (uint32_t pass = 0; pass < m_hizMipLevels; pass++)
+	{
+		const bool isFirstPass = (pass == 0);
+
+		// Allocate descriptor buffer space
+		VkDeviceSize descOffset =
+		currentFrame.m_descriptorBuffer.allocate(m_hizDownsampleLayoutInfo);
+		void* descPtr =
+		currentFrame.m_descriptorBuffer.getPtrAtOffset(descOffset);
+
+		if (isFirstPass)
+		{
+			// Binding 0: unused but must be valid — use mip0 as placeholder
+			m_descriptorBufferWriter.writeStorageImage(
+			descPtr, m_hizDownsampleLayoutInfo.bindingOffsets[0], m_hizMipViews[0]);
+
+			// Binding 1: dst = mip0 (storage image)
+			m_descriptorBufferWriter.writeStorageImage(
+			descPtr, m_hizDownsampleLayoutInfo.bindingOffsets[1], m_hizMipViews[0]);
+
+			// Binding 2: depth resolve texture (combined image sampler)
+			m_descriptorBufferWriter.writeImageSampler(
+			descPtr, m_hizDownsampleLayoutInfo.bindingOffsets[2],
+			m_depthResolveImage.m_imageView, m_hizSampler,
+			VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+		}
+		else
+		{
+			// Binding 0: src = previous mip (storage image)
+			m_descriptorBufferWriter.writeStorageImage(
+			descPtr, m_hizDownsampleLayoutInfo.bindingOffsets[0], m_hizMipViews[pass - 1]);
+
+			// Binding 1: dst = current mip (storage image)
+			m_descriptorBufferWriter.writeStorageImage(
+			descPtr, m_hizDownsampleLayoutInfo.bindingOffsets[1], m_hizMipViews[pass]);
+
+			// Binding 2: placeholder (unused but must be valid)
+			m_descriptorBufferWriter.writeImageSampler(
+			descPtr, m_hizDownsampleLayoutInfo.bindingOffsets[2],
+			m_depthResolveImage.m_imageView, m_hizSampler,
+			VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+		}
+
+		// Set descriptor buffer offset
+		uint32_t bufferIndex = 0;
+		vkCmdSetDescriptorBufferOffsetsEXT(
+		cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+		m_hizDownsamplePipelineLayout,
+		0, 1, &bufferIndex, &descOffset);
+
+		// Push constants
+		HiZPushConstants hizPC {};
+		hizPC.m_srcWidth    = mipWidth;
+		hizPC.m_srcHeight   = mipHeight;
+		hizPC.m_isFirstMip  = isFirstPass ? 1 : 0;
+		vkCmdPushConstants(cmd, m_hizDownsamplePipelineLayout,
+		                   VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(HiZPushConstants), &hizPC);
+
+		// Dispatch — first pass writes full-res mip0, subsequent passes halve
+		if (isFirstPass)
+		{
+			// First pass: copy depth to mip0 at full resolution
+			vkCmdDispatch(cmd, (mipWidth + 7) / 8, (mipHeight + 7) / 8, 1);
+		}
+		else
+		{
+			uint32_t dstW = std::max(mipWidth / 2, 1u);
+			uint32_t dstH = std::max(mipHeight / 2, 1u);
+			vkCmdDispatch(cmd, (dstW + 7) / 8, (dstH + 7) / 8, 1);
+			mipWidth  = dstW;
+			mipHeight = dstH;
+		}
+
+		// Barrier between passes
+		vkinit::memoryBarrier(cmd,
+		    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT,
+		    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT);
+	}
+
+	// --- Step C: Transition Hi-Z to SHADER_READ_ONLY for next frame's cull pass ---
+	vkinit::imageBarrier(cmd, m_hizImage.m_image,
+	    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT,
+	    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT,
+	    VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+	m_hizReady = true;
 }
 
 glm::mat4 Renderer::calculateLightSpaceMatrix(const glm::vec3& lightDir)
@@ -828,7 +1028,76 @@ Renderer::calculatePointLightMatrices(const glm::vec3& lightPos,
 	return matrices;
 }
 
-void Renderer::drawShadowPass(VkCommandBuffer cmd, FrameData& currentFrame)
+Renderer::ShadowIndirectResources Renderer::buildShadowIndirectBuffers(FrameData& currentFrame)
+{
+#ifdef TRACY_ENABLE
+	ZoneScopedN("Build Shadow Indirect Buffers");
+#endif
+
+	ShadowIndirectResources res;
+	const auto& surfaces = m_mainDrawContext.m_OpaqueSurfaces;
+	res.totalDraws = static_cast<uint32_t>(surfaces.size());
+
+	if (res.totalDraws == 0)
+		return res;
+
+	// Allocate indirect command buffer
+	const VkDeviceSize indirectBufSize =
+	res.totalDraws * sizeof(VkDrawIndexedIndirectCommand);
+	res.indirectBuffer = m_resourceManager->createBuffer(
+	indirectBufSize,
+	VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
+	VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+	// Allocate draw data SSBO
+	const VkDeviceSize drawDataBufSize = res.totalDraws * sizeof(GPUDrawData);
+	res.drawDataBuffer = m_resourceManager->createBuffer(
+	drawDataBufSize,
+	VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+	VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+	VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+	// Add to frame deletion queue
+	auto* rm = m_resourceManager;
+	currentFrame.m_deletionQueue.push_function(
+	[rm, indBuf = res.indirectBuffer, ddBuf = res.drawDataBuffer]()
+	{
+		rm->destroyBuffer(indBuf);
+		rm->destroyBuffer(ddBuf);
+	});
+
+	// Fill indirect commands and draw data (no sorting — global index buffer)
+	auto* indirectCmds =
+	static_cast<VkDrawIndexedIndirectCommand*>(res.indirectBuffer.m_info.pMappedData);
+	auto* drawDataPtr =
+	static_cast<GPUDrawData*>(res.drawDataBuffer.m_info.pMappedData);
+
+	for (uint32_t i = 0; i < res.totalDraws; i++)
+	{
+		const RenderObject& r = surfaces[i];
+
+		indirectCmds[i].indexCount    = r.m_indexCount;
+		indirectCmds[i].instanceCount = 1;
+		indirectCmds[i].firstIndex    = r.m_firstIndex;
+		indirectCmds[i].vertexOffset  = 0;
+		indirectCmds[i].firstInstance = i;
+
+		drawDataPtr[i].m_worldMatrix   = r.m_transform;
+		drawDataPtr[i].m_vertexBuffer  = r.m_vertexBufferAddress;
+		drawDataPtr[i].m_materialIndex = 0;
+		drawDataPtr[i].m_padding       = 0;
+	}
+
+	// Get BDA for draw data buffer
+	VkBufferDeviceAddressInfo drawDataAddrInfo {};
+	drawDataAddrInfo.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+	drawDataAddrInfo.buffer = res.drawDataBuffer.m_buffer;
+	res.drawDataBDA = vkGetBufferDeviceAddress(m_device, &drawDataAddrInfo);
+
+	return res;
+}
+
+void Renderer::drawShadowPass(VkCommandBuffer cmd, FrameData& currentFrame, const ShadowIndirectResources& shadowRes)
 {
 #ifdef TRACY_ENABLE
 	ZoneScopedN("Shadow Pass");
@@ -928,31 +1197,27 @@ void Renderer::drawShadowPass(VkCommandBuffer cmd, FrameData& currentFrame)
 	                                   &bufferIndex,
 	                                   &sceneDescriptorOffset);
 
-	// Draw all opaque objects (no transparent for shadow mapping)
-	VkBuffer lastIndexBuffer = VK_NULL_HANDLE;
+	// Push BDA to draw data (once for entire pass)
+	IndirectDrawPushConstants pushConst;
+	pushConst.m_drawDataBufferPtr = shadowRes.drawDataBDA;
+	vkCmdPushConstants(cmd,
+	                   m_shadowPipelineLayout,
+	                   VK_SHADER_STAGE_VERTEX_BIT,
+	                   0,
+	                   sizeof(IndirectDrawPushConstants),
+	                   &pushConst);
 
-	for (const auto& obj : m_mainDrawContext.m_OpaqueSurfaces)
-	{
-		if (obj.m_indexBuffer != lastIndexBuffer)
-		{
-			lastIndexBuffer = obj.m_indexBuffer;
-			vkCmdBindIndexBuffer(
-			cmd, obj.m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-		}
+	// Bind global index buffer and issue single indirect draw
+	vkCmdBindIndexBuffer(cmd, m_resourceManager->getGlobalIndexBuffer(), 0, VK_INDEX_TYPE_UINT32);
+	constexpr uint32_t stride = sizeof(VkDrawIndexedIndirectCommand);
 
-		ShadowPushConstants pushConstants;
-		pushConstants.m_worldMatrix  = obj.m_transform;
-		pushConstants.m_vertexBuffer = obj.m_vertexBufferAddress;
-
-		vkCmdPushConstants(cmd,
-		                   m_shadowPipelineLayout,
-		                   VK_SHADER_STAGE_VERTEX_BIT,
-		                   0,
-		                   sizeof(ShadowPushConstants),
-		                   &pushConstants);
-
-		vkCmdDrawIndexed(cmd, obj.m_indexCount, 1, obj.m_firstIndex, 0, 0);
-	}
+	if (m_multiDrawIndirectSupported && m_multiDrawIndirectEnabled)
+		vkCmdDrawIndexedIndirect(cmd, shadowRes.indirectBuffer.m_buffer,
+		                         0, shadowRes.totalDraws, stride);
+	else
+		for (uint32_t i = 0; i < shadowRes.totalDraws; i++)
+			vkCmdDrawIndexedIndirect(cmd, shadowRes.indirectBuffer.m_buffer,
+			                         i * stride, 1, stride);
 
 	vkCmdEndRendering(cmd);
 
@@ -963,7 +1228,7 @@ void Renderer::drawShadowPass(VkCommandBuffer cmd, FrameData& currentFrame)
 	                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
 }
 
-void Renderer::drawSpotShadowPass(VkCommandBuffer cmd, FrameData& currentFrame)
+void Renderer::drawSpotShadowPass(VkCommandBuffer cmd, FrameData& currentFrame, const ShadowIndirectResources& shadowRes)
 {
 #ifdef TRACY_ENABLE
 	ZoneScopedN("Spot Shadow Pass");
@@ -1066,31 +1331,27 @@ void Renderer::drawSpotShadowPass(VkCommandBuffer cmd, FrameData& currentFrame)
 	                                   &bufferIndex,
 	                                   &sceneDescriptorOffset);
 
-	// Draw all opaque objects
-	VkBuffer lastIndexBuffer = VK_NULL_HANDLE;
+	// Push BDA to draw data (once for entire pass)
+	IndirectDrawPushConstants pushConst;
+	pushConst.m_drawDataBufferPtr = shadowRes.drawDataBDA;
+	vkCmdPushConstants(cmd,
+	                   m_shadowPipelineLayout,
+	                   VK_SHADER_STAGE_VERTEX_BIT,
+	                   0,
+	                   sizeof(IndirectDrawPushConstants),
+	                   &pushConst);
 
-	for (const auto& obj : m_mainDrawContext.m_OpaqueSurfaces)
-	{
-		if (obj.m_indexBuffer != lastIndexBuffer)
-		{
-			lastIndexBuffer = obj.m_indexBuffer;
-			vkCmdBindIndexBuffer(
-			cmd, obj.m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-		}
+	// Bind global index buffer and issue single indirect draw
+	vkCmdBindIndexBuffer(cmd, m_resourceManager->getGlobalIndexBuffer(), 0, VK_INDEX_TYPE_UINT32);
+	constexpr uint32_t stride = sizeof(VkDrawIndexedIndirectCommand);
 
-		ShadowPushConstants pushConstants;
-		pushConstants.m_worldMatrix  = obj.m_transform;
-		pushConstants.m_vertexBuffer = obj.m_vertexBufferAddress;
-
-		vkCmdPushConstants(cmd,
-		                   m_shadowPipelineLayout,
-		                   VK_SHADER_STAGE_VERTEX_BIT,
-		                   0,
-		                   sizeof(ShadowPushConstants),
-		                   &pushConstants);
-
-		vkCmdDrawIndexed(cmd, obj.m_indexCount, 1, obj.m_firstIndex, 0, 0);
-	}
+	if (m_multiDrawIndirectSupported && m_multiDrawIndirectEnabled)
+		vkCmdDrawIndexedIndirect(cmd, shadowRes.indirectBuffer.m_buffer,
+		                         0, shadowRes.totalDraws, stride);
+	else
+		for (uint32_t i = 0; i < shadowRes.totalDraws; i++)
+			vkCmdDrawIndexedIndirect(cmd, shadowRes.indirectBuffer.m_buffer,
+			                         i * stride, 1, stride);
 
 	vkCmdEndRendering(cmd);
 
@@ -1101,7 +1362,7 @@ void Renderer::drawSpotShadowPass(VkCommandBuffer cmd, FrameData& currentFrame)
 	                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
 }
 
-void Renderer::drawPointShadowPass(VkCommandBuffer cmd)
+void Renderer::drawPointShadowPass(VkCommandBuffer cmd, const ShadowIndirectResources& shadowRes)
 {
 #ifdef TRACY_ENABLE
 	ZoneScopedN("Point Shadow Pass");
@@ -1137,26 +1398,11 @@ void Renderer::drawPointShadowPass(VkCommandBuffer cmd)
 	for (uint32_t face = 0; face < 6; face++)
 	{
 		// Transition this cube face to depth attachment
-		VkImageMemoryBarrier2 barrier {};
-		barrier.sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-		barrier.srcStageMask  = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-		barrier.srcAccessMask = 0;
-		barrier.dstStageMask  = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT;
-		barrier.dstAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-		barrier.oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
-		barrier.newLayout     = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-		barrier.image         = m_pointShadowCubeMap.m_image;
-		barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT;
-		barrier.subresourceRange.baseMipLevel   = 0;
-		barrier.subresourceRange.levelCount     = 1;
-		barrier.subresourceRange.baseArrayLayer = face;
-		barrier.subresourceRange.layerCount     = 1;
-
-		VkDependencyInfo depInfo {};
-		depInfo.sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-		depInfo.imageMemoryBarrierCount = 1;
-		depInfo.pImageMemoryBarriers    = &barrier;
-		vkCmdPipelineBarrier2(cmd, &depInfo);
+		vkinit::imageBarrier(cmd, m_pointShadowCubeMap.m_image,
+		    VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, 0,
+		    VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+		    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+		    VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, face, 1);
 
 		// Setup depth attachment for this face
 		VkRenderingAttachmentInfo depthAttachment {};
@@ -1187,60 +1433,42 @@ void Renderer::drawPointShadowPass(VkCommandBuffer cmd)
 		vkCmdSetViewport(cmd, 0, 1, &viewport);
 		vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-		// Draw all opaque objects
-		VkBuffer lastIndexBuffer = VK_NULL_HANDLE;
+		// Push per-face constants (once per face, not per object)
+		PointShadowIndirectPushConstants pushConst;
+		pushConst.m_drawDataBufferPtr = shadowRes.drawDataBDA;
+		pushConst.m_lightViewProj     = faceMatrices[face];
+		pushConst.m_lightPos          = lightPos;
+		pushConst.m_farPlane          = m_pointShadowFarPlane;
 
-		for (const auto& obj : m_mainDrawContext.m_OpaqueSurfaces)
-		{
-			if (obj.m_indexBuffer != lastIndexBuffer)
-			{
-				lastIndexBuffer = obj.m_indexBuffer;
-				vkCmdBindIndexBuffer(
-				cmd, obj.m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-			}
+		vkCmdPushConstants(cmd,
+		                   m_pointShadowPipelineLayout,
+		                   VK_SHADER_STAGE_VERTEX_BIT |
+		                   VK_SHADER_STAGE_FRAGMENT_BIT,
+		                   0,
+		                   sizeof(PointShadowIndirectPushConstants),
+		                   &pushConst);
 
-			PointShadowPushConstants pushConstants;
-			pushConstants.m_worldMatrix   = obj.m_transform;
-			pushConstants.m_vertexBuffer  = obj.m_vertexBufferAddress;
-			pushConstants.m_lightViewProj = faceMatrices[face];
-			pushConstants.m_lightPos      = lightPos;
-			pushConstants.m_farPlane      = m_pointShadowFarPlane;
+		// Bind global index buffer and issue single indirect draw
+		vkCmdBindIndexBuffer(cmd, m_resourceManager->getGlobalIndexBuffer(), 0, VK_INDEX_TYPE_UINT32);
+		constexpr uint32_t stride = sizeof(VkDrawIndexedIndirectCommand);
 
-			vkCmdPushConstants(cmd,
-			                   m_pointShadowPipelineLayout,
-			                   VK_SHADER_STAGE_VERTEX_BIT |
-			                   VK_SHADER_STAGE_FRAGMENT_BIT,
-			                   0,
-			                   sizeof(PointShadowPushConstants),
-			                   &pushConstants);
-
-			vkCmdDrawIndexed(cmd, obj.m_indexCount, 1, obj.m_firstIndex, 0, 0);
-		}
+		if (m_multiDrawIndirectSupported && m_multiDrawIndirectEnabled)
+			vkCmdDrawIndexedIndirect(cmd, shadowRes.indirectBuffer.m_buffer,
+			                         0, shadowRes.totalDraws, stride);
+		else
+			for (uint32_t i = 0; i < shadowRes.totalDraws; i++)
+				vkCmdDrawIndexedIndirect(cmd, shadowRes.indirectBuffer.m_buffer,
+				                         i * stride, 1, stride);
 
 		vkCmdEndRendering(cmd);
 	}
 
 	// Transition entire cube map to shader read optimal for sampling
-	VkImageMemoryBarrier2 finalBarrier {};
-	finalBarrier.sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-	finalBarrier.srcStageMask  = VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
-	finalBarrier.srcAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-	finalBarrier.dstStageMask  = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-	finalBarrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
-	finalBarrier.oldLayout     = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-	finalBarrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-	finalBarrier.image     = m_pointShadowCubeMap.m_image;
-	finalBarrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT;
-	finalBarrier.subresourceRange.baseMipLevel   = 0;
-	finalBarrier.subresourceRange.levelCount     = 1;
-	finalBarrier.subresourceRange.baseArrayLayer = 0;
-	finalBarrier.subresourceRange.layerCount     = 6; // All 6 faces
-
-	VkDependencyInfo finalDepInfo {};
-	finalDepInfo.sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-	finalDepInfo.imageMemoryBarrierCount = 1;
-	finalDepInfo.pImageMemoryBarriers    = &finalBarrier;
-	vkCmdPipelineBarrier2(cmd, &finalDepInfo);
+	vkinit::imageBarrier(cmd, m_pointShadowCubeMap.m_image,
+	    VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+	    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT,
+	    VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+	    VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 6);
 }
 
 void Renderer::renderFrame(VkCommandBuffer cmd,
@@ -1270,22 +1498,42 @@ void Renderer::renderFrame(VkCommandBuffer cmd,
 	                        VK_IMAGE_LAYOUT_UNDEFINED,
 	                        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
+	// Transition depth resolve target for Hi-Z
+	if (m_hizOcclusionEnabled && m_depthResolveImage.m_image != VK_NULL_HANDLE)
+	{
+		vkutil::transitionImage(cmd,
+		                        m_depthResolveImage.m_image,
+		                        VK_IMAGE_LAYOUT_UNDEFINED,
+		                        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+	}
+
 	// Transition resolve target (draw image) for resolve operation
 	vkutil::transitionImage(cmd,
 	                        m_drawImage.m_image,
 	                        VK_IMAGE_LAYOUT_UNDEFINED,
 	                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
+	// Build shared shadow indirect buffers (once for all shadow passes)
+	ShadowIndirectResources shadowRes;
+	bool anyShadowPass =
+	(m_shadowsEnabled && m_mainDrawContext.m_DirectionalLight.active) ||
+	(m_spotShadowsEnabled && !m_mainDrawContext.m_SpotLights.empty()) ||
+	(m_pointShadowsEnabled && !m_mainDrawContext.m_PointLights.empty() &&
+	 m_pointShadowLightIndex < static_cast<int>(m_mainDrawContext.m_PointLights.size()));
+
+	if (anyShadowPass && !m_mainDrawContext.m_OpaqueSurfaces.empty())
+		shadowRes = buildShadowIndirectBuffers(currentFrame);
+
 	// Shadow passes (before main geometry)
 	if (m_shadowsEnabled && m_mainDrawContext.m_DirectionalLight.active)
 	{
-		drawShadowPass(cmd, currentFrame);
+		drawShadowPass(cmd, currentFrame, shadowRes);
 	}
 
 	// Spot light shadow pass
 	if (m_spotShadowsEnabled && !m_mainDrawContext.m_SpotLights.empty())
 	{
-		drawSpotShadowPass(cmd, currentFrame);
+		drawSpotShadowPass(cmd, currentFrame, shadowRes);
 	}
 
 	// Point light shadow pass
@@ -1293,13 +1541,19 @@ void Renderer::renderFrame(VkCommandBuffer cmd,
 	    m_pointShadowLightIndex <
 	    static_cast<int>(m_mainDrawContext.m_PointLights.size()))
 	{
-		drawPointShadowPass(cmd);
+		drawPointShadowPass(cmd, shadowRes);
 	}
 
 	// Object ID pass for picking (only runs when picking is requested)
 	drawObjectIDPass(cmd, currentFrame);
 
 	drawGeometry(cmd, currentFrame);
+
+	// Build Hi-Z pyramid for next frame's occlusion culling
+	if (m_hizOcclusionEnabled && m_hizDownsamplePipeline != VK_NULL_HANDLE)
+	{
+		buildHiZPyramid(cmd, currentFrame);
+	}
 
 	// transtion the draw image and the swapchain image into their correct
 	// transfer layouts
@@ -1401,8 +1655,22 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 #endif
 
 	// reset counters
-	m_stats.m_drawcallCount = 0;
-	m_stats.m_triangleCount = 0;
+	m_stats.m_drawcallCount  = 0;
+	m_stats.m_triangleCount  = 0;
+
+	// Read back pipeline statistics from the PREVIOUS frame's query
+	{
+		uint32_t readIdx = (m_statsFrameIndex + 1) % STATS_FRAME_OVERLAP;
+		uint64_t statsResult = 0;
+		VkResult qr = vkGetQueryPoolResults(
+		m_device, m_statsQueryPool[readIdx], 0, 1,
+		sizeof(uint64_t), &statsResult, sizeof(uint64_t),
+		VK_QUERY_RESULT_64_BIT);
+		if (qr == VK_SUCCESS)
+			m_stats.m_renderedTriangles = static_cast<int>(statsResult);
+		// VK_NOT_READY means previous frame not done yet — keep old value
+	}
+
 	// begin clock
 	auto start = std::chrono::system_clock::now();
 
@@ -1411,28 +1679,11 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	std::vector<uint32_t> transparentDraws;
 	transparentDraws.reserve(m_mainDrawContext.m_TransparentSurfaces.size());
 
-	{
-#ifdef TRACY_ENABLE
-		ZoneScopedN("Frustum Culling");
-#endif
-		for (uint32_t i = 0; i < m_mainDrawContext.m_OpaqueSurfaces.size(); i++)
-		{
-			if (isVisible(m_mainDrawContext.m_OpaqueSurfaces[i],
-			              m_sceneData.m_viewproj))
-			{
-				opaqueDraws.push_back(i);
-			}
-		}
-		for (uint32_t i = 0; i < m_mainDrawContext.m_TransparentSurfaces.size();
-		     i++)
-		{
-			if (isVisible(m_mainDrawContext.m_TransparentSurfaces[i],
-			              m_sceneData.m_viewproj))
-			{
-				transparentDraws.push_back(i);
-			}
-		}
-	}
+	// Include all surfaces — GPU compute shader handles frustum + occlusion culling
+	for (uint32_t i = 0; i < m_mainDrawContext.m_OpaqueSurfaces.size(); i++)
+		opaqueDraws.push_back(i);
+	for (uint32_t i = 0; i < m_mainDrawContext.m_TransparentSurfaces.size(); i++)
+		transparentDraws.push_back(i);
 
 	{
 #ifdef TRACY_ENABLE
@@ -1447,14 +1698,7 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 			          m_mainDrawContext.m_OpaqueSurfaces[iA];
 			          const RenderObject& B =
 			          m_mainDrawContext.m_OpaqueSurfaces[iB];
-			          if (A.m_material == B.m_material)
-			          {
-				          return A.m_indexBuffer < B.m_indexBuffer;
-			          }
-			          else
-			          {
-				          return A.m_material < B.m_material;
-			          }
+			          return A.m_material < B.m_material;
 		          });
 	}
 
@@ -1484,18 +1728,10 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 		});
 	}
 
-	// begin a render pass with MSAA images that resolve to draw image
-	VkRenderingAttachmentInfo colorAttachment =
-	vkinit::attachmentInfoMsaa(m_msaaColorImage.m_imageView,
-	                           m_drawImage.m_imageView,
-	                           nullptr,
-	                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	VkRenderingAttachmentInfo depthAttachment = vkinit::depthAttachmentInfo(
-	m_depthImage.m_imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-
-	VkRenderingInfo renderInfo =
-	vkinit::renderingInfo(m_drawExtent, &colorAttachment, &depthAttachment);
-	vkCmdBeginRendering(cmd, &renderInfo);
+	// =========================================================
+	// Scene UBO setup (before render pass for compute access)
+	// =========================================================
+	ResourceManager* rm = m_resourceManager;
 
 	//  allocate a new uniform buffer for the scene data
 	AllocatedBuffer gpuSceneDataBuffer =
@@ -1513,7 +1749,6 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 
 	// add buffers to the deletion queue of this frame so they get deleted once
 	// used
-	ResourceManager* rm = m_resourceManager;
 	currentFrame.m_deletionQueue.push_function(
 	[rm, gpuSceneDataBuffer, gpuLightDataBuffer]()
 	{
@@ -1602,6 +1837,27 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	m_pointShadowSampler,
 	VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
 
+	// Binding 5: Hi-Z depth pyramid (for GPU occlusion culling)
+	if (m_hizReady && m_hizSampler != VK_NULL_HANDLE)
+	{
+		m_descriptorBufferWriter.writeImageSampler(
+		sceneDescriptorPtr,
+		m_gpuSceneDataLayoutInfo.bindingOffsets[5],
+		m_hizImage.m_imageView,
+		m_hizSampler,
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	}
+	else
+	{
+		// Placeholder when Hi-Z not yet built (first frame)
+		m_descriptorBufferWriter.writeImageSampler(
+		sceneDescriptorPtr,
+		m_gpuSceneDataLayoutInfo.bindingOffsets[5],
+		m_shadowMap.m_imageView,
+		m_shadowSampler,
+		VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+	}
+
 	// Bind descriptor buffers once before any draws (bindless architecture)
 	VkDescriptorBufferBindingInfoEXT bufferBindings[4] = {};
 
@@ -1643,19 +1899,286 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	VkDeviceSize samplerOffset  = 0;
 	VkDeviceSize materialOffset = 0;
 
-	// keep track of what state we are binding
-	MaterialPipeline* lastPipeline    = nullptr;
-	VkBuffer          lastIndexBuffer = VK_NULL_HANDLE;
+	// =========================================================
+	// Build indirect command buffer + draw data SSBO
+	// =========================================================
+	const uint32_t totalDraws =
+	static_cast<uint32_t>(opaqueDraws.size() + transparentDraws.size());
 
-	auto draw = [&](const RenderObject& r)
+	// Helper lambda: fill indirect commands and draw data for a set of draws
+	auto fillDrawData = [&](const std::vector<uint32_t>&    drawIndices,
+	                        const std::vector<RenderObject>& surfaces,
+	                        VkDrawIndexedIndirectCommand*    cmdBuf,
+	                        GPUDrawData*                     dataBuf,
+	                        uint32_t                         baseIndex)
 	{
-		// Rebind pipeline if changed
-		if (r.m_material->m_pipeline != lastPipeline)
+		for (uint32_t i = 0; i < drawIndices.size(); i++)
 		{
-			lastPipeline = r.m_material->m_pipeline;
-			vkCmdBindPipeline(cmd,
-			                  VK_PIPELINE_BIND_POINT_GRAPHICS,
-			                  r.m_material->m_pipeline->m_pipeline);
+			const RenderObject& r            = surfaces[drawIndices[i]];
+			const uint32_t      drawIndex    = baseIndex + i;
+
+			// Fill indirect command
+			cmdBuf[drawIndex].indexCount    = r.m_indexCount;
+			cmdBuf[drawIndex].instanceCount = 1;
+			cmdBuf[drawIndex].firstIndex    = r.m_firstIndex;
+			cmdBuf[drawIndex].vertexOffset  = 0;
+			cmdBuf[drawIndex].firstInstance = drawIndex; // maps to SV_InstanceID
+
+			// Fill per-draw data
+			dataBuf[drawIndex].m_worldMatrix   = r.m_transform;
+			dataBuf[drawIndex].m_vertexBuffer  = r.m_vertexBufferAddress;
+			dataBuf[drawIndex].m_materialIndex = r.m_material->m_materialIndex;
+			dataBuf[drawIndex].m_padding       = 0;
+
+			// Accumulate stats
+			m_stats.m_triangleCount += r.m_indexCount / 3;
+		}
+	};
+
+	AllocatedBuffer indirectBuffer {};    // input: all draws (opaque + transparent)
+	AllocatedBuffer drawDataBuffer {};
+	AllocatedBuffer drawCountBuffer {};
+	VkDeviceAddress drawDataBDA = 0;
+	uint32_t transparentBase = 0;
+
+	// Compacted opaque buffers (set by GPU cull, fallback to input if no cull)
+	AllocatedBuffer opaqueIndirectBuffer {};
+	VkDeviceAddress opaqueDrawDataBDA = 0;
+
+	if (totalDraws > 0)
+	{
+		// Allocate indirect command buffer (extra flags for GPU culling compute access)
+		const VkDeviceSize indirectBufSize =
+		totalDraws * sizeof(VkDrawIndexedIndirectCommand);
+
+		VkBufferUsageFlags indirectUsage = VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT |
+		                                   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+		                                   VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+
+		indirectBuffer = m_resourceManager->createBuffer(
+		indirectBufSize,
+		indirectUsage,
+		VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+		// Allocate draw data SSBO
+		const VkDeviceSize drawDataBufSize = totalDraws * sizeof(GPUDrawData);
+		drawDataBuffer = m_resourceManager->createBuffer(
+        drawDataBufSize,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+		// Add to frame deletion queue
+		currentFrame.m_deletionQueue.push_function(
+		[rm, indirectBuffer, drawDataBuffer]()
+		{
+			rm->destroyBuffer(indirectBuffer);
+			rm->destroyBuffer(drawDataBuffer);
+		});
+
+		auto* indirectCmds =
+		static_cast<VkDrawIndexedIndirectCommand*>(indirectBuffer.m_info.pMappedData);
+		auto* drawDataPtr =
+		static_cast<GPUDrawData*>(drawDataBuffer.m_info.pMappedData);
+
+		// Fill opaque draws (starting at index 0)
+		fillDrawData(opaqueDraws,
+		             m_mainDrawContext.m_OpaqueSurfaces,
+		             indirectCmds,
+		             drawDataPtr,
+		             0);
+
+		// Fill transparent draws (starting after opaques)
+		transparentBase = static_cast<uint32_t>(opaqueDraws.size());
+		fillDrawData(transparentDraws,
+		             m_mainDrawContext.m_TransparentSurfaces,
+		             indirectCmds,
+		             drawDataPtr,
+		             transparentBase);
+
+		// Get BDA for draw data buffer
+		VkBufferDeviceAddressInfo drawDataAddrInfo {};
+		drawDataAddrInfo.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+		drawDataAddrInfo.buffer = drawDataBuffer.m_buffer;
+		drawDataBDA = vkGetBufferDeviceAddress(m_device, &drawDataAddrInfo);
+
+		// Default: opaque uses same buffers as input (overridden by cull compaction)
+		opaqueIndirectBuffer = indirectBuffer;
+		opaqueDrawDataBDA    = drawDataBDA;
+
+		// No batching needed — global index buffer bound once
+
+		// =========================================================
+		// GPU frustum + occlusion culling with draw compaction
+		// =========================================================
+		if (m_cullPipeline != VK_NULL_HANDLE && !opaqueDraws.empty())
+		{
+#ifdef TRACY_ENABLE
+			ZoneScopedN("GPU Cull Dispatch");
+#endif
+			const uint32_t opaqueCount = static_cast<uint32_t>(opaqueDraws.size());
+
+			// Allocate bounds buffer (per-opaque draw, CPU->GPU)
+			AllocatedBuffer boundsBuffer = m_resourceManager->createBuffer(
+			opaqueCount * sizeof(GPUBoundsData),
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+			VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+			auto* boundsPtr = static_cast<GPUBoundsData*>(boundsBuffer.m_info.pMappedData);
+			for (uint32_t i = 0; i < opaqueCount; i++)
+			{
+				const RenderObject& r = m_mainDrawContext.m_OpaqueSurfaces[opaqueDraws[i]];
+				boundsPtr[i].m_aabbMin     = r.m_bounds.m_origin - r.m_bounds.m_extents;
+				boundsPtr[i].m_aabbMax     = r.m_bounds.m_origin + r.m_bounds.m_extents;
+				boundsPtr[i].m_worldMatrix = r.m_transform;
+			}
+
+			// Allocate compaction output buffers (GPU-only)
+			AllocatedBuffer indirectBufferOut = m_resourceManager->createBuffer(
+			opaqueCount * sizeof(VkDrawIndexedIndirectCommand),
+			VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT |
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+			VMA_MEMORY_USAGE_GPU_ONLY);
+
+			AllocatedBuffer drawDataOut = m_resourceManager->createBuffer(
+			opaqueCount * sizeof(GPUDrawData),
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+			VMA_MEMORY_USAGE_GPU_ONLY);
+
+			// Atomic draw count buffer (GPU-only, reset via vkCmdFillBuffer)
+			drawCountBuffer = m_resourceManager->createBuffer(
+			sizeof(uint32_t),
+			VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT |
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+			VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+			VMA_MEMORY_USAGE_GPU_ONLY);
+
+			currentFrame.m_deletionQueue.push_function(
+			[rm, boundsBuffer, indirectBufferOut, drawDataOut, drawCountBuffer]()
+			{
+				rm->destroyBuffer(boundsBuffer);
+				rm->destroyBuffer(indirectBufferOut);
+				rm->destroyBuffer(drawDataOut);
+				rm->destroyBuffer(drawCountBuffer);
+			});
+
+			// Reset draw count to 0
+			vkCmdFillBuffer(cmd, drawCountBuffer.m_buffer, 0, sizeof(uint32_t), 0);
+			vkinit::memoryBarrier(cmd,
+			    VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+			    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+			    VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT);
+
+			// Get BDAs
+			VkBufferDeviceAddressInfo bdaInfo {};
+			bdaInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+
+			bdaInfo.buffer = boundsBuffer.m_buffer;
+			VkDeviceAddress boundsBDA = vkGetBufferDeviceAddress(m_device, &bdaInfo);
+
+			bdaInfo.buffer = indirectBuffer.m_buffer;
+			VkDeviceAddress indirectInBDA = vkGetBufferDeviceAddress(m_device, &bdaInfo);
+
+			bdaInfo.buffer = indirectBufferOut.m_buffer;
+			VkDeviceAddress indirectOutBDA = vkGetBufferDeviceAddress(m_device, &bdaInfo);
+
+			bdaInfo.buffer = drawDataBuffer.m_buffer;
+			VkDeviceAddress drawDataInBDA = drawDataBDA; // already computed above
+
+			bdaInfo.buffer = drawDataOut.m_buffer;
+			VkDeviceAddress drawDataOutBDA = vkGetBufferDeviceAddress(m_device, &bdaInfo);
+
+			bdaInfo.buffer = drawCountBuffer.m_buffer;
+			VkDeviceAddress drawCountBDA = vkGetBufferDeviceAddress(m_device, &bdaInfo);
+
+			// Bind cull compute pipeline
+			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_cullPipeline);
+
+			uint32_t     cullBufferIndex = 0;
+			VkDeviceSize cullOffset      = sceneDescriptorOffset;
+			vkCmdSetDescriptorBufferOffsetsEXT(
+			cmd,
+			VK_PIPELINE_BIND_POINT_COMPUTE,
+			m_cullPipelineLayout,
+			0, 1,
+			&cullBufferIndex,
+			&cullOffset);
+
+			// Push constants
+			CullPushConstants cullPC {};
+			cullPC.m_boundsBufferPtr      = boundsBDA;
+			cullPC.m_indirectBufferInPtr  = indirectInBDA;
+			cullPC.m_indirectBufferOutPtr = indirectOutBDA;
+			cullPC.m_drawDataInPtr        = drawDataInBDA;
+			cullPC.m_drawDataOutPtr       = drawDataOutBDA;
+			cullPC.m_drawCountPtr         = drawCountBDA;
+			cullPC.m_drawCount            = opaqueCount;
+			cullPC.m_hizEnabled           = (m_hizReady && m_hizOcclusionEnabled) ? 1 : 0;
+			cullPC.m_hizWidth             = m_hizImage.m_imageExtent.width;
+			cullPC.m_hizHeight            = m_hizImage.m_imageExtent.height;
+			vkCmdPushConstants(cmd,
+			                   m_cullPipelineLayout,
+			                   VK_SHADER_STAGE_COMPUTE_BIT,
+			                   0,
+			                   sizeof(CullPushConstants),
+			                   &cullPC);
+
+			// Dispatch (256 threads per group)
+			vkCmdDispatch(cmd, (opaqueCount + 255) / 256, 1, 1);
+
+			// Barrier: compute write -> (indirect read + shader storage read)
+			vkinit::memoryBarrier(cmd,
+			    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT,
+			    VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
+			    VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_2_SHADER_READ_BIT);
+
+			// Store compacted output for opaque draw calls below
+			// Keep original buffers for transparent draws (they're not culled)
+			opaqueIndirectBuffer = indirectBufferOut;
+			opaqueDrawDataBDA   = drawDataOutBDA;
+		}
+	}
+
+	// =========================================================
+	// Begin render pass
+	// =========================================================
+	VkRenderingAttachmentInfo colorAttachment =
+	vkinit::attachmentInfoMsaa(m_msaaColorImage.m_imageView,
+	                           m_drawImage.m_imageView,
+	                           nullptr,
+	                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	VkRenderingAttachmentInfo depthAttachment = vkinit::depthAttachmentInfo(
+	m_depthImage.m_imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
+	// Add MSAA depth resolve for Hi-Z pyramid
+	if (m_hizOcclusionEnabled && m_hizDownsamplePipeline != VK_NULL_HANDLE &&
+	    m_depthResolveImage.m_image != VK_NULL_HANDLE)
+	{
+		depthAttachment.resolveMode       = VK_RESOLVE_MODE_MIN_BIT;
+		depthAttachment.resolveImageView  = m_depthResolveImage.m_imageView;
+		depthAttachment.resolveImageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+	}
+
+	VkRenderingInfo renderInfo =
+	vkinit::renderingInfo(m_drawExtent, &colorAttachment, &depthAttachment);
+	// Begin pipeline statistics query (must be outside render pass)
+	uint32_t writeIdx = m_statsFrameIndex;
+	vkCmdResetQueryPool(cmd, m_statsQueryPool[writeIdx], 0, 1);
+	vkCmdBeginQuery(cmd, m_statsQueryPool[writeIdx], 0, 0);
+
+	vkCmdBeginRendering(cmd, &renderInfo);
+
+	if (totalDraws > 0)
+	{
+		// Helper: bind pipeline state once per pass
+		auto bindPipelineState = [&](MaterialPipeline* pipeline, VkDeviceAddress dataBDA)
+		{
+			vkCmdBindPipeline(
+			cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipeline);
 
 			// Bind all 4 descriptor buffer offsets (bindless)
 			uint32_t     bufferIndices[4] = {0, 1, 2, 3};
@@ -1666,13 +2189,13 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 			vkCmdSetDescriptorBufferOffsetsEXT(
 			cmd,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			r.m_material->m_pipeline->m_layout,
-			0, // first set
-			4, // descriptor count
+			pipeline->m_layout,
+			0,
+			4,
 			bufferIndices,
 			offsets);
 
-			// set dynamic viewport and scissor
+			// Set dynamic viewport and scissor
 			VkViewport viewport = {};
 			viewport.x          = 0;
 			viewport.y          = 0;
@@ -1680,7 +2203,6 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 			viewport.height     = static_cast<float>(m_drawExtent.height);
 			viewport.minDepth   = 0.f;
 			viewport.maxDepth   = 1.f;
-
 			vkCmdSetViewport(cmd, 0, 1, &viewport);
 
 			VkRect2D scissor      = {};
@@ -1688,56 +2210,76 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 			scissor.offset.y      = 0;
 			scissor.extent.width  = m_drawExtent.width;
 			scissor.extent.height = m_drawExtent.height;
-
 			vkCmdSetScissor(cmd, 0, 1, &scissor);
-		}
 
-		// rebind index buffer if needed
-		if (r.m_indexBuffer != lastIndexBuffer)
+			// Push indirect draw constants (BDA to draw data)
+			IndirectDrawPushConstants pushConst;
+			pushConst.m_drawDataBufferPtr = dataBDA;
+			vkCmdPushConstants(cmd,
+			                   pipeline->m_layout,
+			                   VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+			                   0,
+			                   sizeof(IndirectDrawPushConstants),
+			                   &pushConst);
+		};
+
+		// Bind global index buffer once for all draws
+		vkCmdBindIndexBuffer(cmd, m_resourceManager->getGlobalIndexBuffer(), 0, VK_INDEX_TYPE_UINT32);
+
+		constexpr uint32_t stride = sizeof(VkDrawIndexedIndirectCommand);
+
+		// === Draw opaque (compacted by GPU cull) ===
+		if (!opaqueDraws.empty())
 		{
-			lastIndexBuffer = r.m_indexBuffer;
-			vkCmdBindIndexBuffer(cmd, r.m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-		}
-
-		// Push constants with material index (bindless)
-		GPUDrawPushConstants push_constants;
-		push_constants.m_worldMatrix   = r.m_transform;
-		push_constants.m_vertexBuffer  = r.m_vertexBufferAddress;
-		push_constants.m_materialIndex = r.m_material->m_materialIndex;
-		push_constants.m_padding       = 0;
-
-		vkCmdPushConstants(cmd,
-		                   r.m_material->m_pipeline->m_layout,
-		                   VK_SHADER_STAGE_VERTEX_BIT |
-		                   VK_SHADER_STAGE_FRAGMENT_BIT,
-		                   0,
-		                   sizeof(GPUDrawPushConstants),
-		                   &push_constants);
-
-		vkCmdDrawIndexed(cmd, r.m_indexCount, 1, r.m_firstIndex, 0, 0);
-
-		// add counters for triangles and draws
-		m_stats.m_drawcallCount++;
-		m_stats.m_triangleCount += r.m_indexCount / 3;
-	};
-
-	{
 #ifdef TRACY_ENABLE
-		ZoneScopedN("Draw Opaque");
+			ZoneScopedN("Draw Opaque Indirect");
 #endif
-		for (auto& r : opaqueDraws)
-		{
-			draw(m_mainDrawContext.m_OpaqueSurfaces[r]);
-		}
-	}
+			const uint32_t opaqueCount = static_cast<uint32_t>(opaqueDraws.size());
+			const RenderObject& firstOpaque =
+			m_mainDrawContext.m_OpaqueSurfaces[opaqueDraws[0]];
+			bindPipelineState(firstOpaque.m_material->m_pipeline, opaqueDrawDataBDA);
 
-	{
-#ifdef TRACY_ENABLE
-		ZoneScopedN("Draw Transparent");
-#endif
-		for (auto& r : transparentDraws)
+			if (drawCountBuffer.m_buffer != VK_NULL_HANDLE)
+			{
+				// Compacted path: draw count comes from GPU atomic counter
+				vkCmdDrawIndexedIndirectCount(cmd,
+				    opaqueIndirectBuffer.m_buffer, 0,
+				    drawCountBuffer.m_buffer, 0,
+				    opaqueCount, stride);
+			}
+			else
+			{
+				// Fallback: no cull pipeline, draw all
+				vkCmdDrawIndexedIndirect(cmd, opaqueIndirectBuffer.m_buffer,
+				                         0, opaqueCount, stride);
+			}
+			m_stats.m_drawcallCount++;
+		}
+
+		// === Draw transparent (uses original input buffers, not compacted) ===
+		if (!transparentDraws.empty())
 		{
-			draw(m_mainDrawContext.m_TransparentSurfaces[r]);
+#ifdef TRACY_ENABLE
+			ZoneScopedN("Draw Transparent Indirect");
+#endif
+			const uint32_t transpCount = static_cast<uint32_t>(transparentDraws.size());
+			const RenderObject& firstTransparent =
+			m_mainDrawContext.m_TransparentSurfaces[transparentDraws[0]];
+			bindPipelineState(firstTransparent.m_material->m_pipeline, drawDataBDA);
+
+			VkDeviceSize transpOffset = transparentBase * stride;
+			if (m_multiDrawIndirectSupported && m_multiDrawIndirectEnabled)
+			{
+				vkCmdDrawIndexedIndirect(cmd, indirectBuffer.m_buffer,
+				                         transpOffset, transpCount, stride);
+			}
+			else
+			{
+				for (uint32_t i = 0; i < transpCount; i++)
+					vkCmdDrawIndexedIndirect(cmd, indirectBuffer.m_buffer,
+					                         transpOffset + i * stride, 1, stride);
+			}
+			m_stats.m_drawcallCount++;
 		}
 	}
 
@@ -1751,10 +2293,15 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 		m_skybox->draw(cmd,
 		               sceneDescriptorOffset,
 		               currentFrame.m_descriptorBuffer.getDeviceAddress(),
-		               m_drawExtent);
+		               m_drawExtent,
+		               m_resourceManager->getGlobalIndexBuffer());
 	}
 
 	vkCmdEndRendering(cmd);
+
+	// End pipeline statistics query and advance frame index (must be outside render pass)
+	vkCmdEndQuery(cmd, m_statsQueryPool[writeIdx], 0);
+	m_statsFrameIndex = (m_statsFrameIndex + 1) % STATS_FRAME_OVERLAP;
 
 	auto end = std::chrono::system_clock::now();
 
@@ -1818,9 +2365,8 @@ void Renderer::updateScene(float deltaTime, VkExtent2D windowExtent)
 			{
 				RenderObject obj;
 				obj.m_indexCount = surface.m_count;
-				obj.m_firstIndex = surface.m_startIndex;
-				obj.m_indexBuffer =
-				mesh.meshAsset->m_meshBuffers.m_indexBuffer.m_buffer;
+				obj.m_firstIndex = mesh.meshAsset->m_meshBuffers.m_globalIndexOffset
+				                 + surface.m_startIndex;
 				obj.m_material  = &surface.m_material->m_data;
 				obj.m_bounds    = surface.m_bounds;
 				obj.m_transform = transform.worldTransform;
@@ -1931,6 +2477,32 @@ void Renderer::updateScene(float deltaTime, VkExtent2D windowExtent)
 
 	m_sceneData.m_cameraPosition = m_camera->m_position;
 
+	// Gribb-Hartmann: extract + normalize 6 frustum planes from viewProj
+	// Each plane stored as (nx, ny, nz, d) where nx*x + ny*y + nz*z + d = 0
+	{
+		const glm::mat4& m = viewProj;
+		// Left
+		m_sceneData.m_frustumPlanes[0] = glm::vec4(m[0][3] + m[0][0], m[1][3] + m[1][0], m[2][3] + m[2][0], m[3][3] + m[3][0]);
+		// Right
+		m_sceneData.m_frustumPlanes[1] = glm::vec4(m[0][3] - m[0][0], m[1][3] - m[1][0], m[2][3] - m[2][0], m[3][3] - m[3][0]);
+		// Bottom
+		m_sceneData.m_frustumPlanes[2] = glm::vec4(m[0][3] + m[0][1], m[1][3] + m[1][1], m[2][3] + m[2][1], m[3][3] + m[3][1]);
+		// Top
+		m_sceneData.m_frustumPlanes[3] = glm::vec4(m[0][3] - m[0][1], m[1][3] - m[1][1], m[2][3] - m[2][1], m[3][3] - m[3][1]);
+		// Near (reverse-Z: w+z for near plane)
+		m_sceneData.m_frustumPlanes[4] = glm::vec4(m[0][3] + m[0][2], m[1][3] + m[1][2], m[2][3] + m[2][2], m[3][3] + m[3][2]);
+		// Far (reverse-Z: w-z for far plane)
+		m_sceneData.m_frustumPlanes[5] = glm::vec4(m[0][3] - m[0][2], m[1][3] - m[1][2], m[2][3] - m[2][2], m[3][3] - m[3][2]);
+
+		// Normalize each plane
+		for (int i = 0; i < 6; i++)
+		{
+			float len = glm::length(glm::vec3(m_sceneData.m_frustumPlanes[i]));
+			if (len > 0.0f)
+				m_sceneData.m_frustumPlanes[i] /= len;
+		}
+	}
+
 	// Calculate shadow mapping data for directional light
 	if (m_shadowsEnabled && m_mainDrawContext.m_DirectionalLight.active)
 	{
@@ -2038,14 +2610,14 @@ void Renderer::initObjectIDPipeline()
 	VkShaderModule fragmentShader;
 
 	if (!vkutil::loadShaderModule(
-	    resPath("shaders/slang/objectid.vert.spv").c_str(), m_device, &vertexShader))
+	    resPath("shaders/slang/ObjectId.vert.spv").c_str(), m_device, &vertexShader))
 	{
 		AGNI_PRINT("Failed to load objectid vertex shader\n");
 		return;
 	}
 
 	if (!vkutil::loadShaderModule(
-	    resPath("shaders/slang/objectid.frag.spv").c_str(), m_device, &fragmentShader))
+	    resPath("shaders/slang/ObjectId.frag.spv").c_str(), m_device, &fragmentShader))
 	{
 		AGNI_PRINT("Failed to load objectid fragment shader\n");
 		vkDestroyShaderModule(m_device, vertexShader, nullptr);
@@ -2237,17 +2809,12 @@ void Renderer::drawObjectIDPass(VkCommandBuffer cmd, FrameData& currentFrame)
 	                                   &bufferIndex,
 	                                   &sceneDescriptorOffset);
 
+	// Bind global index buffer once for all object ID draws
+	vkCmdBindIndexBuffer(cmd, m_resourceManager->getGlobalIndexBuffer(), 0, VK_INDEX_TYPE_UINT32);
+
 	// Draw all opaque objects with their entity IDs
-	VkBuffer lastIndexBuffer = VK_NULL_HANDLE;
 	for (const auto& obj : m_mainDrawContext.m_OpaqueSurfaces)
 	{
-		if (obj.m_indexBuffer != lastIndexBuffer)
-		{
-			lastIndexBuffer = obj.m_indexBuffer;
-			vkCmdBindIndexBuffer(
-			cmd, obj.m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-		}
-
 		ObjectIDPushConstants pushConstants;
 		pushConstants.m_worldMatrix  = obj.m_transform;
 		pushConstants.m_vertexBuffer = obj.m_vertexBufferAddress;

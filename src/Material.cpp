@@ -12,7 +12,7 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 {
 	VkShaderModule meshFragShader;
 	if (!vkutil::loadShaderModuleWithFallback(
-	    resPath("shaders/slang/mesh.frag.spv").c_str(),
+	    resPath("shaders/slang/Mesh.frag.spv").c_str(),
 	    engine->m_device,
 	    &meshFragShader,
 	    FallbackShaders::meshFragSpv,
@@ -23,7 +23,7 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 
 	VkShaderModule meshVertexShader;
 	if (!vkutil::loadShaderModuleWithFallback(
-	    resPath("shaders/slang/mesh.vert.spv").c_str(),
+	    resPath("shaders/slang/Mesh.vert.spv").c_str(),
 	    engine->m_device,
 	    &meshVertexShader,
 	    FallbackShaders::meshVertSpv,
@@ -34,7 +34,7 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 
 	VkPushConstantRange matrixRange {};
 	matrixRange.offset     = 0;
-	matrixRange.size       = sizeof(GPUDrawPushConstants);
+	matrixRange.size       = sizeof(IndirectDrawPushConstants);
 	matrixRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
 	// Bindless pipeline layout: Scene + Textures + Samplers + Materials

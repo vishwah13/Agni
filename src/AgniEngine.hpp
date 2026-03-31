@@ -212,6 +212,10 @@ public:
 	// Descriptor buffer extension properties
 	DescriptorBufferProperties m_descriptorBufferProps {};
 
+	// Multi-draw indirect support
+	bool m_multiDrawIndirectSupported {false}; // GPU capability (queried at init)
+	bool m_multiDrawIndirectEnabled {true};   // User toggle (only effective if supported)
+
 	FrameData m_frames[FRAME_OVERLAP];
 
 	FrameData& getCurrentFrame()

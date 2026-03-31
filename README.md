@@ -8,14 +8,18 @@ My personal Game Engine featuring bleeding-edge Vulkan 1.4, physically-based ren
 
 ## Features
 
-### Rendering
-- Vulkan 1.4 with dynamic rendering and bindless resources (descriptor buffers)
-- Physically-Based Rendering (PBR) with metallic-roughness workflow
-- Shadow mapping for directional, spot, and point lights with optional PCF soft shadows
+### GPU-Driven Rendering
+- Vulkan 1.4 with dynamic rendering and bindless resources (`VK_EXT_descriptor_buffer`)
+- **Vertex pulling** via buffer device addresses (BDA) — no vertex input bindings
+- **Indirect draw calls** using `vkCmdDrawIndexedIndirect` / `vkCmdDrawIndexedIndirectCount`
+- **GPU frustum culling** — compute shader tests bounding spheres against 6 frustum planes
+- **Hi-Z occlusion culling** — hierarchical depth pyramid for conservative visibility testing
+- Physically-Based Rendering (PBR) with Cook-Torrance BRDF and metallic-roughness workflow
+- Shadow mapping for directional, spot, and point lights with PCF soft shadows
 - glTF 2.0 model loading with automatic material extraction
 - Multi-light support (up to 256 point lights, 64 spot lights)
 - Skybox rendering and compute shader effects
-- Frustum culling and configurable MSAA (1x/2x/4x/8x)
+- Configurable MSAA (1x/2x/4x/8x)
 - Object picking for viewport entity selection
 
 ### Entity-Component-System (ECS)
@@ -38,6 +42,7 @@ My personal Game Engine featuring bleeding-edge Vulkan 1.4, physically-based ren
 - Keyboard shortcuts (Delete, Escape, etc.)
 - Performance monitor and rendering settings windows
 - Tracy Profiler integration for real-time performance analysis
+- NVIDIA Nsight Graphics support with shader debug info (source-level shader debugging)
 - RenderDoc support for graphics debugging
 
 ## Building
@@ -73,6 +78,7 @@ python build.py --clean         # Clean and rebuild
 python build.py --tracy         # Force build Tracy profiler (auto in Debug)
 python build.py --no-shaders    # Skip shader compilation (use pre-compiled)
 python build.py --no-tracy      # Disable Tracy profiling
+python build.py --no-nsight     # Disable Nsight shader debug info (re-enables RenderDoc)
 python build.py -j 8            # Use 8 parallel jobs
 
 # Generator options:
@@ -106,15 +112,17 @@ If you prefer to use CMake directly:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `AGNI_COMPILE_SHADERS` | `ON` | Compile shaders to SPIR-V. Set to `OFF` to use pre-compiled `.spv` files |
-| `AGNI_ENABLE_TRACY` | `ON` | Enable Tracy profiler integration. Set to `OFF` for production builds |
+| `AGNI_SHADER_DEBUG` | `ON` | Enable shader debug info (`-g2 -O0`) for GPU debuggers like NVIDIA Nsight Graphics. Disables RenderDoc |
+| `AGNI_ENABLE_TRACY` | `ON` | Enable Tracy profiler integration |
 | `AGNI_ENABLE_JOLT` | `ON` | Enable Jolt Physics integration |
+| `AGNI_PRODUCTION_BUILD` | `OFF` | Production build — strips debug tools (RenderDoc) and sets relative resource paths |
 
 ## Shader System
 
-Agni uses [Slang](https://github.com/shader-slang/slang) for shader compilation:
+Agni uses [Slang](https://github.com/shader-slang/slang) as its shader language, compiled to SPIR-V:
 
-- **GLSL shaders** (`.vert`, `.frag`, `.comp`) are compiled using glslang (bundled with Slang)
-- **Slang shaders** (`.slang`) can be used for advanced features like generics, interfaces, and automatic differentiation
+- All shaders are written in **Slang** (`.slang`) and compiled to SPIR-V via `slangc`
+- Shader debug info (`-g2 -O0`) is enabled by default for NVIDIA Nsight Graphics source-level debugging
 - Pre-compiled SPIR-V files (`.spv`) are included for CI/CD builds
 
 See [docs/ShaderCompilation.md](docs/ShaderCompilation.md) for detailed documentation.
@@ -140,7 +148,10 @@ All dependencies are included as git submodules in `third_party/`:
 | [fmt](https://github.com/fmtlib/fmt) | String formatting |
 | [Flecs](https://github.com/SanderMertens/flecs) | Entity-Component-System |
 | [Jolt Physics](https://github.com/jrouwe/JoltPhysics) | 3D physics simulation |
+| [simdjson](https://github.com/simdjson/simdjson) | High-performance JSON parsing |
+| [dmon](https://github.com/AshishBhattarai/dmon) | File system monitoring |
 | [Tracy](https://github.com/wolfpld/tracy) | Real-time profiler |
+| [RenderDoc](https://github.com/baldurk/renderdoc) | Graphics debugger API |
 
 ## Performance Profiling with Tracy
 
@@ -214,11 +225,11 @@ Agni includes comprehensive profiling instrumentation:
 | `FrameMark` | Frame boundaries for FPS analysis |
 | `renderFrame` | Total frame rendering time |
 | `drawGeometry` | Geometry rendering with sub-zones: |
-| ├─ `Frustum Culling` | Visibility testing performance |
+| ├─ `GPU Cull Dispatch` | Compute shader frustum + Hi-Z culling |
 | ├─ `Sort Opaque` | Opaque surface sorting |
 | ├─ `Sort Transparent` | Transparent surface sorting (back-to-front) |
-| ├─ `Draw Opaque` | Opaque geometry rendering |
-| ├─ `Draw Transparent` | Transparent geometry rendering |
+| ├─ `Draw Opaque` | Indirect draw opaque geometry |
+| ├─ `Draw Transparent` | Indirect draw transparent geometry |
 | └─ `Draw Skybox` | Skybox rendering |
 | `drawBackground` | Compute shader background effects |
 | `drawImgui` | ImGui UI overlay rendering |

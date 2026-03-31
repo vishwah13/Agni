@@ -26,10 +26,11 @@ class World;
 struct EngineStats
 {
 	float m_frametime       = 0.0f;
-	int   m_triangleCount   = 0;
+	int   m_triangleCount   = 0;   // Submitted triangles (CPU-side count)
 	int   m_drawcallCount   = 0;
 	float m_sceneUpdateTime = 0.0f;
 	float m_meshDrawTime    = 0.0f;
+	int   m_renderedTriangles  = 0; // GPU-reported primitives (from pipeline statistics query)
 };
 
 struct ComputePushConstants
@@ -53,8 +54,7 @@ struct ComputeEffect
 struct RenderObject
 {
 	uint32_t m_indexCount = 0;
-	uint32_t m_firstIndex = 0;
-	VkBuffer m_indexBuffer = VK_NULL_HANDLE;
+	uint32_t m_firstIndex = 0; // global offset into global index buffer
 
 	MaterialInstance* m_material            = nullptr;
 	Bounds            m_bounds {};
@@ -167,6 +167,18 @@ public:
 	const SamplerRegistry& getSamplerRegistry() const { return m_samplerRegistry; }
 	MaterialRegistry& getMaterialRegistry() { return m_materialRegistry; }
 	const MaterialRegistry& getMaterialRegistry() const { return m_materialRegistry; }
+
+	// GPU culling accessor
+	bool& getHiZOcclusionEnabled() { return m_hizOcclusionEnabled; }
+
+	// Multi-draw indirect accessors
+	bool& getMultiDrawIndirectEnabled() { return m_multiDrawIndirectEnabled; }
+	bool  getMultiDrawIndirectSupported() const { return m_multiDrawIndirectSupported; }
+	void  setMultiDrawIndirect(bool supported, bool enabled)
+	{
+		m_multiDrawIndirectSupported = supported;
+		m_multiDrawIndirectEnabled   = enabled;
+	}
 
 	const AllocatedImage& getMsaaColorImage() const
 	{
@@ -305,6 +317,42 @@ private:
 	bool  m_pointShadowPCFEnabled = true;   // Toggle soft shadows
 	int   m_pointShadowLightIndex = 0;      // Which point light casts shadows
 
+	// GPU frustum culling
+	VkPipeline       m_cullPipeline       = VK_NULL_HANDLE;
+	VkPipelineLayout m_cullPipelineLayout = VK_NULL_HANDLE;
+
+	// Hi-Z occlusion culling
+	AllocatedImage               m_hizImage;
+	AllocatedImage               m_depthResolveImage;
+	std::vector<VkImageView>     m_hizMipViews;
+	VkSampler                    m_hizSampler                    = VK_NULL_HANDLE;
+	VkPipeline                   m_hizDownsamplePipeline         = VK_NULL_HANDLE;
+	VkPipelineLayout             m_hizDownsamplePipelineLayout   = VK_NULL_HANDLE;
+	VkDescriptorSetLayout        m_hizDownsampleDescriptorLayout = VK_NULL_HANDLE;
+	DescriptorLayoutInfo         m_hizDownsampleLayoutInfo;
+	uint32_t                     m_hizMipLevels       = 0;
+	bool                         m_hizReady           = false;
+	bool                         m_hizOcclusionEnabled = true;
+
+	// Pipeline statistics query (GPU-side rendered triangle count)
+	static constexpr uint32_t STATS_FRAME_OVERLAP = 2;
+	VkQueryPool m_statsQueryPool[STATS_FRAME_OVERLAP] = {VK_NULL_HANDLE, VK_NULL_HANDLE};
+	uint32_t    m_statsFrameIndex = 0; // alternates 0/1 each frame
+
+	// Multi-draw indirect support
+	bool m_multiDrawIndirectSupported {false};
+	bool m_multiDrawIndirectEnabled {true};
+
+	// Batch of consecutive indirect draw commands sharing the same index buffer
+	// Shared indirect draw resources for all shadow passes
+	struct ShadowIndirectResources
+	{
+		AllocatedBuffer indirectBuffer {};
+		AllocatedBuffer drawDataBuffer {};
+		VkDeviceAddress drawDataBDA = 0;
+		uint32_t        totalDraws = 0;
+	};
+
 	// Private rendering functions
 	void drawBackground(VkCommandBuffer cmd);
 	void drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame);
@@ -318,17 +366,24 @@ private:
 	void initPickingResources(VkExtent2D windowExtent);
 	void initObjectIDPipeline();
 
+	// GPU culling
+	void initCullPipeline();
+	void initHiZResources();
+	void initHiZPipeline();
+	void buildHiZPyramid(VkCommandBuffer cmd, FrameData& currentFrame);
+
 	// Shadow mapping helpers
 	void initShadowResources();
 	void initShadowPipeline();
-	void drawShadowPass(VkCommandBuffer cmd, FrameData& currentFrame);
-	void drawSpotShadowPass(VkCommandBuffer cmd, FrameData& currentFrame);
+	ShadowIndirectResources buildShadowIndirectBuffers(FrameData& currentFrame);
+	void drawShadowPass(VkCommandBuffer cmd, FrameData& currentFrame, const ShadowIndirectResources& shadowRes);
+	void drawSpotShadowPass(VkCommandBuffer cmd, FrameData& currentFrame, const ShadowIndirectResources& shadowRes);
 	glm::mat4 calculateLightSpaceMatrix(const glm::vec3& lightDir);
 	glm::mat4 calculateSpotLightSpaceMatrix(const glm::vec3& position, const glm::vec3& direction, float outerConeAngle);
 
 	// Point light shadow mapping helpers
 	void initPointShadowResources();
 	void initPointShadowPipeline();
-	void drawPointShadowPass(VkCommandBuffer cmd);
+	void drawPointShadowPass(VkCommandBuffer cmd, const ShadowIndirectResources& shadowRes);
 	std::array<glm::mat4, 6> calculatePointLightMatrices(const glm::vec3& lightPos, float nearPlane, float farPlane);
 };

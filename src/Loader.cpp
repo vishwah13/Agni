@@ -1044,8 +1044,8 @@ void LoadedGLTF::clearAll()
 	{
 		if (v)
 		{
-			m_creator->m_resourceManager.destroyBuffer(v->m_meshBuffers.m_indexBuffer);
 			m_creator->m_resourceManager.destroyBuffer(v->m_meshBuffers.m_vertexBuffer);
+			m_creator->m_resourceManager.freeIndexAllocation(v->m_meshBuffers.m_indexAllocation);
 		}
 	}
 
