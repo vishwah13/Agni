@@ -9,8 +9,8 @@
 #include <vector>
 
 #define VK_NO_PROTOTYPES
-#include <vk_mem_alloc.h>
 #include <volk.h>
+#include <vk_mem_alloc.h>
 
 #include <fmt/core.h>
 #include <IndexPageAllocator.hpp>
