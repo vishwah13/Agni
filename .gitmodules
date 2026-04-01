@@ -50,3 +50,6 @@
 [submodule "third_party/simdjson"]
 	path = third_party/simdjson
 	url = https://github.com/simdjson/simdjson
+[submodule "third_party/googletest"]
+	path = third_party/googletest
+	url = https://github.com/google/googletest.git

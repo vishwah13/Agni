@@ -1,16 +1,9 @@
 #pragma once
-#include <fmt/core.h>
+#include <AgniLog.hpp>
 #include <cstdlib>
 #include <atomic>
 #include <volk.h>
 #include <vk_mem_alloc.h>
-
-// Debug print macro
-#ifndef NDEBUG
-#define AGNI_PRINT(...) fmt::print(__VA_ARGS__)
-#else
-#define AGNI_PRINT(...) ((void)0)
-#endif
 
 // CPU allocation tracking
 struct AllocationMetrics

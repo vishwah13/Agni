@@ -42,6 +42,7 @@ endif()
 option(AGNI_COMPILE_SHADERS "Compile Slang shaders to SPIR-V" ON)
 option(AGNI_PRODUCTION_BUILD "Make this a production build" OFF)
 option(AGNI_SHADER_DEBUG "Enable shader debug info for GPU debuggers (Nsight Graphics)" ON)
+option(AGNI_BUILD_TESTS "Build unit tests" OFF)
 
 # Using Vulkan-Headers submodule instead of system Vulkan SDK
 
@@ -63,6 +64,11 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO "${PROJECT_SOURCE_DIR}/bin/Rel
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_MINSIZEREL "${PROJECT_SOURCE_DIR}/bin/MinSizeRel")
 
 add_subdirectory(src)
+
+if(AGNI_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
 
 # Shader compilation (optional - can be disabled in CI/CD)
 if(AGNI_COMPILE_SHADERS)
