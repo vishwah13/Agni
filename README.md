@@ -8,7 +8,7 @@ A GPU-driven game engine built with Vulkan 1.4 and C++20.
 
 ## Features
 
-- **GPU-Driven Rendering** — Vertex pulling, indirect draw calls, AABB frustum culling, Hi-Z occlusion culling, draw compaction via compute shaders
+- **GPU-Driven Rendering** — Vertex pulling, indirect draw calls, GPU frustum culling, GPU Hi-Z occlusion culling.
 - **Bindless Resources** — Descriptor buffers (`VK_EXT_descriptor_buffer`) for textures, samplers, and materials
 - **PBR Rendering** — Cook-Torrance BRDF, shadow mapping (directional, spot, point), MSAA, skybox
 - **Entity-Component-System** — [Flecs](https://github.com/SanderMertens/flecs)-based architecture with transform hierarchy
