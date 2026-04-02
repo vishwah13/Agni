@@ -61,22 +61,29 @@ public:
 	                           const ColliderComponent& collider,
 	                           float                   mass,
 	                           float                   friction,
-	                           float                   restitution);
+	                           float                   restitution,
+	                           bool                    useGravity = true,
+	                           const glm::vec3&        scale = glm::vec3(1.0f));
 
 	uint32_t createStaticBody(const glm::vec3&        pos,
 	                          const glm::quat&        rot,
 	                          ColliderType            type,
 	                          const ColliderComponent& collider,
 	                          float                   friction,
-	                          float                   restitution);
+	                          float                   restitution,
+	                          const glm::vec3&        scale = glm::vec3(1.0f));
 
 	uint32_t createKinematicBody(const glm::vec3&        pos,
 	                             const glm::quat&        rot,
 	                             ColliderType            type,
-	                             const ColliderComponent& collider);
+	                             const ColliderComponent& collider,
+	                             const glm::vec3&        scale = glm::vec3(1.0f));
 
 	void removeBody(uint32_t bodyID);
 	void removeAllBodies();
+
+	// Broadphase optimization (call after bulk body creation)
+	void optimizeBroadPhase();
 
 	// Transform sync
 	void      setBodyTransform(uint32_t bodyID, const glm::mat4& transform);

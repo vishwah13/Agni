@@ -12,6 +12,8 @@
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Body/BodyActivationListener.h>
+#include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
+#include <Jolt/Physics/Collision/Shape/ScaledShape.h>
 
 // Free function for Jolt trace callback (GCC cannot convert variadic lambdas to function pointers)
 static void JoltTraceNoop(const char*, ...) {}
@@ -151,6 +153,51 @@ inline glm::quat toGlmQuat(const Quat& q)
 	return glm::quat(q.GetW(), q.GetX(), q.GetY(), q.GetZ());
 }
 
+// Helper: Create a collision shape from ColliderComponent, applying center offset and scale
+static RefConst<Shape> createCollisionShape(ColliderType            type,
+                                            const ColliderComponent& collider,
+                                            const glm::vec3&        scale = glm::vec3(1.0f))
+{
+	// Create base shape with scale applied to dimensions
+	RefConst<Shape> baseShape;
+	switch (type)
+	{
+	case ColliderType::Box:
+		baseShape = new BoxShape(toJoltVec3(collider.boxHalfExtents * scale));
+		break;
+	case ColliderType::Sphere:
+	{
+		// Use max axis scale for uniform sphere scaling
+		float uniformScale = std::max({scale.x, scale.y, scale.z});
+		baseShape = new SphereShape(collider.sphereRadius * uniformScale);
+		break;
+	}
+	case ColliderType::Capsule:
+	{
+		float radiusScale = std::max(scale.x, scale.z);
+		baseShape = new CapsuleShape(collider.capsuleHalfHeight * scale.y,
+		                             collider.capsuleRadius * radiusScale);
+		break;
+	}
+	default:
+		return nullptr;
+	}
+
+	// Wrap with center offset if non-zero
+	if (collider.center.x != 0.0f || collider.center.y != 0.0f || collider.center.z != 0.0f)
+	{
+		RotatedTranslatedShapeSettings offsetSettings(
+		    toJoltVec3(collider.center * scale),
+		    Quat::sIdentity(),
+		    baseShape);
+		auto result = offsetSettings.Create();
+		if (result.IsValid())
+			return result.Get();
+	}
+
+	return baseShape;
+}
+
 JoltPhysicsManager::JoltPhysicsManager() = default;
 
 JoltPhysicsManager::~JoltPhysicsManager()
@@ -240,15 +287,25 @@ void JoltPhysicsManager::update(float deltaTime)
 	if (!m_physicsSystem)
 		return;
 
-	// Use fixed timestep for stability (60 Hz physics tick)
 	const float fixedTimestep = 1.0f / 60.0f;
 
-	// Run physics step
-	m_physicsSystem->Update(
-	    fixedTimestep,
-	    m_settings.collisionSteps,
-	    m_tempAllocator.get(),
-	    m_jobSystem.get());
+	// Accumulate frame time
+	m_accumulator += deltaTime;
+
+	// Cap to prevent spiral of death (e.g., after breakpoint or long hitch)
+	if (m_accumulator > 0.1f)
+		m_accumulator = 0.1f;
+
+	// Step physics in fixed increments
+	while (m_accumulator >= fixedTimestep)
+	{
+		m_physicsSystem->Update(
+		    fixedTimestep,
+		    m_settings.collisionSteps,
+		    m_tempAllocator.get(),
+		    m_jobSystem.get());
+		m_accumulator -= fixedTimestep;
+	}
 }
 
 uint32_t JoltPhysicsManager::createDynamicBody(const glm::vec3&        pos,
@@ -257,25 +314,16 @@ uint32_t JoltPhysicsManager::createDynamicBody(const glm::vec3&        pos,
                                                const ColliderComponent& collider,
                                                float                   mass,
                                                float                   friction,
-                                               float                   restitution)
+                                               float                   restitution,
+                                               bool                    useGravity,
+                                               const glm::vec3&        scale)
 {
 	if (!m_physicsSystem)
 		return 0;
 
-	// Create shape based on collider type
-	RefConst<Shape> shape;
-	switch (type)
+	RefConst<Shape> shape = createCollisionShape(type, collider, scale);
+	if (!shape)
 	{
-	case ColliderType::Box:
-		shape = new BoxShape(toJoltVec3(collider.boxHalfExtents));
-		break;
-	case ColliderType::Sphere:
-		shape = new SphereShape(collider.sphereRadius);
-		break;
-	case ColliderType::Capsule:
-		shape = new CapsuleShape(collider.capsuleHalfHeight, collider.capsuleRadius);
-		break;
-	default:
 		AGNI_PRINT("[JoltPhysicsManager] Unsupported collider type\n");
 		return 0;
 	}
@@ -295,6 +343,9 @@ uint32_t JoltPhysicsManager::createDynamicBody(const glm::vec3&        pos,
 	bodySettings.mOverrideMassProperties = EOverrideMassProperties::CalculateInertia;
 	bodySettings.mMassPropertiesOverride.mMass = mass;
 
+	// Respect useGravity flag
+	bodySettings.mGravityFactor = useGravity ? 1.0f : 0.0f;
+
 	// Create and add body to physics system
 	BodyInterface& bodyInterface = m_physicsSystem->GetBodyInterface();
 	BodyID         bodyID        = bodyInterface.CreateAndAddBody(bodySettings, EActivation::Activate);
@@ -313,27 +364,15 @@ uint32_t JoltPhysicsManager::createStaticBody(const glm::vec3&        pos,
                                               ColliderType            type,
                                               const ColliderComponent& collider,
                                               float                   friction,
-                                              float                   restitution)
+                                              float                   restitution,
+                                              const glm::vec3&        scale)
 {
 	if (!m_physicsSystem)
 		return 0;
 
-	// Create shape
-	RefConst<Shape> shape;
-	switch (type)
-	{
-	case ColliderType::Box:
-		shape = new BoxShape(toJoltVec3(collider.boxHalfExtents));
-		break;
-	case ColliderType::Sphere:
-		shape = new SphereShape(collider.sphereRadius);
-		break;
-	case ColliderType::Capsule:
-		shape = new CapsuleShape(collider.capsuleHalfHeight, collider.capsuleRadius);
-		break;
-	default:
+	RefConst<Shape> shape = createCollisionShape(type, collider, scale);
+	if (!shape)
 		return 0;
-	}
 
 	// Create static body settings
 	BodyCreationSettings bodySettings(
@@ -356,27 +395,15 @@ uint32_t JoltPhysicsManager::createStaticBody(const glm::vec3&        pos,
 uint32_t JoltPhysicsManager::createKinematicBody(const glm::vec3&        pos,
                                                  const glm::quat&        rot,
                                                  ColliderType            type,
-                                                 const ColliderComponent& collider)
+                                                 const ColliderComponent& collider,
+                                                 const glm::vec3&        scale)
 {
 	if (!m_physicsSystem)
 		return 0;
 
-	// Create shape
-	RefConst<Shape> shape;
-	switch (type)
-	{
-	case ColliderType::Box:
-		shape = new BoxShape(toJoltVec3(collider.boxHalfExtents));
-		break;
-	case ColliderType::Sphere:
-		shape = new SphereShape(collider.sphereRadius);
-		break;
-	case ColliderType::Capsule:
-		shape = new CapsuleShape(collider.capsuleHalfHeight, collider.capsuleRadius);
-		break;
-	default:
+	RefConst<Shape> shape = createCollisionShape(type, collider, scale);
+	if (!shape)
 		return 0;
-	}
 
 	// Create kinematic body settings
 	BodyCreationSettings bodySettings(
@@ -550,6 +577,12 @@ glm::vec3 JoltPhysicsManager::getGravity() const
 		return toGlmVec3(m_physicsSystem->GetGravity());
 	}
 	return m_settings.gravity;
+}
+
+void JoltPhysicsManager::optimizeBroadPhase()
+{
+	if (m_physicsSystem)
+		m_physicsSystem->OptimizeBroadPhase();
 }
 
 void JoltPhysicsManager::registerEntityBody(EntityID entity, uint32_t bodyID)
