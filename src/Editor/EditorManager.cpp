@@ -130,17 +130,31 @@ namespace agni
 
 		void EditorManager::update()
 		{
-			// Process deferred entity deletion (deferred from render to avoid
-			// crashing during Flecs iteration)
-			if (m_pendingDeleteEntity != NULL_ENTITY)
+			// Process deferred operations (queued during render, safe to execute here)
+			for (auto& op : m_deferredOps)
 			{
-				auto command = std::make_unique<DeleteEntityCommand>(
-				    m_engine.getECSWorld(),
-				    m_engine.getECSWorld().getPrefabManager(),
-				    m_pendingDeleteEntity);
-				m_commandHistory->execute(std::move(command));
-				m_pendingDeleteEntity = NULL_ENTITY;
+				switch (op.type)
+				{
+				case DeferredOpType::DeleteEntity:
+				{
+					auto command = std::make_unique<DeleteEntityCommand>(
+					    m_engine.getECSWorld(),
+					    m_engine.getECSWorld().getPrefabManager(),
+					    op.entityId);
+					m_commandHistory->execute(std::move(command));
+					break;
+				}
+				case DeferredOpType::DuplicateEntity:
+					// TODO: DuplicateEntityCommand (Phase 3)
+					AGNI_PRINT("[EditorManager] Duplicate not yet implemented\n");
+					break;
+				case DeferredOpType::RenameEntity:
+					// TODO: RenameEntityCommand (Phase 3)
+					AGNI_PRINT("[EditorManager] Rename not yet implemented\n");
+					break;
+				}
 			}
+			m_deferredOps.clear();
 
 			if (m_inputManager)
 			{
@@ -281,11 +295,9 @@ namespace agni
 		{
 			if (m_selectedEntity != NULL_ENTITY)
 			{
-				// Defer deletion to next update() to avoid crashing during Flecs iteration
-				m_pendingDeleteEntity = m_selectedEntity;
+				// Queue deletion — processed in update() outside Flecs iteration
+				m_deferredOps.push_back({DeferredOpType::DeleteEntity, m_selectedEntity, {}});
 				m_selectedEntity = NULL_ENTITY;
-				if (m_inspector)
-					m_inspector->setSelectedEntity(NULL_ENTITY);
 			}
 		}
 
@@ -377,11 +389,6 @@ namespace agni
 		void EditorManager::setSelectedEntity(EntityID entity)
 		{
 			m_selectedEntity = entity;
-
-			if (m_inspector)
-			{
-				m_inspector->setSelectedEntity(entity);
-			}
 		}
 
 		ECSInspector* EditorManager::getInspector()

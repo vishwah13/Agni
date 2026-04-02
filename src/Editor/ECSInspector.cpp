@@ -169,7 +169,7 @@ namespace agni
 			ImGui::Separator();
 
 			// Scrollable entity list
-			ImGui::BeginChild("EntityList", ImVec2(0, 0), true);
+			ImGui::BeginChild("EntityList", ImVec2(0, -FLT_MIN), true);
 
 			// Iterate through all entities with TransformComponent (filters out
 			// internal Flecs entities)
@@ -204,7 +204,7 @@ namespace agni
 					return;
 
 				// Check if this entity is selected
-				bool isSelected = (e.id() == m_selectedEntity);
+				bool isSelected = (e.id() == m_editorManager.getSelectedEntity());
 
 				// Create selectable item with entity info
 				char label[256];
@@ -213,13 +213,13 @@ namespace agni
 
 				if (ImGui::Selectable(label, isSelected))
 				{
-					m_selectedEntity = e.id();
+					m_editorManager.setSelectedEntity(e.id());
 				}
 
 				// Right-click context menu
 				if (ImGui::BeginPopupContextItem())
 				{
-					m_selectedEntity = e.id();
+					m_editorManager.setSelectedEntity(e.id());
 
 					if (ImGui::MenuItem("Save as Prefab"))
 					{
@@ -351,17 +351,17 @@ namespace agni
 		{
 			widgets::SectionHeader("Components");
 
-			if (m_selectedEntity == NULL_ENTITY)
+			if (m_editorManager.getSelectedEntity() == NULL_ENTITY)
 			{
 				ImGui::TextDisabled("No entity selected");
 				return;
 			}
 
-			auto entity = m_world.get().entity(m_selectedEntity);
+			auto entity = m_world.get().entity(m_editorManager.getSelectedEntity());
 			if (!entity.is_valid())
 			{
 				ImGui::TextDisabled("Invalid entity");
-				m_selectedEntity = NULL_ENTITY;
+				m_editorManager.setSelectedEntity(NULL_ENTITY);
 				return;
 			}
 
@@ -372,7 +372,7 @@ namespace agni
 			                          ? info->displayName.c_str()
 			                          : entity.name().c_str();
 			widgets::InfoRow("Entity", "%s", displayName);
-			widgets::InfoRow("ID", "%llu", m_selectedEntity);
+			widgets::InfoRow("ID", "%llu", m_editorManager.getSelectedEntity());
 			ImGui::Separator();
 
 			// Scrollable component list
@@ -380,7 +380,7 @@ namespace agni
 
 			// Transform Component (special: uses gizmo, not generic fields)
 			if (TransformComponent* transform =
-			    m_world.getComponent<TransformComponent>(m_selectedEntity))
+			    m_world.getComponent<TransformComponent>(m_editorManager.getSelectedEntity()))
 			{
 				if (widgets::CollapsibleSection("Transform", icons::Transform))
 				{
@@ -391,7 +391,7 @@ namespace agni
 			// RenderMesh Component (special: has asset browser integration)
 			if (agni::ecs::RenderMeshComponent* mesh =
 			    m_world.getComponent<agni::ecs::RenderMeshComponent>(
-			    m_selectedEntity))
+			    m_editorManager.getSelectedEntity()))
 			{
 				if (widgets::CollapsibleSection(
 				    "Render Mesh", icons::Mesh, ImGuiTreeNodeFlags_None))
@@ -403,7 +403,7 @@ namespace agni
 			// SceneNode Component (special: hierarchy info, not reflectable)
 			if (const agni::ecs::SceneNodeComponent* node =
 			    m_world.getComponent<agni::ecs::SceneNodeComponent>(
-			    m_selectedEntity))
+			    m_editorManager.getSelectedEntity()))
 			{
 				if (widgets::CollapsibleSection(
 				    "Scene Node", icons::SceneNode, ImGuiTreeNodeFlags_None))
@@ -580,7 +580,7 @@ namespace agni
 			if (widgets::PropertyVec3(
 			    "Position", glm::value_ptr(position), 0.0f, 0.1f))
 			{
-				m_world.setPosition(m_selectedEntity, position);
+				m_world.setPosition(m_editorManager.getSelectedEntity(), position);
 			}
 
 			// Show world position (read-only)
@@ -866,15 +866,15 @@ namespace agni
 
 		void ECSInspector::renderGizmo(Camera* camera, VkExtent2D windowExtent)
 		{
-			if (!camera || m_selectedEntity == NULL_ENTITY)
+			if (!camera || m_editorManager.getSelectedEntity() == NULL_ENTITY)
 				return;
 
-			auto entity = m_world.get().entity(m_selectedEntity);
+			auto entity = m_world.get().entity(m_editorManager.getSelectedEntity());
 			if (!entity.is_valid())
 				return;
 
 			TransformComponent* transform =
-			m_world.getComponent<TransformComponent>(m_selectedEntity);
+			m_world.getComponent<TransformComponent>(m_editorManager.getSelectedEntity());
 			if (!transform)
 				return;
 
@@ -923,7 +923,7 @@ namespace agni
 			// Get the SceneNode to check hierarchy
 			const agni::ecs::SceneNodeComponent* node =
 			m_world.getComponent<agni::ecs::SceneNodeComponent>(
-			m_selectedEntity);
+			m_editorManager.getSelectedEntity());
 
 			// Use local transform for root entities, world transform for
 			// children This ensures the gizmo shows the correct position
@@ -955,7 +955,7 @@ namespace agni
 				if (node && node->parent == NULL_ENTITY)
 				{
 					// No parent: directly set local transform
-					m_world.setLocalTransform(m_selectedEntity, matrix);
+					m_world.setLocalTransform(m_editorManager.getSelectedEntity(), matrix);
 				}
 				else if (node && node->parent != NULL_ENTITY)
 				{
@@ -971,7 +971,7 @@ namespace agni
 							glm::mat4 localTransform =
 							glm::inverse(parentTransform->worldTransform) *
 							matrix;
-							m_world.setLocalTransform(m_selectedEntity,
+							m_world.setLocalTransform(m_editorManager.getSelectedEntity(),
 							                          localTransform);
 						}
 					}
@@ -983,7 +983,7 @@ namespace agni
 				if (m_physicsManager)
 				{
 					const RigidBodyComponent* rigidbody =
-					m_world.getComponent<RigidBodyComponent>(m_selectedEntity);
+					m_world.getComponent<RigidBodyComponent>(m_editorManager.getSelectedEntity());
 					if (rigidbody && rigidbody->joltBodyID != 0)
 					{
 						// Update the physics body transform to match the new

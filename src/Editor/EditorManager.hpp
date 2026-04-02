@@ -156,7 +156,15 @@ private:
 
 	// Editor state
 	EntityID m_selectedEntity = NULL_ENTITY;
-	EntityID m_pendingDeleteEntity = NULL_ENTITY; // Deferred delete (avoid crash during iteration)
+
+	// Deferred operations — queued during render, processed in update()
+	enum class DeferredOpType { DeleteEntity, DuplicateEntity, RenameEntity };
+	struct DeferredOperation {
+		DeferredOpType type;
+		EntityID entityId = NULL_ENTITY;
+		std::string stringArg;
+	};
+	std::vector<DeferredOperation> m_deferredOps;
 
 	// ========================================================================
 	// Async Asset Loading

@@ -46,18 +46,6 @@ public:
 		m_meshResources = meshResources;
 	}
 
-	// Set selected entity (for viewport picking)
-	void setSelectedEntity(EntityID entity)
-	{
-		m_selectedEntity = entity;
-	}
-
-	// Get selected entity
-	EntityID getSelectedEntity() const
-	{
-		return m_selectedEntity;
-	}
-
 	// Set physics manager reference (for gizmo physics sync)
 	void setPhysicsManager(agni::physics::JoltPhysicsManager* physicsManager)
 	{
@@ -78,8 +66,9 @@ private:
 	class ContextMenus* m_contextMenus = nullptr;
 	std::shared_ptr<LoadedGLTF> m_meshResources;
 
-	// Selected entity
-	EntityID m_selectedEntity {NULL_ENTITY};
+	// Selection is stored in EditorManager (single source of truth)
+	// Read via m_editorManager.getSelectedEntity()
+	// Write via m_editorManager.setSelectedEntity()
 
 	// Entity creation state
 	bool        m_showCreateEntityPopup {false};

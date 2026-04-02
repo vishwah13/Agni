@@ -55,8 +55,8 @@ void EditorUI::renderMainMenuBar()
 
 		if (ImGui::BeginMenu("Edit"))
 		{
-			if (ImGui::MenuItem("Undo", "Ctrl+Z")) { /* TODO */ }
-			if (ImGui::MenuItem("Redo", "Ctrl+Y")) { /* TODO */ }
+			if (ImGui::MenuItem("Undo", "Ctrl+Z", false, m_editorManager.canUndo())) { m_editorManager.undo(); }
+			if (ImGui::MenuItem("Redo", "Ctrl+Y", false, m_editorManager.canRedo())) { m_editorManager.redo(); }
 			ImGui::Separator();
 			if (ImGui::MenuItem("Copy", "Ctrl+C")) { /* TODO */ }
 			if (ImGui::MenuItem("Paste", "Ctrl+V")) { /* TODO */ }
