@@ -998,6 +998,17 @@ namespace agni::scene
 		});
 	}
 
+	std::string SceneSerializer::serializeToString(const SceneSaveOptions& options)
+	{
+		return serializeScene(options);
+	}
+
+	bool SceneSerializer::deserializeFromString(const std::string& json,
+	                                            const SceneLoadOptions& options)
+	{
+		return deserializeScene(json, options);
+	}
+
 	std::shared_ptr<MeshAsset>
 	SceneSerializer::getPrimitiveMesh(const std::string& name)
 	{

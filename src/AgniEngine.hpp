@@ -263,6 +263,9 @@ public:
 	// Quit flag
 	bool m_shouldQuit = false;
 
+	// Simulation control (editor sets this for Play/Stop)
+	bool m_simulationPaused = true; // true = Edit mode (no physics/ECS tick)
+
 	// ECS accessors
 	agni::ecs::World& getECSWorld()
 	{

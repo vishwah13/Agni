@@ -79,21 +79,25 @@ int Application::run([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 		onRenderUI();
 		onEndUIFrame();
 
-		// ECS systems
+		// ECS systems always tick (transform hierarchy needs to run for gizmo in Edit mode)
 		engine.m_ecsWorld->progress(engine.m_deltaTime);
 
-#ifdef AGNI_HAS_JOLT
-		if (engine.m_physicsManager)
+		// Physics only ticks when simulation is running (Play mode)
+		if (!engine.m_simulationPaused)
 		{
-			agni::ecs::PhysicsSystem::initializePhysicsBodies(
-			    *engine.m_ecsWorld, *engine.m_physicsManager);
-			agni::ecs::PhysicsSystem::syncToPhysics(
-			    *engine.m_ecsWorld, *engine.m_physicsManager);
-			engine.m_physicsManager->update(engine.m_deltaTime);
-			agni::ecs::PhysicsSystem::syncFromPhysics(
-			    *engine.m_ecsWorld, *engine.m_physicsManager);
-		}
+#ifdef AGNI_HAS_JOLT
+			if (engine.m_physicsManager)
+			{
+				agni::ecs::PhysicsSystem::initializePhysicsBodies(
+				    *engine.m_ecsWorld, *engine.m_physicsManager);
+				agni::ecs::PhysicsSystem::syncToPhysics(
+				    *engine.m_ecsWorld, *engine.m_physicsManager);
+				engine.m_physicsManager->update(engine.m_deltaTime);
+				agni::ecs::PhysicsSystem::syncFromPhysics(
+				    *engine.m_ecsWorld, *engine.m_physicsManager);
+			}
 #endif
+		}
 
 		// Render
 		engine.draw();

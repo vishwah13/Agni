@@ -61,6 +61,10 @@ public:
 	void markDirty() { m_hasUnsavedChanges = true; }
 	void clearDirty() { m_hasUnsavedChanges = false; }
 
+	// Snapshot/restore for Play/Stop mode
+	std::string serializeToString(const SceneSaveOptions& options = {});
+	bool deserializeFromString(const std::string& json, const SceneLoadOptions& options = {});
+
 private:
 	AgniEngine& m_engine;
 	std::string m_lastError;
