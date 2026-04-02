@@ -134,6 +134,15 @@ target_sources(imgui PRIVATE
 
 target_link_libraries(imgui PUBLIC volk::volk_headers SDL3::SDL3 Vulkan::Headers)
 
+# Enable test engine hooks in ImGui when editor tests are enabled
+if(AGNI_ENABLE_EDITOR_TESTS)
+    target_compile_definitions(imgui PUBLIC
+        IMGUI_ENABLE_TEST_ENGINE
+        IMGUI_TEST_ENGINE_ENABLE_COROUTINE_STDTHREAD_IMPL=1
+    )
+    message(STATUS "ImGui test engine hooks: ENABLED")
+endif()
+
 # ImGuizmo (3D gizmos for transform manipulation)
 add_library(imguizmo STATIC)
 

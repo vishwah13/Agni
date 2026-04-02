@@ -4,6 +4,12 @@
 
 #include <imgui.h>
 
+#ifdef AGNI_ENABLE_EDITOR_TESTS
+#include <imgui_test_engine/imgui_te_engine.h>
+#include <imgui_test_engine/imgui_te_ui.h>
+extern void RegisterEditorTests(ImGuiTestEngine* engine);
+#endif
+
 #include <Editor/EditorManager.hpp>
 #include <Scene/SceneSerializer.hpp>
 
@@ -11,6 +17,10 @@ class EditorApp : public agni::Application
 {
 	ImGuiIntegration m_imgui;
 	std::unique_ptr<agni::editor::EditorManager> m_editor;
+
+#ifdef AGNI_ENABLE_EDITOR_TESTS
+	ImGuiTestEngine* m_testEngine = nullptr;
+#endif
 
 	// Play/Stop state
 	enum class Mode { Editing, Playing, Paused };
@@ -70,7 +80,18 @@ protected:
 	{
 		auto& engine = getEngine();
 		m_imgui.init(engine);
-		engine.m_simulationPaused = true; // Start in Edit mode
+		engine.m_simulationPaused = true;
+
+#ifdef AGNI_ENABLE_EDITOR_TESTS
+		m_testEngine = ImGuiTestEngine_CreateContext();
+		ImGuiTestEngineIO& testIO = ImGuiTestEngine_GetIO(m_testEngine);
+		testIO.ConfigVerboseLevel = ImGuiTestVerboseLevel_Info;
+		testIO.ConfigVerboseLevelOnError = ImGuiTestVerboseLevel_Debug;
+		testIO.ConfigRunSpeed = ImGuiTestRunSpeed_Fast;
+		ImGuiTestEngine_Start(m_testEngine, ImGui::GetCurrentContext());
+		ImGuiTestEngine_InstallDefaultCrashHandler();
+		RegisterEditorTests(m_testEngine);
+#endif
 	}
 
 	void onPostInit() override
@@ -108,11 +129,18 @@ protected:
 		renderPlayStopToolbar();
 
 		if (m_editor) m_editor->render();
+
+#ifdef AGNI_ENABLE_EDITOR_TESTS
+		ImGuiTestEngine_ShowTestEngineWindows(m_testEngine, nullptr);
+#endif
 	}
 
 	void onEndUIFrame() override
 	{
 		m_imgui.endFrame();
+#ifdef AGNI_ENABLE_EDITOR_TESTS
+		ImGuiTestEngine_PostSwap(m_testEngine);
+#endif
 	}
 
 	bool wantCaptureMouse() override
@@ -134,8 +162,19 @@ protected:
 	{
 		if (m_mode != Mode::Editing)
 			stop();
+
+#ifdef AGNI_ENABLE_EDITOR_TESTS
+		ImGuiTestEngine_Stop(m_testEngine);
+#endif
+
 		m_editor.reset();
 		m_imgui.cleanup(getEngine());
+
+#ifdef AGNI_ENABLE_EDITOR_TESTS
+		// Destroy test engine AFTER ImGui context (so .ini data is saved)
+		ImGuiTestEngine_DestroyContext(m_testEngine);
+		m_testEngine = nullptr;
+#endif
 	}
 
 private:

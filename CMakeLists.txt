@@ -43,6 +43,7 @@ option(AGNI_COMPILE_SHADERS "Compile Slang shaders to SPIR-V" ON)
 option(AGNI_PRODUCTION_BUILD "Make this a production build" OFF)
 option(AGNI_SHADER_DEBUG "Enable shader debug info for GPU debuggers (Nsight Graphics)" ON)
 option(AGNI_BUILD_TESTS "Build unit tests" OFF)
+option(AGNI_ENABLE_EDITOR_TESTS "Enable imgui_test_engine for editor UI testing" OFF)
 
 # Using Vulkan-Headers submodule instead of system Vulkan SDK
 

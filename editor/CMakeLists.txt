@@ -34,6 +34,28 @@ target_include_directories(agni_editor SYSTEM PRIVATE
     ${PROJECT_SOURCE_DIR}/third_party/ImGuizmo
 )
 
+# imgui_test_engine integration (optional)
+if(AGNI_ENABLE_EDITOR_TESTS)
+    target_sources(agni_editor PRIVATE
+        EditorTests.cpp
+        "${PROJECT_SOURCE_DIR}/third_party/imgui_test_engine/imgui_test_engine/imgui_te_engine.cpp"
+        "${PROJECT_SOURCE_DIR}/third_party/imgui_test_engine/imgui_test_engine/imgui_te_context.cpp"
+        "${PROJECT_SOURCE_DIR}/third_party/imgui_test_engine/imgui_test_engine/imgui_te_coroutine.cpp"
+        "${PROJECT_SOURCE_DIR}/third_party/imgui_test_engine/imgui_test_engine/imgui_te_ui.cpp"
+        "${PROJECT_SOURCE_DIR}/third_party/imgui_test_engine/imgui_test_engine/imgui_te_utils.cpp"
+        "${PROJECT_SOURCE_DIR}/third_party/imgui_test_engine/imgui_test_engine/imgui_te_exporters.cpp"
+        "${PROJECT_SOURCE_DIR}/third_party/imgui_test_engine/imgui_test_engine/imgui_te_perftool.cpp"
+        "${PROJECT_SOURCE_DIR}/third_party/imgui_test_engine/imgui_test_engine/imgui_capture_tool.cpp"
+    )
+    target_include_directories(agni_editor SYSTEM PRIVATE
+        "${PROJECT_SOURCE_DIR}/third_party/imgui_test_engine"
+    )
+    target_compile_definitions(agni_editor PRIVATE AGNI_ENABLE_EDITOR_TESTS=1)
+
+    # Suppress unsafe function warnings from third-party test engine code
+    target_compile_definitions(agni_editor PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
+
 # Warnings as errors
 target_compile_options(agni_editor PRIVATE
     $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX>
