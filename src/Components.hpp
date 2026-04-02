@@ -65,10 +65,10 @@ struct CameraComponent
 		desc.SetCategory("Rendering");
 		desc.AddMember(&CameraComponent::position, "position", "Position");
 		desc.AddMember(&CameraComponent::velocity, "velocity", "Velocity").SetReadOnly().SetNoSerialize();
-		desc.AddMember(&CameraComponent::pitch, "pitch", "Pitch");
-		desc.AddMember(&CameraComponent::yaw, "yaw", "Yaw");
-		desc.AddMember(&CameraComponent::speed, "speed", "Speed");
-		desc.AddMember(&CameraComponent::mouseSensitivity, "mouseSensitivity", "Mouse Sensitivity");
+		desc.AddMember(&CameraComponent::pitch, "pitch", "Pitch").SetRange(-89.0f, 89.0f).SetUnit("deg");
+		desc.AddMember(&CameraComponent::yaw, "yaw", "Yaw").SetRange(-360.0f, 360.0f).SetUnit("deg");
+		desc.AddMember(&CameraComponent::speed, "speed", "Speed").SetRange(0.1f, 500.0f).SetUnit("m/s");
+		desc.AddMember(&CameraComponent::mouseSensitivity, "mouseSensitivity", "Mouse Sensitivity").SetRange(0.01f, 10.0f);
 	}
 };
 
@@ -143,11 +143,11 @@ struct LightComponent
 		desc.SetCategory("Rendering");
 		desc.AddMember(&LightComponent::type, "type", "Light Type").SetEnum(&lightTypeEnum);
 		desc.AddMember(&LightComponent::color, "color", "Color").SetAsColor();
-		desc.AddMember(&LightComponent::intensity, "intensity", "Intensity");
-		desc.AddMember(&LightComponent::radius, "radius", "Radius", "Attenuation radius");
+		desc.AddMember(&LightComponent::intensity, "intensity", "Intensity").SetRange(0.0f, 100.0f);
+		desc.AddMember(&LightComponent::radius, "radius", "Radius", "Attenuation radius").SetRange(0.0f, 1000.0f).SetUnit("m");
 		desc.AddMember(&LightComponent::direction, "direction", "Direction");
-		desc.AddMember(&LightComponent::innerConeAngle, "innerConeAngle", "Inner Cone Angle");
-		desc.AddMember(&LightComponent::outerConeAngle, "outerConeAngle", "Outer Cone Angle");
+		desc.AddMember(&LightComponent::innerConeAngle, "innerConeAngle", "Inner Cone Angle").SetRange(0.0f, 90.0f).SetUnit("deg");
+		desc.AddMember(&LightComponent::outerConeAngle, "outerConeAngle", "Outer Cone Angle").SetRange(0.0f, 90.0f).SetUnit("deg");
 	}
 };
 
@@ -207,9 +207,9 @@ struct RigidBodyComponent
 		desc.SetName("RigidBodyComponent");
 		desc.SetCategory("Physics");
 		desc.AddMember(&RigidBodyComponent::type, "type", "Body Type").SetEnum(&bodyTypeEnum);
-		desc.AddMember(&RigidBodyComponent::mass, "mass", "Mass");
-		desc.AddMember(&RigidBodyComponent::friction, "friction", "Friction");
-		desc.AddMember(&RigidBodyComponent::restitution, "restitution", "Restitution", "Bounciness (0=none, 1=perfect)");
+		desc.AddMember(&RigidBodyComponent::mass, "mass", "Mass").SetRange(0.0f, 10000.0f).SetUnit("kg");
+		desc.AddMember(&RigidBodyComponent::friction, "friction", "Friction").SetRange(0.0f, 1.0f);
+		desc.AddMember(&RigidBodyComponent::restitution, "restitution", "Restitution", "Bounciness (0=none, 1=perfect)").SetRange(0.0f, 1.0f);
 		desc.AddMember(&RigidBodyComponent::useGravity, "useGravity", "Use Gravity");
 		desc.AddMember(&RigidBodyComponent::linearVelocity, "linearVelocity", "Linear Velocity").SetReadOnly().SetNoSerialize();
 		desc.AddMember(&RigidBodyComponent::angularVelocity, "angularVelocity", "Angular Velocity").SetReadOnly().SetNoSerialize();
@@ -255,9 +255,9 @@ struct ColliderComponent
 		desc.SetCategory("Physics");
 		desc.AddMember(&ColliderComponent::type, "type", "Collider Type").SetEnum(&colliderTypeEnum);
 		desc.AddMember(&ColliderComponent::boxHalfExtents, "boxHalfExtents", "Box Half Extents");
-		desc.AddMember(&ColliderComponent::sphereRadius, "sphereRadius", "Sphere Radius");
-		desc.AddMember(&ColliderComponent::capsuleRadius, "capsuleRadius", "Capsule Radius");
-		desc.AddMember(&ColliderComponent::capsuleHalfHeight, "capsuleHalfHeight", "Capsule Half Height");
+		desc.AddMember(&ColliderComponent::sphereRadius, "sphereRadius", "Sphere Radius").SetRange(0.01f, 1000.0f).SetUnit("m");
+		desc.AddMember(&ColliderComponent::capsuleRadius, "capsuleRadius", "Capsule Radius").SetRange(0.01f, 1000.0f).SetUnit("m");
+		desc.AddMember(&ColliderComponent::capsuleHalfHeight, "capsuleHalfHeight", "Capsule Half Height").SetRange(0.01f, 1000.0f).SetUnit("m");
 		desc.AddMember(&ColliderComponent::center, "center", "Center Offset");
 		desc.AddMember(&ColliderComponent::isTrigger, "isTrigger", "Is Trigger");
 	}

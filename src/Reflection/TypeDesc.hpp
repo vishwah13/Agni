@@ -130,6 +130,10 @@ struct PropertyInfo
 	const EnumDescBase*  enumDesc     = nullptr;  // Non-null for enum fields
 	alignas(16) uint8_t  defaultValue[64] = {};   // Default value (up to mat4 = 64 bytes)
 	size_t               defaultValueSize = 0;
+	float                rangeMin     = 0.0f;    // Minimum value (when hasRange = true)
+	float                rangeMax     = 0.0f;    // Maximum value (when hasRange = true)
+	const char*          unit         = nullptr;  // Display unit ("degrees", "m/s", etc.)
+	bool                 hasRange     = false;    // Clamp to [rangeMin, rangeMax]
 	bool                 readOnly     = false;    // Inspector shows but can't edit
 	bool                 hidden       = false;    // Don't show in inspector
 	bool                 noSerialize  = false;    // Don't save/load
@@ -179,6 +183,20 @@ public:
 		m_info.isColor = true;
 		if (m_info.type == PropertyType::Vec3) m_info.type = PropertyType::Color3;
 		if (m_info.type == PropertyType::Vec4) m_info.type = PropertyType::Color4;
+		return *this;
+	}
+
+	MemberBuilder& SetRange(float min, float max)
+	{
+		m_info.hasRange = true;
+		m_info.rangeMin = min;
+		m_info.rangeMax = max;
+		return *this;
+	}
+
+	MemberBuilder& SetUnit(const char* unit)
+	{
+		m_info.unit = unit;
 		return *this;
 	}
 

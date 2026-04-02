@@ -446,18 +446,28 @@ namespace agni
 						switch (prop.type)
 						{
 						case agni::PropertyType::Float:
-							widgets::PropertyFloat(prop.displayName, static_cast<float*>(fieldPtr));
+							widgets::PropertyFloat(prop.displayName, static_cast<float*>(fieldPtr),
+								prop.hasRange ? prop.rangeMin : 0.0f,
+								prop.hasRange ? prop.rangeMax : 0.0f);
+							if (prop.unit) { ImGui::SameLine(); ImGui::TextDisabled("%s", prop.unit); }
 							break;
 
 						case agni::PropertyType::Int:
-							ImGui::DragInt(prop.displayName, static_cast<int*>(fieldPtr));
+						{
+							int intMin = prop.hasRange ? static_cast<int>(prop.rangeMin) : 0;
+							int intMax = prop.hasRange ? static_cast<int>(prop.rangeMax) : 0;
+							ImGui::DragInt(prop.displayName, static_cast<int*>(fieldPtr), 1.0f, intMin, intMax);
+							if (prop.unit) { ImGui::SameLine(); ImGui::TextDisabled("%s", prop.unit); }
 							break;
+						}
 
 						case agni::PropertyType::UInt32:
 						{
 							int val = static_cast<int>(*static_cast<uint32_t*>(fieldPtr));
-							if (ImGui::DragInt(prop.displayName, &val, 1.0f, 0, INT_MAX))
+							int uintMax = prop.hasRange ? static_cast<int>(prop.rangeMax) : INT_MAX;
+							if (ImGui::DragInt(prop.displayName, &val, 1.0f, 0, uintMax))
 								*static_cast<uint32_t*>(fieldPtr) = static_cast<uint32_t>(val);
+							if (prop.unit) { ImGui::SameLine(); ImGui::TextDisabled("%s", prop.unit); }
 							break;
 						}
 
