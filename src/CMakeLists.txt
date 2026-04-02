@@ -1,7 +1,8 @@
 
-# Add source to this project's executable.
-add_executable (engine
-  main.cpp
+# Agni engine core — static library (no ImGui, no editor)
+add_library(agni STATIC
+  Application.hpp
+  Application.cpp
   Types.hpp
   Components.hpp
   Initializers.cpp
@@ -45,6 +46,7 @@ add_executable (engine
   VulkanTools.cpp
   Scene.hpp
   Scene.cpp
+  IndexPageAllocator.hpp
 
   # ECS Core
   Interfaces/IWorld.hpp
@@ -57,37 +59,17 @@ add_executable (engine
   ECS/PrefabManager.hpp
   ECS/PrefabManager.cpp
 
-  # Editor Tools
-  Editor/EditorManager.hpp
-  Editor/EditorManager.cpp
-  Editor/EditorUI.hpp
-  Editor/EditorUI.cpp
-  Editor/InputManager.hpp
-  Editor/InputManager.cpp
-  Editor/ContextMenus.hpp
-  Editor/ContextMenus.cpp
-  Editor/ECSInspector.hpp
-  Editor/ECSInspector.cpp
-  Editor/AssetBrowser.hpp
-  Editor/AssetBrowser.cpp
-  Editor/EditorTheme.hpp
-  Editor/EditorTheme.cpp
-  Editor/EditorWidgets.hpp
-  Editor/EditorWidgets.cpp
-  Editor/EditorIcons.hpp
-  Editor/CommandHistory.hpp
-  Editor/CommandHistory.cpp
-  Editor/EntityCommands.hpp
-  Editor/EntityCommands.cpp
-
   # Scene Serialization
   Scene/SceneSerializer.hpp
   Scene/SceneSerializer.cpp
+
+  # NO Editor/*.cpp — editor lives in editor/ directory
+  # NO main.cpp — entry points live in editor/ and runtime/
 )
 
 # Add Physics source files conditionally
 if(AGNI_ENABLE_JOLT)
-    target_sources(engine PRIVATE
+    target_sources(agni PRIVATE
         Physics/JoltPhysicsManager.hpp
         Physics/JoltPhysicsManager.cpp
         ECS/Systems/PhysicsSystem.hpp
@@ -99,45 +81,35 @@ endif()
 file(GLOB_RECURSE SLANG_SHADER_FILES
   "${PROJECT_SOURCE_DIR}/shaders/slang/*.slang"
 )
-
-target_sources(engine PRIVATE ${SLANG_SHADER_FILES})
-
-# Set the folder for shaders in Visual Studio
+target_sources(agni PRIVATE ${SLANG_SHADER_FILES})
 source_group("Shaders/Slang" FILES ${SLANG_SHADER_FILES})
 
-set_property(TARGET engine PROPERTY CXX_STANDARD 20)
-target_compile_definitions(engine PUBLIC GLM_FORCE_DEPTH_ZERO_TO_ONE)
+set_property(TARGET agni PROPERTY CXX_STANDARD 20)
+target_compile_definitions(agni PUBLIC GLM_FORCE_DEPTH_ZERO_TO_ONE)
 
 if(AGNI_PRODUCTION_BUILD)
-    target_compile_definitions(engine PUBLIC PRODUCTION_BUILD=1)
-    target_compile_definitions(engine PUBLIC RESOURCES_PATH="./")
+    target_compile_definitions(agni PUBLIC PRODUCTION_BUILD=1)
+    target_compile_definitions(agni PUBLIC RESOURCES_PATH="./")
 else()
-    target_compile_definitions(engine PUBLIC RESOURCES_PATH="${CMAKE_SOURCE_DIR}/")
+    target_compile_definitions(agni PUBLIC RESOURCES_PATH="${CMAKE_SOURCE_DIR}/")
 endif()
 if(AGNI_SHADER_DEBUG OR AGNI_PRODUCTION_BUILD)
-    target_compile_definitions(engine PUBLIC AGNI_DISABLE_RENDERDOC=1)
+    target_compile_definitions(agni PUBLIC AGNI_DISABLE_RENDERDOC=1)
 endif()
 
-target_include_directories(engine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_include_directories(agni PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
-# ============================================================================
-# Treat warnings as errors for main project only
-# ============================================================================
-target_compile_options(engine PRIVATE
+# Warnings as errors
+target_compile_options(agni PRIVATE
     $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX>
     $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Werror
         -Wno-missing-field-initializers>
 )
 
-# ============================================================================
-# Mark third-party includes as SYSTEM to suppress warnings
-# ============================================================================
-target_include_directories(engine SYSTEM PRIVATE
+# Third-party includes (SYSTEM to suppress warnings)
+target_include_directories(agni SYSTEM PUBLIC
     ${PROJECT_SOURCE_DIR}/third_party/glm
     ${PROJECT_SOURCE_DIR}/third_party/vma/include
-    ${PROJECT_SOURCE_DIR}/third_party/imgui
-    ${PROJECT_SOURCE_DIR}/third_party/imgui/backends
-    ${PROJECT_SOURCE_DIR}/third_party/ImGuizmo
     ${PROJECT_SOURCE_DIR}/third_party/stb_image
     ${PROJECT_SOURCE_DIR}/third_party/vkbootstrap/src
     ${PROJECT_SOURCE_DIR}/third_party/fastgltf/include
@@ -153,51 +125,34 @@ target_include_directories(engine SYSTEM PRIVATE
     ${PROJECT_SOURCE_DIR}/third_party/dmon
 )
 
-add_dependencies(engine Shaders)
+add_dependencies(agni Shaders)
 
-target_link_libraries(engine PUBLIC vma glm volk::volk Vulkan::Headers fmt::fmt stb_image SDL3::SDL3 vkbootstrap imgui imguizmo fastgltf::fastgltf simdjson renderdoc mikktspace flecs::flecs_static dmon)
+# Engine dependencies — NO imgui, NO imguizmo
+target_link_libraries(agni PUBLIC
+    vma glm volk::volk Vulkan::Headers fmt::fmt stb_image
+    SDL3::SDL3 vkbootstrap fastgltf::fastgltf simdjson
+    renderdoc mikktspace flecs::flecs_static dmon
+)
 
-# Link Jolt if enabled
 if(AGNI_ENABLE_JOLT)
-    target_link_libraries(engine PUBLIC jolt_interface)
-    target_compile_definitions(engine PUBLIC AGNI_HAS_JOLT=1)
+    target_link_libraries(agni PUBLIC jolt_interface)
+    target_compile_definitions(agni PUBLIC AGNI_HAS_JOLT=1)
 endif()
 
-# Link Slang library only if shader compilation is enabled (for runtime shader compilation)
 if(AGNI_COMPILE_SHADERS)
-    target_link_libraries(engine PUBLIC slang)
-    target_compile_definitions(engine PUBLIC AGNI_HAS_SLANG=1)
+    target_link_libraries(agni PUBLIC slang)
+    target_compile_definitions(agni PUBLIC AGNI_HAS_SLANG=1)
 endif()
 
-# Link Tracy profiler if enabled
 if(AGNI_ENABLE_TRACY)
-    target_link_libraries(engine PUBLIC tracy)
+    target_link_libraries(agni PUBLIC tracy)
 endif()
 
-# Link dl library on Unix for dynamic loading (RenderDoc API)
 if(UNIX)
-    target_link_libraries(engine PUBLIC ${CMAKE_DL_LIBS})
+    target_link_libraries(agni PUBLIC ${CMAKE_DL_LIBS})
 endif()
 
-target_precompile_headers(engine PUBLIC <optional> <vector> <memory> <string> <vector> <unordered_map> <glm/mat4x4.hpp>  <glm/vec4.hpp> <volk.h>)
-
-if(WIN32)
-  add_custom_command(TARGET engine POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:engine> $<TARGET_FILE_DIR:engine>
-    COMMAND_EXPAND_LISTS
-    )
-endif()
-
-if(UNIX AND NOT APPLE)
-    # Set RPATH so engine finds shared libs (libSDL3.so) next to itself
-    set_target_properties(engine PROPERTIES
-        BUILD_RPATH "$ORIGIN"
-        INSTALL_RPATH "$ORIGIN"
-    )
-    # Copy SDL3 shared library next to engine binary
-    add_custom_command(TARGET engine POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_FILE:SDL3::SDL3>
-            $<TARGET_FILE_DIR:engine>/
-    )
-endif()
+target_precompile_headers(agni PUBLIC
+    <optional> <vector> <memory> <string> <vector>
+    <unordered_map> <glm/mat4x4.hpp> <glm/vec4.hpp> <volk.h>
+)

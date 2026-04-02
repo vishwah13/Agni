@@ -7,6 +7,7 @@
 #include <Types.hpp>
 
 #include <array>
+#include <functional>
 #include <unordered_map>
 #include <vector>
 
@@ -170,6 +171,9 @@ public:
 
 	// GPU culling accessor
 	bool& getHiZOcclusionEnabled() { return m_hizOcclusionEnabled; }
+
+	// UI draw callback (editor sets this to ImGui draw, runtime leaves null)
+	std::function<void(VkCommandBuffer, VkImageView)> m_uiDrawCallback;
 
 	// Multi-draw indirect accessors
 	bool& getMultiDrawIndirectEnabled() { return m_multiDrawIndirectEnabled; }
@@ -356,7 +360,6 @@ private:
 	// Private rendering functions
 	void drawBackground(VkCommandBuffer cmd);
 	void drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame);
-	void drawImgui(VkCommandBuffer cmd, VkImageView targetImageView);
 	void drawObjectIDPass(VkCommandBuffer cmd, FrameData& currentFrame);
 
 	// Initialization helpers

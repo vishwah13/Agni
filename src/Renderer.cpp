@@ -9,9 +9,6 @@
 #include <Pipelines.hpp>
 #include <VulkanTools.hpp>
 
-#include <imgui.h>
-#include <imgui_impl_vulkan.h>
-
 #include <algorithm>
 #include <chrono>
 
@@ -1582,8 +1579,9 @@ void Renderer::renderFrame(VkCommandBuffer cmd,
 	VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 	VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-	drawImgui(
-	cmd, m_swapchainManager->getSwapchainImageViews()[swapchainImageIndex]);
+	// Draw UI overlay (editor sets this to ImGui, runtime leaves null)
+	if (m_uiDrawCallback)
+		m_uiDrawCallback(cmd, m_swapchainManager->getSwapchainImageViews()[swapchainImageIndex]);
 
 	// make the swapchain image into presentable mode
 	vkutil::transitionImage(
@@ -1630,23 +1628,6 @@ void Renderer::drawBackground(VkCommandBuffer cmd)
 	              1);
 }
 
-void Renderer::drawImgui(VkCommandBuffer cmd, VkImageView targetImageView)
-{
-#ifdef TRACY_ENABLE
-	ZoneScoped;
-#endif
-
-	VkRenderingAttachmentInfo colorAttachment = vkinit::attachmentInfo(
-	targetImageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	VkRenderingInfo renderInfo = vkinit::renderingInfo(
-	m_swapchainManager->getSwapchainExtent(), &colorAttachment, nullptr);
-
-	vkCmdBeginRendering(cmd, &renderInfo);
-
-	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
-
-	vkCmdEndRendering(cmd);
-}
 
 void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 {

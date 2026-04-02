@@ -29,14 +29,7 @@
 #include <memory>
 #include <vector>
 
-// Forward declarations
-namespace agni
-{
-	namespace editor
-	{
-		class EditorManager;
-	}
-} // namespace agni
+namespace agni { class Application; }
 
 constexpr uint32_t FRAME_OVERLAP = 2;
 
@@ -207,7 +200,6 @@ public:
 	VkPhysicalDevice         m_chosenGPU     = VK_NULL_HANDLE; // GPU chosen as the default device
 	VkDevice                 m_device        = VK_NULL_HANDLE; // Vulkan device for commands
 	VkSurfaceKHR             m_surface       = VK_NULL_HANDLE; // Vulkan window surface
-	VkDescriptorPool m_imguiPool {VK_NULL_HANDLE}; // ImGui descriptor pool
 
 	// Descriptor buffer extension properties
 	DescriptorBufferProperties m_descriptorBufferProps {};
@@ -245,8 +237,6 @@ public:
 	// draw loop
 	void draw();
 
-	// run main loop
-	void run();
 
 	// Renderer (handles all rendering logic)
 	Renderer m_renderer;
@@ -260,7 +250,6 @@ public:
 	// ECS World and related systems
 	std::unique_ptr<agni::ecs::World>            m_ecsWorld;
 	std::unique_ptr<agni::ecs::EntityFactory>    m_entityFactory;
-	std::unique_ptr<agni::editor::EditorManager> m_editorManager;
 
 	// Primitive meshes for editor entity creation
 	std::shared_ptr<MeshAsset> m_cubeMesh;
@@ -387,6 +376,7 @@ public:
 #endif
 
 private:
+	friend class agni::Application;
 	RENDERDOC_API_1_1_2* m_rdocAPI = NULL;
 
 	void initVulkan();
@@ -401,8 +391,6 @@ private:
 	void resizeSwapchain();
 
 	void initDescriptors();
-
-	void initImgui();
 
 	void initPipelines();
 
