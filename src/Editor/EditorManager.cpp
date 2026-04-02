@@ -145,13 +145,19 @@ namespace agni
 					break;
 				}
 				case DeferredOpType::DuplicateEntity:
-					// TODO: DuplicateEntityCommand (Phase 3)
-					AGNI_PRINT("[EditorManager] Duplicate not yet implemented\n");
+				{
+					auto command = std::make_unique<DuplicateEntityCommand>(
+					    m_engine.getECSWorld(), op.entityId);
+					m_commandHistory->execute(std::move(command));
 					break;
+				}
 				case DeferredOpType::RenameEntity:
-					// TODO: RenameEntityCommand (Phase 3)
-					AGNI_PRINT("[EditorManager] Rename not yet implemented\n");
+				{
+					auto command = std::make_unique<RenameEntityCommand>(
+					    m_engine.getECSWorld(), op.entityId, op.stringArg);
+					m_commandHistory->execute(std::move(command));
 					break;
+				}
 				}
 			}
 			m_deferredOps.clear();
@@ -306,11 +312,7 @@ namespace agni
 			if (m_selectedEntity == NULL_ENTITY)
 				return;
 
-			// TODO: Implement entity duplication
-			// - Clone all components
-			// - Offset position slightly
-			// - Select the new entity
-			AGNI_PRINT("[EditorManager] Duplicate not yet implemented\n");
+			m_deferredOps.push_back({DeferredOpType::DuplicateEntity, m_selectedEntity, {}});
 		}
 
 		void EditorManager::savePrefab(EntityID entityId)

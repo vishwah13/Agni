@@ -76,6 +76,7 @@ public:
 	                             const ColliderComponent& collider);
 
 	void removeBody(uint32_t bodyID);
+	void removeAllBodies();
 
 	// Transform sync
 	void      setBodyTransform(uint32_t bodyID, const glm::mat4& transform);

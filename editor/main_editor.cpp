@@ -44,12 +44,18 @@ public:
 		auto& engine = getEngine();
 		engine.m_simulationPaused = true;
 
+#ifdef AGNI_HAS_JOLT
+		// Remove all Jolt physics bodies before restoring snapshot
+		// (prevents stale body accumulation)
+		engine.m_physicsManager->removeAllBodies();
+#endif
+
 		if (!m_worldSnapshot.empty())
 		{
 			agni::scene::SceneSerializer serializer(engine);
 			agni::scene::SceneLoadOptions opts;
 			opts.clearExisting = true;
-			opts.reloadAssets  = false; // Assets already loaded, just restore state
+			opts.reloadAssets  = false;
 			serializer.deserializeFromString(m_worldSnapshot, opts);
 			m_worldSnapshot.clear();
 		}

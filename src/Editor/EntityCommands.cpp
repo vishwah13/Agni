@@ -2,6 +2,7 @@
 #include <ECS/World.hpp>
 #include <ECS/PrefabManager.hpp>
 #include <Debug.hpp>
+#include <Reflection/ComponentRegistry.hpp>
 
 namespace agni::editor
 {
@@ -146,11 +147,13 @@ DeleteEntityCommand::DeleteEntityCommand(agni::ecs::World& world,
 
 void DeleteEntityCommand::execute()
 {
-	if (m_entityID == 0)
+	// After undo, the entity has a new ID — use it
+	EntityID idToDelete = (m_restoredEntityID != 0) ? m_restoredEntityID : m_entityID;
+	if (idToDelete == 0)
 		return;
 
-	// Delete the entity
-	m_world.destroyEntity(m_entityID);
+	m_world.destroyEntity(idToDelete);
+	m_restoredEntityID = 0; // Reset for next undo cycle
 }
 
 void DeleteEntityCommand::undo()
@@ -272,6 +275,117 @@ void ModifyTransformCommand::undo()
 std::string ModifyTransformCommand::getDescription() const
 {
 	return "Move " + m_displayName;
+}
+
+// ============================================================================
+// DuplicateEntityCommand
+// ============================================================================
+
+DuplicateEntityCommand::DuplicateEntityCommand(agni::ecs::World& world,
+                                               EntityID sourceEntityID)
+    : m_world(world), m_sourceID(sourceEntityID)
+{
+	auto entity = m_world.get().entity(m_sourceID);
+	const auto* info = entity.try_get<EntityInfoComponent>();
+	m_displayName = (info && !info->displayName.empty())
+	                    ? info->displayName
+	                    : "Entity";
+}
+
+void DuplicateEntityCommand::execute()
+{
+	auto src = m_world.get().entity(m_sourceID);
+	if (!src.is_valid()) return;
+
+	auto dst = m_world.get().entity();
+	m_createdID = dst.id();
+
+	// Copy all reflected components via ComponentRegistry
+	for (const auto* desc : agni::ComponentRegistry::Instance().GetAll())
+	{
+		if (!desc->has(src)) continue;
+		const void* data = desc->getConst(src);
+		if (data) desc->set(dst, data);
+	}
+
+	// Copy special components not in reflection
+	if (const auto* tc = src.try_get<TransformComponent>())
+	{
+		TransformComponent copy = *tc;
+		// Offset position
+		copy.localTransform[3].x += 1.0f;
+		copy.worldTransform = copy.localTransform;
+		dst.set<TransformComponent>(copy);
+	}
+
+	if (const auto* rmc = src.try_get<agni::ecs::RenderMeshComponent>())
+		dst.set<agni::ecs::RenderMeshComponent>(*rmc);
+
+	if (src.has<agni::ecs::MeshEntityTag>())
+		dst.add<agni::ecs::MeshEntityTag>();
+	if (src.has<agni::ecs::LightEntityTag>())
+		dst.add<agni::ecs::LightEntityTag>();
+
+	// Add SceneNodeComponent for hierarchy
+	agni::ecs::SceneNodeComponent snc {};
+	snc.dirtyWorld = true;
+	dst.set<agni::ecs::SceneNodeComponent>(snc);
+
+	// Update display name
+	EntityInfoComponent info;
+	info.displayName = m_displayName + " (Copy)";
+	dst.set<EntityInfoComponent>(info);
+
+	AGNI_PRINT("[DuplicateEntity] Duplicated '{}' → ID {}\n", m_displayName, m_createdID);
+}
+
+void DuplicateEntityCommand::undo()
+{
+	if (m_createdID != NULL_ENTITY)
+	{
+		m_world.destroyEntity(m_createdID);
+		m_createdID = NULL_ENTITY;
+	}
+}
+
+std::string DuplicateEntityCommand::getDescription() const
+{
+	return "Duplicate " + m_displayName;
+}
+
+// ============================================================================
+// RenameEntityCommand
+// ============================================================================
+
+RenameEntityCommand::RenameEntityCommand(agni::ecs::World& world,
+                                         EntityID entityID,
+                                         const std::string& newName)
+    : m_world(world), m_entityID(entityID), m_newName(newName)
+{
+	auto entity = m_world.get().entity(m_entityID);
+	const auto* info = entity.try_get<EntityInfoComponent>();
+	m_oldName = (info && !info->displayName.empty()) ? info->displayName : "";
+}
+
+void RenameEntityCommand::execute()
+{
+	auto entity = m_world.get().entity(m_entityID);
+	if (!entity.is_valid()) return;
+	auto& info = entity.ensure<EntityInfoComponent>();
+	info.displayName = m_newName;
+}
+
+void RenameEntityCommand::undo()
+{
+	auto entity = m_world.get().entity(m_entityID);
+	if (!entity.is_valid()) return;
+	auto& info = entity.ensure<EntityInfoComponent>();
+	info.displayName = m_oldName;
+}
+
+std::string RenameEntityCommand::getDescription() const
+{
+	return "Rename to " + m_newName;
 }
 
 } // namespace agni::editor

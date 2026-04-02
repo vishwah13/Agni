@@ -116,4 +116,47 @@ private:
 	std::string m_displayName;
 };
 
+// ============================================================================
+// DuplicateEntityCommand - Duplicates entity with all reflected components
+// ============================================================================
+
+class DuplicateEntityCommand : public ICommand
+{
+public:
+	DuplicateEntityCommand(agni::ecs::World& world,
+	                       EntityID sourceEntityID);
+
+	void execute() override;
+	void undo() override;
+	std::string getDescription() const override;
+
+private:
+	agni::ecs::World& m_world;
+	EntityID m_sourceID;
+	EntityID m_createdID = NULL_ENTITY;
+	std::string m_displayName;
+};
+
+// ============================================================================
+// RenameEntityCommand - Renames entity display name
+// ============================================================================
+
+class RenameEntityCommand : public ICommand
+{
+public:
+	RenameEntityCommand(agni::ecs::World& world,
+	                    EntityID entityID,
+	                    const std::string& newName);
+
+	void execute() override;
+	void undo() override;
+	std::string getDescription() const override;
+
+private:
+	agni::ecs::World& m_world;
+	EntityID m_entityID;
+	std::string m_oldName;
+	std::string m_newName;
+};
+
 } // namespace agni::editor

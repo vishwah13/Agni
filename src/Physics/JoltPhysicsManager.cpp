@@ -405,6 +405,27 @@ void JoltPhysicsManager::removeBody(uint32_t bodyID)
 	bodyInterface.DestroyBody(joltID);
 }
 
+void JoltPhysicsManager::removeAllBodies()
+{
+	if (!m_physicsSystem)
+		return;
+
+	BodyInterface& bodyInterface = m_physicsSystem->GetBodyInterface();
+
+	for (auto& [bodyID, entityID] : m_bodyToEntity)
+	{
+		if (bodyID == 0) continue;
+		BodyID joltID = toJoltBodyID(bodyID);
+		bodyInterface.RemoveBody(joltID);
+		bodyInterface.DestroyBody(joltID);
+	}
+
+	m_bodyToEntity.clear();
+	m_entityToBody.clear();
+
+	AGNI_PRINT("[JoltPhysics] Removed all bodies\n");
+}
+
 void JoltPhysicsManager::setBodyTransform(uint32_t bodyID, const glm::mat4& transform)
 {
 	if (!m_physicsSystem || bodyID == 0)
