@@ -12,6 +12,8 @@ Usage:
     python build.py --no-tracy      # Disable Tracy profiling
     python build.py --no-nsight     # Disable Nsight shader debug info (re-enables RenderDoc)
     python build.py --test          # Build and run unit tests
+    python build.py --game horror   # Build with specific game (default: horror)
+    python build.py --runtime       # Build runtime (no editor)
     python build.py -G vs2022       # Use Visual Studio 2022
     python build.py -G vs2026       # Use Visual Studio 2026
     python build.py -G make         # Use Unix Makefiles (Linux/macOS)
@@ -113,7 +115,7 @@ def clean_build(build_dir):
         print_info("Build directory doesn't exist, nothing to clean")
 
 
-def configure_cmake(build_dir, source_dir, build_type, compile_shaders, enable_tracy, enable_nsight=True, enable_tests=False, generator=None):
+def configure_cmake(build_dir, source_dir, build_type, compile_shaders, enable_tracy, enable_nsight=True, enable_tests=False, active_game="horror", generator=None):
     """Configure CMake project"""
     print_header(f"Configuring CMake ({build_type} build)")
 
@@ -166,6 +168,9 @@ def configure_cmake(build_dir, source_dir, build_type, compile_shaders, enable_t
         cmake_args.append("-DAGNI_BUILD_TESTS=ON")
         print_info("Unit tests: ENABLED")
 
+    cmake_args.append(f"-DAGNI_ACTIVE_GAME={active_game}")
+    print_info(f"Active game: {active_game}")
+
     # Run CMake configuration
     if run_command(cmake_args, description=f"Running CMake configure..."):
         print_success("CMake configuration complete")
@@ -175,9 +180,12 @@ def configure_cmake(build_dir, source_dir, build_type, compile_shaders, enable_t
         return False
 
 
-def build_project(build_dir, build_type, jobs=None):
+def build_project(build_dir, build_type, jobs=None, target=None):
     """Build the project using CMake"""
-    print_header(f"Building Agni Engine ({build_type})")
+    title = f"Building Agni Engine ({build_type})"
+    if target:
+        title += f" [target: {target}]"
+    print_header(title)
 
     # Build CMake command
     cmake_args = [
@@ -185,6 +193,9 @@ def build_project(build_dir, build_type, jobs=None):
         "--build", str(build_dir),
         "--config", build_type,
     ]
+
+    if target:
+        cmake_args.extend(["--target", target])
 
     # Add parallel jobs
     if jobs:
@@ -357,6 +368,19 @@ Examples:
     )
 
     parser.add_argument(
+        "--game",
+        type=str,
+        default="horror",
+        help="Which game to build (default: horror)"
+    )
+
+    parser.add_argument(
+        "--runtime",
+        action="store_true",
+        help="Build runtime executable (no editor, no ImGui)"
+    )
+
+    parser.add_argument(
         "-j", "--jobs",
         type=int,
         help="Number of parallel build jobs (default: auto-detect)"
@@ -404,6 +428,7 @@ Examples:
         enable_tracy=not args.no_tracy,
         enable_nsight=not args.no_nsight,
         enable_tests=args.test,
+        active_game=args.game,
         generator=args.generator
     ):
         elapsed = time.time() - start_time
@@ -413,7 +438,8 @@ Examples:
         return 1
 
     # Build project
-    if not build_project(build_dir, build_type, args.jobs):
+    build_target = "agni_runtime" if args.runtime else None  # None = build all
+    if not build_project(build_dir, build_type, args.jobs, target=build_target):
         elapsed = time.time() - start_time
         print_header("Build FAILED")
         print_error(f"Compilation failed after {elapsed:.2f}s")

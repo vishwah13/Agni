@@ -18,8 +18,8 @@ ContextMenus::ContextMenus(EditorManager& editorManager, AgniEngine& engine)
 
 void ContextMenus::showHierarchyContextMenu(EntityID entityUnderMouse)
 {
-	// Open popup on right-click
-	if (ImGui::BeginPopupContextWindow("HierarchyContextMenu", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
+	// Popup opened manually via OpenPopup("HierarchyContextMenu") on right-click
+	if (ImGui::BeginPopup("HierarchyContextMenu"))
 	{
 		// If right-clicked on an entity, select it first
 		if (entityUnderMouse != NULL_ENTITY)
@@ -55,6 +55,11 @@ void ContextMenus::showHierarchyContextMenu(EntityID entityUnderMouse)
 				// TODO: Implement rename
 			}
 
+			if (ImGui::MenuItem("Save as Prefab"))
+			{
+				m_editorManager.savePrefab(selected);
+			}
+
 			ImGui::Separator();
 
 			// Delete in red
@@ -67,6 +72,46 @@ void ContextMenus::showHierarchyContextMenu(EntityID entityUnderMouse)
 		}
 
 		ImGui::EndPopup();
+	}
+}
+
+void ContextMenus::renderHierarchyMenuItems(EntityID entityId)
+{
+	// Get camera position for spawning
+	glm::mat4 cameraRotation = m_engine.getCamera().getRotationMatrix();
+	glm::vec3 forward = glm::vec3(cameraRotation * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f));
+	glm::vec3 spawnPos = m_engine.getCamera().m_position + forward * 5.0f;
+
+	// Create submenu
+	if (ImGui::BeginMenu("Create"))
+	{
+		renderCreateSubmenu(spawnPos);
+		ImGui::EndMenu();
+	}
+
+	// Entity-specific actions
+	if (entityId != NULL_ENTITY)
+	{
+		ImGui::Separator();
+
+		if (ImGui::MenuItem("Duplicate", "Ctrl+D"))
+		{
+			m_editorManager.duplicateSelectedEntity();
+		}
+
+		if (ImGui::MenuItem("Save as Prefab"))
+		{
+			m_editorManager.savePrefab(entityId);
+		}
+
+		ImGui::Separator();
+
+		ImGui::PushStyleColor(ImGuiCol_Text, colors::Error);
+		if (ImGui::MenuItem("Delete", "Delete"))
+		{
+			m_editorManager.deleteSelectedEntity();
+		}
+		ImGui::PopStyleColor();
 	}
 }
 

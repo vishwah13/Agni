@@ -130,6 +130,18 @@ namespace agni
 
 		void EditorManager::update()
 		{
+			// Process deferred entity deletion (deferred from render to avoid
+			// crashing during Flecs iteration)
+			if (m_pendingDeleteEntity != NULL_ENTITY)
+			{
+				auto command = std::make_unique<DeleteEntityCommand>(
+				    m_engine.getECSWorld(),
+				    m_engine.getECSWorld().getPrefabManager(),
+				    m_pendingDeleteEntity);
+				m_commandHistory->execute(std::move(command));
+				m_pendingDeleteEntity = NULL_ENTITY;
+			}
+
 			if (m_inputManager)
 			{
 				m_inputManager->update();
@@ -269,21 +281,11 @@ namespace agni
 		{
 			if (m_selectedEntity != NULL_ENTITY)
 			{
-				// Use command for undo/redo support
-				auto command = std::make_unique<DeleteEntityCommand>(
-				m_engine.getECSWorld(),
-				m_engine.getECSWorld().getPrefabManager(),
-				m_selectedEntity);
-				m_commandHistory->execute(std::move(command));
-
-				// Clear selection
+				// Defer deletion to next update() to avoid crashing during Flecs iteration
+				m_pendingDeleteEntity = m_selectedEntity;
 				m_selectedEntity = NULL_ENTITY;
-
-				// Update inspector
 				if (m_inspector)
-				{
 					m_inspector->setSelectedEntity(NULL_ENTITY);
-				}
 			}
 		}
 
@@ -297,6 +299,49 @@ namespace agni
 			// - Offset position slightly
 			// - Select the new entity
 			AGNI_PRINT("[EditorManager] Duplicate not yet implemented\n");
+		}
+
+		void EditorManager::savePrefab(EntityID entityId)
+		{
+			if (entityId == NULL_ENTITY) return;
+
+			auto& world = m_engine.getECSWorld();
+			auto  e     = world.get().entity(entityId);
+			if (!e.is_valid()) return;
+
+			// Build filename from display name (or Flecs name as fallback)
+			std::string safeName = "unnamed";
+			const auto* info = e.try_get<EntityInfoComponent>();
+			if (info && !info->displayName.empty())
+				safeName = info->displayName;
+			else if (const char* n = e.name().c_str(); n && n[0])
+				safeName = n;
+
+			// Save to assets/prefabs/ directory
+			std::filesystem::path prefabDir = resPath("assets/prefabs");
+			std::filesystem::path filePath  = prefabDir / (safeName + ".prefab");
+
+			agni::scene::SceneSerializer serializer(m_engine);
+			if (world.getPrefabManager().savePrefabToFile(entityId, filePath, serializer))
+			{
+				AGNI_PRINT("[EditorManager] Saved prefab: {}\n", filePath.string());
+			}
+		}
+
+		void EditorManager::instantiatePrefab(const std::string& filePath,
+		                                      const glm::vec3&   position)
+		{
+			auto& world = m_engine.getECSWorld();
+			agni::scene::SceneSerializer serializer(m_engine);
+
+			EntityID newId = world.getPrefabManager().loadPrefabFromFile(
+			    filePath, position, serializer);
+
+			if (newId != NULL_ENTITY)
+			{
+				setSelectedEntity(newId);
+				AGNI_PRINT("[EditorManager] Instantiated prefab: {}\n", filePath);
+			}
 		}
 
 		void EditorManager::undo()

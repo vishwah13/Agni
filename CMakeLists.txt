@@ -63,9 +63,12 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE "${PROJECT_SOURCE_DIR}/bin/Release")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO "${PROJECT_SOURCE_DIR}/bin/RelWithDebInfo")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_MINSIZEREL "${PROJECT_SOURCE_DIR}/bin/MinSizeRel")
 
-add_subdirectory(src)        # agni static library
-add_subdirectory(editor)     # agni_editor executable
-add_subdirectory(runtime)    # agni_runtime executable
+set(AGNI_ACTIVE_GAME "horror" CACHE STRING "Which game to build")
+
+add_subdirectory(src)                              # agni static library
+add_subdirectory(games/${AGNI_ACTIVE_GAME})         # agni_game static library
+add_subdirectory(editor)                            # agni_editor executable
+add_subdirectory(runtime)                           # agni_runtime executable
 
 if(AGNI_BUILD_TESTS)
     enable_testing()

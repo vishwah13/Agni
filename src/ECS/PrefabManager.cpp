@@ -2,8 +2,11 @@
 #include "World.hpp"
 #include "EntityManager.hpp"
 
+#include <Debug.hpp>
 #include <Loader.hpp>
+#include <Scene/SceneSerializer.hpp>
 
+#include <fstream>
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace agni::ecs
@@ -225,6 +228,171 @@ std::shared_ptr<MeshAsset> PrefabManager::getMesh(const std::string& meshName) c
 		return m_meshProvider(meshName);
 	}
 	return nullptr;
+}
+
+bool PrefabManager::savePrefabToFile(EntityID entityId,
+                                     const std::filesystem::path& filePath,
+                                     agni::scene::SceneSerializer& serializer)
+{
+	// Serialize the entity to JSON
+	std::string entityJson = serializer.serializeSingleEntity(entityId);
+	if (entityJson == "{}")
+	{
+		AGNI_PRINT("[PrefabManager] Failed to serialize entity {}\n", entityId);
+		return false;
+	}
+
+	// Get entity name for the prefab (prefer display name from EntityInfoComponent)
+	auto e = m_world.get().entity(entityId);
+	std::string prefabName = "Unnamed";
+	const auto* info = e.try_get<EntityInfoComponent>();
+	if (info && !info->displayName.empty())
+		prefabName = info->displayName;
+	else if (const char* n = e.name().c_str(); n && n[0])
+		prefabName = n;
+
+	// Wrap in prefab envelope
+	std::string json;
+	json += "{\n";
+	json += "  \"prefab\": \"" + prefabName + "\",\n";
+	json += "  \"version\": \"1.0\",\n";
+	json += "  \"entity\": " + entityJson + "\n";
+	json += "}\n";
+
+	// Create parent directories if needed
+	if (filePath.has_parent_path())
+		std::filesystem::create_directories(filePath.parent_path());
+
+	// Write to file
+	std::ofstream file(filePath);
+	if (!file.is_open())
+	{
+		AGNI_PRINT("[PrefabManager] Failed to write prefab file: {}\n", filePath.string());
+		return false;
+	}
+
+	file << json;
+	file.close();
+
+	AGNI_PRINT("[PrefabManager] Saved prefab '{}' to {}\n", prefabName, filePath.string());
+	return true;
+}
+
+EntityID PrefabManager::loadPrefabFromFile(const std::filesystem::path& filePath,
+                                            const glm::vec3& position,
+                                            agni::scene::SceneSerializer& serializer)
+{
+	// Read file
+	std::ifstream file(filePath);
+	if (!file.is_open())
+	{
+		AGNI_PRINT("[PrefabManager] Failed to open prefab file: {}\n", filePath.string());
+		return NULL_ENTITY;
+	}
+
+	std::string fileContent((std::istreambuf_iterator<char>(file)),
+	                         std::istreambuf_iterator<char>());
+	file.close();
+
+	// Extract the entity JSON from the prefab envelope
+	auto entityPos = fileContent.find("\"entity\":");
+	if (entityPos == std::string::npos)
+	{
+		AGNI_PRINT("[PrefabManager] Invalid prefab file (no 'entity' key): {}\n", filePath.string());
+		return NULL_ENTITY;
+	}
+
+	auto braceStart = fileContent.find('{', entityPos + 9);
+	if (braceStart == std::string::npos) return NULL_ENTITY;
+
+	int depth = 0;
+	size_t braceEnd = braceStart;
+	for (size_t i = braceStart; i < fileContent.size(); i++)
+	{
+		if (fileContent[i] == '{') depth++;
+		else if (fileContent[i] == '}') depth--;
+		if (depth == 0) { braceEnd = i; break; }
+	}
+
+	std::string entityJson = fileContent.substr(braceStart, braceEnd - braceStart + 1);
+
+	// Build synthetic scene with the entity
+	std::string sceneJson = "{\"version\":\"1.0\",\"entities\":[" + entityJson + "]}";
+
+	// Save current scene path (deserialize may clear it)
+	auto savedPath = serializer.getCurrentScenePath();
+
+	// Deserialize without clearing existing entities or reloading assets from files
+	agni::scene::SceneLoadOptions opts;
+	opts.clearExisting = false;
+	opts.reloadAssets  = true;
+
+	// Track entities before loading
+	std::vector<EntityID> beforeIds;
+	m_world.get().query<const TransformComponent>().each(
+	    [&](flecs::entity e, const TransformComponent&) { beforeIds.push_back(e.id()); });
+
+	if (!serializer.deserializeFromString(sceneJson, opts))
+	{
+		AGNI_PRINT("[PrefabManager] Failed to deserialize prefab: {}\n", filePath.string());
+		serializer.setCurrentScenePath(savedPath);
+		return NULL_ENTITY;
+	}
+
+	// Restore scene path
+	serializer.setCurrentScenePath(savedPath);
+
+	// Find the new entity
+	EntityID newEntityId = NULL_ENTITY;
+	m_world.get().query<const TransformComponent>().each(
+	    [&](flecs::entity e, const TransformComponent&)
+	{
+		EntityID id = e.id();
+		if (std::find(beforeIds.begin(), beforeIds.end(), id) == beforeIds.end())
+			newEntityId = id;
+	});
+
+	if (newEntityId != NULL_ENTITY)
+	{
+		auto newEntity = m_world.get().entity(newEntityId);
+
+		// Set position
+		m_world.setPosition(newEntityId, position);
+
+		// Ensure the entity has a SceneNodeComponent for transform hierarchy
+		if (!newEntity.has<agni::ecs::SceneNodeComponent>())
+		{
+			agni::ecs::SceneNodeComponent snc {};
+			snc.dirtyWorld = true;
+			newEntity.set<agni::ecs::SceneNodeComponent>(snc);
+		}
+		else
+		{
+			auto& snc = newEntity.ensure<agni::ecs::SceneNodeComponent>();
+			snc.dirtyWorld = true;
+		}
+
+		// Ensure EntityInfoComponent has a name
+		if (!newEntity.has<EntityInfoComponent>())
+		{
+			EntityInfoComponent info;
+			info.displayName = filePath.stem().string();
+			info.isPrefabInstance = true;
+			newEntity.set<EntityInfoComponent>(info);
+		}
+
+		// Add RenderableTag if it has a mesh
+		if (newEntity.has<agni::ecs::RenderMeshComponent>())
+		{
+			if (!newEntity.has<RenderableTag>())
+				newEntity.set<RenderableTag>({.visible = true});
+		}
+
+		AGNI_PRINT("[PrefabManager] Loaded prefab '{}' at ({},{},{})\n",
+		           filePath.stem().string(), position.x, position.y, position.z);
+	}
+
+	return newEntityId;
 }
 
 } // namespace agni::ecs

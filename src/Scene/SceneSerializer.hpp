@@ -1,11 +1,14 @@
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+using EntityID = uint64_t;
 
 // Forward declarations
 class AgniEngine;
@@ -64,6 +67,9 @@ public:
 	// Snapshot/restore for Play/Stop mode
 	std::string serializeToString(const SceneSaveOptions& options = {});
 	bool deserializeFromString(const std::string& json, const SceneLoadOptions& options = {});
+
+	// Single entity serialization (for prefab save)
+	std::string serializeSingleEntity(EntityID entityId);
 
 private:
 	AgniEngine& m_engine;

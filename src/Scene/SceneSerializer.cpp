@@ -998,6 +998,103 @@ namespace agni::scene
 		});
 	}
 
+	std::string SceneSerializer::serializeSingleEntity(EntityID entityId)
+	{
+		auto& world = m_engine.getECSWorld();
+		flecs::entity e = world.get().entity(entityId);
+		if (!e.is_valid()) return "{}";
+
+		std::string json;
+		std::string indent  = "  ";
+		std::string indent2 = "    ";
+
+		json += "{\n";
+
+		// Entity name
+		const char* name = e.name().c_str();
+		json += indent + fmt::format("\"name\": \"{}\",\n", escapeJsonString(name ? name : ""));
+
+		// Components
+		json += indent + "\"components\": {\n";
+		bool firstComponent = true;
+
+		// TransformComponent (special — mat4)
+		if (const auto* tc = e.try_get<TransformComponent>())
+		{
+			if (!firstComponent) json += ",\n";
+			firstComponent = false;
+			json += indent2 + "\"TransformComponent\": {\n";
+			json += indent2 + "  \"localTransform\": " + mat4ToJson(tc->localTransform) + "\n";
+			json += indent2 + "}";
+		}
+
+		// AssetReferenceComponent (special — asset paths)
+		if (const auto* arc = e.try_get<AssetReferenceComponent>())
+		{
+			if (!firstComponent) json += ",\n";
+			firstComponent = false;
+			json += indent2 + "\"AssetReferenceComponent\": {\n";
+			json += indent2 + fmt::format("  \"assetPath\": \"{}\",\n", escapeJsonString(arc->assetPath));
+			json += indent2 + fmt::format("  \"meshName\": \"{}\",\n", escapeJsonString(arc->meshName));
+			json += indent2 + fmt::format("  \"assetType\": \"{}\"\n", escapeJsonString(arc->assetType));
+			json += indent2 + "}";
+		}
+
+		// RenderMeshComponent (special — visibility only)
+		if (const auto* rmc = e.try_get<agni::ecs::RenderMeshComponent>())
+		{
+			if (!firstComponent) json += ",\n";
+			firstComponent = false;
+			json += indent2 + "\"RenderMeshComponent\": {\n";
+			json += indent2 + fmt::format("  \"visible\": {}\n", rmc->visible ? "true" : "false");
+			json += indent2 + "}";
+		}
+
+		// Reflection-based components
+		for (const auto* desc : agni::ComponentRegistry::Instance().GetAll())
+		{
+			if (std::strcmp(desc->name, "TransformComponent") == 0) continue;
+			if (std::strcmp(desc->name, "AssetReferenceComponent") == 0) continue;
+
+			const void* compData = desc->getConst(e);
+			if (!compData) continue;
+
+			if (!firstComponent) json += ",\n";
+			firstComponent = false;
+
+			json += indent2 + fmt::format("\"{}\":", desc->name) + " {\n";
+			json += serializeReflectedComponent(*desc, compData, indent2);
+			json += "\n" + indent2 + "}";
+		}
+
+		json += "\n" + indent + "},\n";
+
+		// Tags
+		json += indent + "\"tags\": [";
+		bool firstTag = true;
+
+		{
+			bool hasMesh    = e.has<agni::ecs::MeshEntityTag>();
+			bool hasLight   = e.has<agni::ecs::LightEntityTag>();
+			bool hasCamera  = e.has<agni::ecs::CameraEntityTag>();
+			bool hasStatic  = e.has<agni::ecs::StaticTag>();
+			bool hasDynamic = e.has<agni::ecs::DynamicTag>();
+			bool hasPhysics = e.has<PhysicsEnabledTag>();
+
+			if (hasMesh)    { if (!firstTag) json += ", "; json += "\"MeshEntityTag\"";     firstTag = false; }
+			if (hasLight)   { if (!firstTag) json += ", "; json += "\"LightEntityTag\"";    firstTag = false; }
+			if (hasCamera)  { if (!firstTag) json += ", "; json += "\"CameraEntityTag\"";   firstTag = false; }
+			if (hasStatic)  { if (!firstTag) json += ", "; json += "\"StaticTag\"";         firstTag = false; }
+			if (hasDynamic) { if (!firstTag) json += ", "; json += "\"DynamicTag\"";        firstTag = false; }
+			if (hasPhysics) { if (!firstTag) json += ", "; json += "\"PhysicsEnabledTag\""; firstTag = false; }
+		}
+
+		json += "]\n";
+
+		json += "}";
+		return json;
+	}
+
 	std::string SceneSerializer::serializeToString(const SceneSaveOptions& options)
 	{
 		return serializeScene(options);

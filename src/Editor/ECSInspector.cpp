@@ -217,13 +217,25 @@ namespace agni
 				}
 
 				// Right-click context menu
-				if (ImGui::IsItemClicked(ImGuiMouseButton_Right))
+				if (ImGui::BeginPopupContextItem())
 				{
-					m_selectedEntity = e.id(); // Select on right-click
-					if (m_contextMenus)
+					m_selectedEntity = e.id();
+
+					if (ImGui::MenuItem("Save as Prefab"))
 					{
-						ImGui::OpenPopup("HierarchyContextMenu");
+						m_editorManager.savePrefab(e.id());
 					}
+					if (ImGui::MenuItem("Duplicate"))
+					{
+						m_editorManager.duplicateSelectedEntity();
+					}
+					ImGui::Separator();
+					if (ImGui::MenuItem("Delete"))
+					{
+						m_editorManager.deleteSelectedEntity();
+					}
+
+					ImGui::EndPopup();
 				}
 
 				// Show entity ID on hover
@@ -233,10 +245,15 @@ namespace agni
 				}
 			});
 
-			// Show context menu (for right-click on empty space or entity)
+			// Right-click on empty space (not on any entity) — show Create menu
 			if (m_contextMenus)
 			{
-				m_contextMenus->showHierarchyContextMenu(m_selectedEntity);
+				if (ImGui::BeginPopupContextWindow("HierarchyEmptyContext",
+				    ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
+				{
+					m_contextMenus->renderHierarchyMenuItems(NULL_ENTITY);
+					ImGui::EndPopup();
+				}
 			}
 
 			// Drag-drop target for spawning assets from Asset Browser
@@ -278,6 +295,13 @@ namespace agni
 							AGNI_PRINT("[ECSInspector] Spawned asset: {}\n",
 							           path.filename().string());
 						}
+					}
+					else if (ext == ".prefab")
+					{
+						glm::vec3 spawnPos = glm::vec3(0.0f, 2.0f, 0.0f);
+						m_editorManager.instantiatePrefab(path.string(), spawnPos);
+						AGNI_PRINT("[ECSInspector] Spawned prefab: {}\n",
+						           path.filename().string());
 					}
 
 					// Clear drag state
