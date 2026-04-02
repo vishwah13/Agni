@@ -1,58 +1,16 @@
 {
   "version": "1.0",
   "metadata": {
-    "savedAt": "2026-01-26T21:37:56",
+    "savedAt": "2026-04-02T17:21:16",
     "engine": "Agni"
   },
   "entities": [
     {
-      "name": "Plane",
-      "id": 4294967881,
-      "components": {
-        "TransformComponent": {
-          "localTransform": [12.686098,0,0,0,0,1,0,0,0,0,9.637732,0,3.7971263,0.042169333,6.1523604,1]
-        },
-        "SceneNodeComponent": {
-          "parent": 0,
-          "children": [],
-          "depth": 0
-        },
-        "AssetReferenceComponent": {
-          "assetPath": "",
-          "meshName": "Plane",
-          "assetType": "primitive"
-        },
-        "RenderMeshComponent": {
-          "visible": true
-        },
-        "RenderableTag": {
-          "visible": true
-        },
-        "RigidBodyComponent": {
-          "type": "Static",
-          "mass": 1,
-          "friction": 0.5,
-          "restitution": 0,
-          "useGravity": true
-        },
-        "ColliderComponent": {
-          "type": "Box",
-          "boxHalfExtents": [1,0.1,1],
-          "sphereRadius": 0.5,
-          "capsuleRadius": 0.5,
-          "capsuleHalfHeight": 1,
-          "center": [0,0,0],
-          "isTrigger": false
-        }
-      },
-      "tags": ["MeshEntityTag"]
-    },
-    {
       "name": "Cube",
-      "id": 4294967880,
+      "id": 592,
       "components": {
         "TransformComponent": {
-          "localTransform": [0.9996707,-1.4610856e-07,0.02566236,0,9.331533e-08,1,2.0584218e-06,0,-0.02566236,-2.0553491e-06,0.9996707,0,4.077429,0.6221696,6.8154936,1]
+          "localTransform": [0.9996707,-1.4610862e-07,0.025662368,0,9.331538e-08,1,2.0584218e-06,0,-0.025662368,-2.0553491e-06,0.9996707,0,4.0774307,0.6221696,6.8154936,1]
         },
         "SceneNodeComponent": {
           "parent": 0,
@@ -91,7 +49,7 @@
     },
     {
       "name": "Directional Light",
-      "id": 4294967879,
+      "id": 593,
       "components": {
         "TransformComponent": {
           "localTransform": [1,0,0,0,0,0.26595414,-0.9639857,0,0,0.9639857,0.26595414,0,4.0890417,2.1045957,6.7717013,1]
@@ -112,6 +70,110 @@
         }
       },
       "tags": ["LightEntityTag"]
+    },
+    {
+      "name": "Plane",
+      "id": 594,
+      "components": {
+        "TransformComponent": {
+          "localTransform": [12.686098,0,0,0,0,1,0,0,0,0,9.637732,0,3.7971263,0.042169333,6.1523604,1]
+        },
+        "SceneNodeComponent": {
+          "parent": 0,
+          "children": [],
+          "depth": 0
+        },
+        "AssetReferenceComponent": {
+          "assetPath": "",
+          "meshName": "Plane",
+          "assetType": "primitive"
+        },
+        "RenderMeshComponent": {
+          "visible": true
+        },
+        "RenderableTag": {
+          "visible": true
+        },
+        "RigidBodyComponent": {
+          "type": "Static",
+          "mass": 1,
+          "friction": 0.5,
+          "restitution": 0,
+          "useGravity": true
+        },
+        "ColliderComponent": {
+          "type": "Box",
+          "boxHalfExtents": [1,0.1,1],
+          "sphereRadius": 0.5,
+          "capsuleRadius": 0.5,
+          "capsuleHalfHeight": 1,
+          "center": [0,0,0],
+          "isTrigger": false
+        },
+        "EntityInfoComponent": {
+          "displayName": "",
+          "isPrefabInstance": false
+        }
+      },
+      "tags": ["MeshEntityTag"]
+    },
+    {
+      "name": "",
+      "id": 595,
+      "components": {
+        "TransformComponent": {
+          "localTransform": [1,0,0,0,0,1,0,0,0,0,1,0,6.4162526,1.8926766,5.509833,1]
+        },
+        "SceneNodeComponent": {
+          "parent": 0,
+          "children": [],
+          "depth": 0
+        },
+        "LightComponent": {
+          "type": "Spot",
+          "color": [0,0.8373984,0.10212166],
+          "intensity": 1,
+          "radius": 10,
+          "direction": [0,-1,0],
+          "innerConeAngle": 12.5,
+          "outerConeAngle": 17.5
+        },
+        "EntityInfoComponent": {
+          "displayName": "SpotLight_1",
+          "isPrefabInstance": true
+        }
+      },
+      "tags": ["LightEntityTag"]
+    },
+    {
+      "name": "",
+      "id": 596,
+      "components": {
+        "TransformComponent": {
+          "localTransform": [1,0,0,0,0,1,0,0,0,0,1,0,5.568251,2.7204428,6.64078,1]
+        },
+        "SceneNodeComponent": {
+          "parent": 0,
+          "children": [],
+          "depth": 0
+        },
+        "AssetReferenceComponent": {
+          "assetPath": "",
+          "meshName": "Plane",
+          "assetType": "primitive"
+        },
+        "RenderMeshComponent": {
+          "visible": true
+        },
+        "RenderableTag": {
+          "visible": true
+        },
+        "EntityInfoComponent": {
+          "displayName": "Plane_1",
+          "isPrefabInstance": true
+        }
+      },
+      "tags": ["MeshEntityTag"]
     }
   ]
 }
