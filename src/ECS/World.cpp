@@ -1,6 +1,7 @@
 #include <ECS/EntityManager.hpp>
 #include <ECS/PrefabManager.hpp>
 #include <ECS/World.hpp>
+#include <Reflection/ComponentRegistry.hpp>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -52,6 +53,17 @@ namespace agni
 
 			// Entity metadata (Unity-style display names)
 			m_world.component<EntityInfoComponent>();
+
+			// Register component reflection (CryEngine-style)
+			auto& registry = agni::ComponentRegistry::Instance();
+			registry.Register<TransformComponent>();
+			registry.Register<CameraComponent>();
+			registry.Register<LightComponent>();
+			registry.Register<RenderableTag>();
+			registry.Register<RigidBodyComponent>();
+			registry.Register<ColliderComponent>();
+			registry.Register<AssetReferenceComponent>();
+			registry.Register<EntityInfoComponent>();
 
 			// Register tag components
 			m_world.component<MeshEntityTag>();

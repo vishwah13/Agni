@@ -63,6 +63,11 @@ add_library(agni STATIC
   Scene/SceneSerializer.hpp
   Scene/SceneSerializer.cpp
 
+  # Reflection System
+  Reflection/TypeDesc.hpp
+  Reflection/ComponentRegistry.hpp
+  Reflection/ComponentRegistry.cpp
+
   # NO Editor/*.cpp — editor lives in editor/ directory
   # NO main.cpp — entry points live in editor/ and runtime/
 )
