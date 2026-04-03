@@ -14,6 +14,7 @@ add_executable(agni_editor
     "${PROJECT_SOURCE_DIR}/src/Editor/ContextMenus.cpp"
     "${PROJECT_SOURCE_DIR}/src/Editor/EditorTheme.cpp"
     "${PROJECT_SOURCE_DIR}/src/Editor/EditorWidgets.cpp"
+    "${PROJECT_SOURCE_DIR}/src/Editor/ExpressionEval.cpp"
     "${PROJECT_SOURCE_DIR}/src/Editor/EntityCommands.cpp"
     "${PROJECT_SOURCE_DIR}/src/Editor/CommandHistory.cpp"
 )
