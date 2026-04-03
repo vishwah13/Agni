@@ -14,6 +14,10 @@
 #include <Jolt/Physics/Body/BodyActivationListener.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/Shape/ScaledShape.h>
+#include <Jolt/Physics/Collision/RayCast.h>
+#include <Jolt/Physics/Collision/CastResult.h>
+#include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
+#include <Jolt/Physics/Body/BodyLock.h>
 
 #ifdef JPH_DEBUG_RENDERER
 #include <Physics/JoltDebugRenderer.hpp>
@@ -635,6 +639,110 @@ void JoltPhysicsManager::drawDebugFromECS(
 	}
 }
 #endif
+
+bool JoltPhysicsManager::raycast(const glm::vec3& origin, const glm::vec3& direction,
+                                  float maxDistance, RaycastHit& outHit) const
+{
+	if (!m_physicsSystem)
+		return false;
+
+	// Jolt ray: origin + direction*maxDistance (direction encodes length)
+	RRayCast ray(RVec3(origin.x, origin.y, origin.z),
+	             Vec3(direction.x, direction.y, direction.z) * maxDistance);
+
+	ClosestHitCollisionCollector<CastRayCollector> collector;
+	m_physicsSystem->GetNarrowPhaseQuery().CastRay(ray, RayCastSettings(), collector);
+
+	if (!collector.HadHit())
+		return false;
+
+	const RayCastResult& result = collector.mHit;
+	outHit.fraction = result.mFraction;
+	outHit.bodyID   = result.mBodyID.GetIndexAndSequenceNumber();
+	outHit.entity   = getEntityFromBody(outHit.bodyID);
+
+	RVec3 hitPos    = ray.GetPointOnRay(result.mFraction);
+	outHit.position = glm::vec3(static_cast<float>(hitPos.GetX()),
+	                            static_cast<float>(hitPos.GetY()),
+	                            static_cast<float>(hitPos.GetZ()));
+
+	// Surface normal via body lock
+	BodyLockRead lock(m_physicsSystem->GetBodyLockInterface(), result.mBodyID);
+	if (lock.Succeeded())
+	{
+		Vec3 normal = lock.GetBody().GetWorldSpaceSurfaceNormal(result.mSubShapeID2, hitPos);
+		outHit.normal = glm::vec3(normal.GetX(), normal.GetY(), normal.GetZ());
+	}
+
+	return true;
+}
+
+bool JoltPhysicsManager::raycastAll(const glm::vec3& origin, const glm::vec3& direction,
+                                     float maxDistance, std::vector<RaycastHit>& outHits) const
+{
+	if (!m_physicsSystem)
+		return false;
+
+	RRayCast ray(RVec3(origin.x, origin.y, origin.z),
+	             Vec3(direction.x, direction.y, direction.z) * maxDistance);
+
+	AllHitCollisionCollector<CastRayCollector> collector;
+	m_physicsSystem->GetNarrowPhaseQuery().CastRay(ray, RayCastSettings(), collector);
+
+	if (!collector.HadHit())
+		return false;
+
+	collector.Sort();
+	outHits.reserve(collector.mHits.size());
+
+	for (const RayCastResult& result : collector.mHits)
+	{
+		RaycastHit hit {};
+		hit.fraction = result.mFraction;
+		hit.bodyID   = result.mBodyID.GetIndexAndSequenceNumber();
+		hit.entity   = getEntityFromBody(hit.bodyID);
+
+		RVec3 hitPos = ray.GetPointOnRay(result.mFraction);
+		hit.position = glm::vec3(static_cast<float>(hitPos.GetX()),
+		                         static_cast<float>(hitPos.GetY()),
+		                         static_cast<float>(hitPos.GetZ()));
+
+		BodyLockRead lock(m_physicsSystem->GetBodyLockInterface(), result.mBodyID);
+		if (lock.Succeeded())
+		{
+			Vec3 normal = lock.GetBody().GetWorldSpaceSurfaceNormal(result.mSubShapeID2, hitPos);
+			hit.normal = glm::vec3(normal.GetX(), normal.GetY(), normal.GetZ());
+		}
+
+		outHits.push_back(hit);
+	}
+
+	return true;
+}
+
+void JoltPhysicsManager::screenToWorldRay(const glm::mat4& invViewProj,
+                                           const glm::vec2& screenPos,
+                                           const glm::vec2& viewportSize,
+                                           glm::vec3& outOrigin,
+                                           glm::vec3& outDirection)
+{
+	// Screen to NDC [-1, 1]
+	float ndcX = (2.0f * screenPos.x / viewportSize.x) - 1.0f;
+	float ndcY = 1.0f - (2.0f * screenPos.y / viewportSize.y); // Flip Y
+
+	// Unproject near and far points
+	glm::vec4 nearNDC(ndcX, ndcY, 0.0f, 1.0f); // Near plane (reversed-Z: 1.0 is near)
+	glm::vec4 farNDC(ndcX, ndcY, 1.0f, 1.0f);  // Far plane (reversed-Z: 0.0 is far)
+
+	glm::vec4 nearWorld = invViewProj * nearNDC;
+	glm::vec4 farWorld  = invViewProj * farNDC;
+
+	nearWorld /= nearWorld.w;
+	farWorld  /= farWorld.w;
+
+	outOrigin    = glm::vec3(nearWorld);
+	outDirection = glm::normalize(glm::vec3(farWorld) - glm::vec3(nearWorld));
+}
 
 void JoltPhysicsManager::registerEntityBody(EntityID entity, uint32_t bodyID)
 {

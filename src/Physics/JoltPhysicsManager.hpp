@@ -2,12 +2,14 @@
 
 #include <Components.hpp>
 
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/gtc/quaternion.hpp>
 
 #include <memory>
 #include <unordered_map>
+#include <vector>
 
 #ifdef JPH_DEBUG_RENDERER
 namespace agni { namespace physics { class JoltDebugRenderer; } }
@@ -30,6 +32,15 @@ namespace agni
 {
 namespace physics
 {
+
+struct RaycastHit
+{
+	EntityID  entity   = NULL_ENTITY; // Mapped from Jolt BodyID
+	glm::vec3 position {0.0f};       // World-space hit point
+	glm::vec3 normal   {0.0f};       // Surface normal at hit point
+	float     fraction = 0.0f;       // 0.0 = ray origin, 1.0 = maxDistance
+	uint32_t  bodyID   = 0;          // Raw Jolt body ID
+};
 
 struct PhysicsDebugSettings
 {
@@ -118,6 +129,19 @@ public:
 	// Gravity control
 	void      setGravity(const glm::vec3& gravity);
 	glm::vec3 getGravity() const;
+
+	// Raycasting
+	bool raycast(const glm::vec3& origin, const glm::vec3& direction,
+	             float maxDistance, RaycastHit& outHit) const;
+	bool raycastAll(const glm::vec3& origin, const glm::vec3& direction,
+	                float maxDistance, std::vector<RaycastHit>& outHits) const;
+
+	// Screen-to-world ray conversion
+	static void screenToWorldRay(const glm::mat4& invViewProj,
+	                              const glm::vec2& screenPos,
+	                              const glm::vec2& viewportSize,
+	                              glm::vec3& outOrigin,
+	                              glm::vec3& outDirection);
 
 	// Entity <-> Body mapping
 	void     registerEntityBody(EntityID entity, uint32_t bodyID);
