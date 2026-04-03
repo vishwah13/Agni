@@ -28,6 +28,9 @@ public:
 
 	// Input state (not part of component data)
 	bool m_rightMousePressed = false;
+	bool m_keyW = false, m_keyS = false;
+	bool m_keyA = false, m_keyD = false;
+	bool m_keyQ = false, m_keyE = false;
 
 	glm::mat4 getViewMatrix() const;
 	glm::mat4 getRotationMatrix() const;

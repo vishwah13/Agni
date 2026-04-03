@@ -30,44 +30,44 @@ glm::mat4 Camera::getRotationMatrix() const
 // TO-DO: Add zoom functionality
 void Camera::processSDLEvent(const SDL_Event& e)
 {
-	// Camera movement only active while right mouse is held (fly mode)
-	if (e.type == SDL_EVENT_KEY_DOWN && m_rightMousePressed)
+	// Track key held state
+	if (e.type == SDL_EVENT_KEY_DOWN || e.type == SDL_EVENT_KEY_UP)
 	{
-		if (e.key.key == SDLK_W)
-			m_velocity.z = -1;
-		if (e.key.key == SDLK_S)
-			m_velocity.z = 1;
-		if (e.key.key == SDLK_A)
-			m_velocity.x = -1;
-		if (e.key.key == SDLK_D)
-			m_velocity.x = 1;
-		if (e.key.key == SDLK_E)
-			m_velocity.y = 1;
-		if (e.key.key == SDLK_Q)
-			m_velocity.y = -1;
+		bool pressed = (e.type == SDL_EVENT_KEY_DOWN);
+		switch (e.key.key)
+		{
+			case SDLK_W: m_keyW = pressed; break;
+			case SDLK_S: m_keyS = pressed; break;
+			case SDLK_A: m_keyA = pressed; break;
+			case SDLK_D: m_keyD = pressed; break;
+			case SDLK_Q: m_keyQ = pressed; break;
+			case SDLK_E: m_keyE = pressed; break;
+			default: break;
+		}
+
+		// Recompute velocity from held keys (only in fly mode)
+		if (m_rightMousePressed)
+		{
+			m_velocity.z = (float)(-(int)m_keyW + (int)m_keyS);
+			m_velocity.x = (float)(-(int)m_keyA + (int)m_keyD);
+			m_velocity.y = (float)(-(int)m_keyQ + (int)m_keyE);
+		}
 	}
 
-	if (e.type == SDL_EVENT_KEY_UP)
-	{
-		if (e.key.key == SDLK_W)
-			m_velocity.z = 0;
-		if (e.key.key == SDLK_S)
-			m_velocity.z = 0;
-		if (e.key.key == SDLK_A)
-			m_velocity.x = 0;
-		if (e.key.key == SDLK_D)
-			m_velocity.x = 0;
-		if (e.key.key == SDLK_E)
-			m_velocity.y = 0;
-		if (e.key.key == SDLK_Q)
-			m_velocity.y = 0;
-	}
-
-	// Stop all movement when right mouse is released
+	// Stop all movement and clear key state when right mouse is released
 	if (e.type == SDL_EVENT_MOUSE_BUTTON_UP &&
 	    e.button.button == SDL_BUTTON_RIGHT)
 	{
 		m_velocity = glm::vec3(0.f);
+	}
+
+	// Recompute velocity when entering fly mode (keys may already be held)
+	if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
+	    e.button.button == SDL_BUTTON_RIGHT)
+	{
+		m_velocity.z = (float)(-(int)m_keyW + (int)m_keyS);
+		m_velocity.x = (float)(-(int)m_keyA + (int)m_keyD);
+		m_velocity.y = (float)(-(int)m_keyQ + (int)m_keyE);
 	}
 
 	if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
