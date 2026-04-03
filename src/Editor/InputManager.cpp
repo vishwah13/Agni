@@ -17,11 +17,21 @@ bool InputManager::processEvent(const SDL_Event& e)
 		m_altPressed   = (mods & SDL_KMOD_ALT) != 0;
 	}
 
+	// Track right mouse button for fly mode
+	if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && e.button.button == SDL_BUTTON_RIGHT)
+		m_rightMousePressed = true;
+	if (e.type == SDL_EVENT_MOUSE_BUTTON_UP && e.button.button == SDL_BUTTON_RIGHT)
+		m_rightMousePressed = false;
+
 	// Only process key down events for shortcuts
 	if (e.type == SDL_EVENT_KEY_DOWN)
 	{
 		// Don't consume input if ImGui wants it (typing in text field, etc.)
 		if (ImGui::GetIO().WantCaptureKeyboard)
+			return false;
+
+		// Don't fire plain-key shortcuts during fly mode (right mouse held)
+		if (m_rightMousePressed && !m_ctrlPressed && !m_shiftPressed && !m_altPressed)
 			return false;
 
 		// Check if this key combo matches any registered shortcut

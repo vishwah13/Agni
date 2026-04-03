@@ -6,6 +6,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/quaternion.hpp>
+#include <glm/gtc/matrix_inverse.hpp>
 
 #include <Debug.hpp>
 
@@ -40,7 +41,8 @@ void PhysicsSystem::syncFromPhysics(World& world, agni::physics::JoltPhysicsMana
 
 	// Query all dynamic physics bodies and sync their transforms back to ECS
 	flecsWorld.query<TransformComponent, SceneNodeComponent, RigidBodyComponent>()
-	    .each([&physics](TransformComponent&  transform,
+	    .each([&physics, &flecsWorld](
+	                     TransformComponent&  transform,
 	                     SceneNodeComponent& node,
 	                     RigidBodyComponent& rigidbody) {
 		    // Only sync dynamic bodies (static and kinematic are driven by ECS)
@@ -54,16 +56,21 @@ void PhysicsSystem::syncFromPhysics(World& world, agni::physics::JoltPhysicsMana
 		    glm::mat4 physicsTransform = physics.getBodyTransform(rigidbody.joltBodyID);
 
 		    // Update world transform
-		    // Note: For entities with parents, this assumes physics is only on root entities
+		    transform.worldTransform = physicsTransform;
+
 		    if (node.parent == NULL_ENTITY)
 		    {
 			    transform.localTransform = physicsTransform;
-			    transform.worldTransform = physicsTransform;
 		    }
 		    else
 		    {
-			    // If entity has parent, just update world (not ideal, but works for now)
-			    transform.worldTransform = physicsTransform;
+			    // Recalculate localTransform from parent's worldTransform
+			    auto parentEntity = flecsWorld.entity(node.parent);
+			    const TransformComponent* parentTransform = parentEntity.try_get<TransformComponent>();
+			    if (parentTransform)
+				    transform.localTransform = glm::inverse(parentTransform->worldTransform) * physicsTransform;
+			    else
+				    transform.localTransform = physicsTransform;
 		    }
 
 		    // Mark transform as dirty for child updates
@@ -78,10 +85,11 @@ void PhysicsSystem::syncFromPhysics(World& world, agni::physics::JoltPhysicsMana
 void PhysicsSystem::initializePhysicsBodies(World& world, agni::physics::JoltPhysicsManager& physics)
 {
 	auto& flecsWorld = world.get();
+	bool  createdAny = false;
 
 	// Find entities with RigidBodyComponent + ColliderComponent but no joltBodyID yet
 	flecsWorld.query<const TransformComponent, RigidBodyComponent, const ColliderComponent>()
-	    .each([&physics](flecs::entity e,
+	    .each([&physics, &createdAny](flecs::entity e,
 	                     const TransformComponent& transform,
 	                     RigidBodyComponent&       rigidbody,
 	                     const ColliderComponent&  collider) {
@@ -89,26 +97,27 @@ void PhysicsSystem::initializePhysicsBodies(World& world, agni::physics::JoltPhy
 		    if (rigidbody.joltBodyID != 0)
 			    return;
 
-		    // Extract position and rotation from transform matrix
+		    // Extract position, rotation, and scale from transform matrix
 		    glm::vec3 scale, translation, skew;
 		    glm::quat rotation;
 		    glm::vec4 perspective;
 		    glm::decompose(transform.worldTransform, scale, rotation, translation, skew, perspective);
 
-		    // Create appropriate body type
+		    // Create appropriate body type (passing scale for collider sizing)
 		    uint32_t bodyID = 0;
 		    switch (rigidbody.type)
 		    {
 		    case RigidBodyType::Dynamic:
 			    bodyID = physics.createDynamicBody(translation, rotation, collider.type, collider,
-			                                       rigidbody.mass, rigidbody.friction, rigidbody.restitution);
+			                                       rigidbody.mass, rigidbody.friction, rigidbody.restitution,
+			                                       rigidbody.useGravity, scale);
 			    break;
 		    case RigidBodyType::Kinematic:
-			    bodyID = physics.createKinematicBody(translation, rotation, collider.type, collider);
+			    bodyID = physics.createKinematicBody(translation, rotation, collider.type, collider, scale);
 			    break;
 		    case RigidBodyType::Static:
 			    bodyID = physics.createStaticBody(translation, rotation, collider.type, collider,
-			                                      rigidbody.friction, rigidbody.restitution);
+			                                      rigidbody.friction, rigidbody.restitution, scale);
 			    break;
 		    }
 
@@ -123,6 +132,7 @@ void PhysicsSystem::initializePhysicsBodies(World& world, agni::physics::JoltPhy
 
 		    // Register entity <-> body mapping
 		    physics.registerEntityBody(e.id(), bodyID);
+		    createdAny = true;
 
 		    AGNI_PRINT("[PhysicsSystem] Created {} physics body for entity {} (BodyID: {})\n",
 		               rigidbody.type == RigidBodyType::Dynamic    ? "Dynamic"
@@ -131,6 +141,10 @@ void PhysicsSystem::initializePhysicsBodies(World& world, agni::physics::JoltPhy
 		               e.id(),
 		               bodyID);
 	    });
+
+	// Optimize broadphase after bulk body creation for better collision performance
+	if (createdAny)
+		physics.optimizeBroadPhase();
 }
 
 } // namespace ecs

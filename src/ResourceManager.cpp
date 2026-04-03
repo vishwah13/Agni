@@ -1,5 +1,6 @@
 #include <ResourceManager.hpp>
 
+#include <Debug.hpp>
 #include <Images.hpp>
 #include <Initializers.hpp>
 #include <VulkanTools.hpp>
@@ -69,6 +70,11 @@ void ResourceManager::init(VkInstance       instance,
 	VkFenceCreateInfo fenceCreateInfo =
 	vkinit::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
 	VK_CHECK(vkCreateFence(m_device, &fenceCreateInfo, nullptr, &m_immFence));
+
+	VkDebugName(m_device, VK_OBJECT_TYPE_COMMAND_POOL,
+	            (uint64_t)m_immCommandPool, "ImmediateSubmit_CommandPool");
+	VkDebugName(m_device, VK_OBJECT_TYPE_COMMAND_BUFFER,
+	            (uint64_t)m_immCommandBuffer, "ImmediateSubmit_CommandBuffer");
 
 	m_mainDeletionQueue.push_function(
 	[this]() { vkDestroyCommandPool(m_device, m_immCommandPool, nullptr); });
@@ -292,6 +298,9 @@ void ResourceManager::initGlobalIndexBuffer()
 	    VMA_MEMORY_USAGE_GPU_ONLY);
 
 	m_indexAllocator.init(m_globalIndexCapacity);
+
+	VkDebugName(m_device, VK_OBJECT_TYPE_BUFFER,
+	            (uint64_t)m_globalIndexBuffer.m_buffer, "GlobalIndexBuffer");
 
 	m_mainDeletionQueue.push_function(
 	    [this]() { destroyBuffer(m_globalIndexBuffer); });

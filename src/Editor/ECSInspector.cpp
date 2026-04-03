@@ -9,6 +9,7 @@
 #include <Editor/EditorManager.hpp>
 #include <Editor/EditorTheme.hpp>
 #include <Editor/EditorWidgets.hpp>
+#include <Reflection/ComponentRegistry.hpp>
 
 #ifdef AGNI_HAS_JOLT
 #include <Physics/JoltPhysicsManager.hpp>
@@ -84,13 +85,13 @@ namespace agni
 					if (widgets::ButtonToggle(
 					    "L##local", m_gizmoMode == 0, ImVec2(24, 0)))
 						m_gizmoMode = 0;
-					widgets::TooltipOnHover("Local Space");
+					widgets::TooltipOnHover("Local Space (X)");
 
 					ImGui::SameLine();
 					if (widgets::ButtonToggle(
 					    "W##world", m_gizmoMode == 1, ImVec2(24, 0)))
 						m_gizmoMode = 1;
-					widgets::TooltipOnHover("World Space");
+					widgets::TooltipOnHover("World Space (X)");
 					ImGui::PopID();
 
 					ImGui::SameLine();
@@ -168,7 +169,7 @@ namespace agni
 			ImGui::Separator();
 
 			// Scrollable entity list
-			ImGui::BeginChild("EntityList", ImVec2(0, 0), true);
+			ImGui::BeginChild("EntityList", ImVec2(0, -FLT_MIN), true);
 
 			// Iterate through all entities with TransformComponent (filters out
 			// internal Flecs entities)
@@ -203,7 +204,7 @@ namespace agni
 					return;
 
 				// Check if this entity is selected
-				bool isSelected = (e.id() == m_selectedEntity);
+				bool isSelected = (e.id() == m_editorManager.getSelectedEntity());
 
 				// Create selectable item with entity info
 				char label[256];
@@ -212,17 +213,29 @@ namespace agni
 
 				if (ImGui::Selectable(label, isSelected))
 				{
-					m_selectedEntity = e.id();
+					m_editorManager.setSelectedEntity(e.id());
 				}
 
 				// Right-click context menu
-				if (ImGui::IsItemClicked(ImGuiMouseButton_Right))
+				if (ImGui::BeginPopupContextItem())
 				{
-					m_selectedEntity = e.id(); // Select on right-click
-					if (m_contextMenus)
+					m_editorManager.setSelectedEntity(e.id());
+
+					if (ImGui::MenuItem("Save as Prefab"))
 					{
-						ImGui::OpenPopup("HierarchyContextMenu");
+						m_editorManager.savePrefab(e.id());
 					}
+					if (ImGui::MenuItem("Duplicate"))
+					{
+						m_editorManager.duplicateSelectedEntity();
+					}
+					ImGui::Separator();
+					if (ImGui::MenuItem("Delete"))
+					{
+						m_editorManager.deleteSelectedEntity();
+					}
+
+					ImGui::EndPopup();
 				}
 
 				// Show entity ID on hover
@@ -232,10 +245,15 @@ namespace agni
 				}
 			});
 
-			// Show context menu (for right-click on empty space or entity)
+			// Right-click on empty space (not on any entity) — show Create menu
 			if (m_contextMenus)
 			{
-				m_contextMenus->showHierarchyContextMenu(m_selectedEntity);
+				if (ImGui::BeginPopupContextWindow("HierarchyEmptyContext",
+				    ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
+				{
+					m_contextMenus->renderHierarchyMenuItems(NULL_ENTITY);
+					ImGui::EndPopup();
+				}
 			}
 
 			// Drag-drop target for spawning assets from Asset Browser
@@ -277,6 +295,13 @@ namespace agni
 							AGNI_PRINT("[ECSInspector] Spawned asset: {}\n",
 							           path.filename().string());
 						}
+					}
+					else if (ext == ".prefab")
+					{
+						glm::vec3 spawnPos = glm::vec3(0.0f, 2.0f, 0.0f);
+						m_editorManager.instantiatePrefab(path.string(), spawnPos);
+						AGNI_PRINT("[ECSInspector] Spawned prefab: {}\n",
+						           path.filename().string());
 					}
 
 					// Clear drag state
@@ -326,17 +351,17 @@ namespace agni
 		{
 			widgets::SectionHeader("Components");
 
-			if (m_selectedEntity == NULL_ENTITY)
+			if (m_editorManager.getSelectedEntity() == NULL_ENTITY)
 			{
 				ImGui::TextDisabled("No entity selected");
 				return;
 			}
 
-			auto entity = m_world.get().entity(m_selectedEntity);
+			auto entity = m_world.get().entity(m_editorManager.getSelectedEntity());
 			if (!entity.is_valid())
 			{
 				ImGui::TextDisabled("Invalid entity");
-				m_selectedEntity = NULL_ENTITY;
+				m_editorManager.setSelectedEntity(NULL_ENTITY);
 				return;
 			}
 
@@ -347,15 +372,15 @@ namespace agni
 			                          ? info->displayName.c_str()
 			                          : entity.name().c_str();
 			widgets::InfoRow("Entity", "%s", displayName);
-			widgets::InfoRow("ID", "%llu", m_selectedEntity);
+			widgets::InfoRow("ID", "%llu", m_editorManager.getSelectedEntity());
 			ImGui::Separator();
 
 			// Scrollable component list
 			ImGui::BeginChild("ComponentList");
 
-			// Transform Component
+			// Transform Component (special: uses gizmo, not generic fields)
 			if (TransformComponent* transform =
-			    m_world.getComponent<TransformComponent>(m_selectedEntity))
+			    m_world.getComponent<TransformComponent>(m_editorManager.getSelectedEntity()))
 			{
 				if (widgets::CollapsibleSection("Transform", icons::Transform))
 				{
@@ -363,10 +388,10 @@ namespace agni
 				}
 			}
 
-			// RenderMesh Component
+			// RenderMesh Component (special: has asset browser integration)
 			if (agni::ecs::RenderMeshComponent* mesh =
 			    m_world.getComponent<agni::ecs::RenderMeshComponent>(
-			    m_selectedEntity))
+			    m_editorManager.getSelectedEntity()))
 			{
 				if (widgets::CollapsibleSection(
 				    "Render Mesh", icons::Mesh, ImGuiTreeNodeFlags_None))
@@ -375,43 +400,10 @@ namespace agni
 				}
 			}
 
-			// Light Component
-			if (LightComponent* light =
-			    m_world.getComponent<LightComponent>(m_selectedEntity))
-			{
-				if (widgets::CollapsibleSection(
-				    "Light", icons::Light, ImGuiTreeNodeFlags_None))
-				{
-					editLightComponent(*light);
-				}
-			}
-
-			// RigidBody Component
-			if (RigidBodyComponent* rigidbody =
-			    m_world.getComponent<RigidBodyComponent>(m_selectedEntity))
-			{
-				if (widgets::CollapsibleSection(
-				    "Rigid Body", icons::Physics, ImGuiTreeNodeFlags_None))
-				{
-					editRigidBodyComponent(*rigidbody);
-				}
-			}
-
-			// Collider Component
-			if (ColliderComponent* collider =
-			    m_world.getComponent<ColliderComponent>(m_selectedEntity))
-			{
-				if (widgets::CollapsibleSection(
-				    "Collider", icons::Collider, ImGuiTreeNodeFlags_None))
-				{
-					editColliderComponent(*collider);
-				}
-			}
-
-			// SceneNode Component (show hierarchy info)
+			// SceneNode Component (special: hierarchy info, not reflectable)
 			if (const agni::ecs::SceneNodeComponent* node =
 			    m_world.getComponent<agni::ecs::SceneNodeComponent>(
-			    m_selectedEntity))
+			    m_editorManager.getSelectedEntity()))
 			{
 				if (widgets::CollapsibleSection(
 				    "Scene Node", icons::SceneNode, ImGuiTreeNodeFlags_None))
@@ -422,6 +414,169 @@ namespace agni
 					widgets::PropertyCheckbox(
 					"Dirty", const_cast<bool*>(&node->dirtyWorld));
 				}
+			}
+
+			// === Reflection-based components (auto-generated UI) ===
+			// Iterates all registered components. Skips TransformComponent
+			// (handled above with gizmo).
+			for (const auto* desc : agni::ComponentRegistry::Instance().GetAll())
+			{
+				// Skip Transform — already rendered above with custom gizmo editor
+				if (std::strcmp(desc->name, "TransformComponent") == 0)
+					continue;
+
+				if (!desc->has(entity))
+					continue;
+
+				void* data = desc->getMut(entity);
+				if (!data) continue;
+
+				if (ImGui::CollapsingHeader(desc->name, ImGuiTreeNodeFlags_DefaultOpen))
+				{
+					ImGui::PushID(desc->name);
+
+					for (const auto& prop : desc->properties)
+					{
+						if (prop.hidden) continue;
+
+						void* fieldPtr = static_cast<char*>(data) + prop.offset;
+
+						if (prop.readOnly) ImGui::BeginDisabled();
+
+						switch (prop.type)
+						{
+						case agni::PropertyType::Float:
+							widgets::PropertyFloat(prop.displayName, static_cast<float*>(fieldPtr),
+								prop.hasRange ? prop.rangeMin : 0.0f,
+								prop.hasRange ? prop.rangeMax : 0.0f);
+							if (prop.unit) { ImGui::SameLine(); ImGui::TextDisabled("%s", prop.unit); }
+							break;
+
+						case agni::PropertyType::Int:
+						{
+							int intMin = prop.hasRange ? static_cast<int>(prop.rangeMin) : 0;
+							int intMax = prop.hasRange ? static_cast<int>(prop.rangeMax) : 0;
+							ImGuiSliderFlags flags = (intMin != 0 || intMax != 0) ? ImGuiSliderFlags_AlwaysClamp : 0;
+							ImGui::DragInt(prop.displayName, static_cast<int*>(fieldPtr), 1.0f, intMin, intMax, "%d", flags);
+							if (prop.unit) { ImGui::SameLine(); ImGui::TextDisabled("%s", prop.unit); }
+							break;
+						}
+
+						case agni::PropertyType::UInt32:
+						{
+							int val = static_cast<int>(*static_cast<uint32_t*>(fieldPtr));
+							int uintMax = prop.hasRange ? static_cast<int>(prop.rangeMax) : INT_MAX;
+							if (ImGui::DragInt(prop.displayName, &val, 1.0f, 0, uintMax, "%d", ImGuiSliderFlags_AlwaysClamp))
+								*static_cast<uint32_t*>(fieldPtr) = static_cast<uint32_t>(val);
+							if (prop.unit) { ImGui::SameLine(); ImGui::TextDisabled("%s", prop.unit); }
+							break;
+						}
+
+						case agni::PropertyType::Bool:
+							widgets::PropertyCheckbox(prop.displayName, static_cast<bool*>(fieldPtr));
+							break;
+
+						case agni::PropertyType::String:
+						{
+							auto* str = static_cast<std::string*>(fieldPtr);
+							char buf[256] = {};
+							// Safe copy: destination is zero-initialized, copy up to size-1
+							const size_t len = std::min(str->size(), sizeof(buf) - 1);
+							std::memcpy(buf, str->c_str(), len);
+							if (ImGui::InputText(prop.displayName, buf, sizeof(buf)))
+								*str = buf;
+							break;
+						}
+
+						case agni::PropertyType::Vec3:
+							widgets::PropertyVec3(prop.displayName, static_cast<float*>(fieldPtr));
+							break;
+
+						case agni::PropertyType::Color3:
+							ImGui::ColorEdit3(prop.displayName, static_cast<float*>(fieldPtr));
+							break;
+
+						case agni::PropertyType::Color4:
+							ImGui::ColorEdit4(prop.displayName, static_cast<float*>(fieldPtr));
+							break;
+
+						case agni::PropertyType::Vec4:
+							ImGui::DragFloat4(prop.displayName, static_cast<float*>(fieldPtr), 0.1f);
+							break;
+
+						case agni::PropertyType::Enum:
+						{
+							if (prop.enumDesc)
+							{
+								int currentVal = 0;
+								std::memcpy(&currentVal, fieldPtr, std::min(prop.size, sizeof(int)));
+
+								const char* currentName = prop.enumDesc->nameFromValue(currentVal);
+								if (!currentName) currentName = "Unknown";
+
+								if (ImGui::BeginCombo(prop.displayName, currentName))
+								{
+									for (const auto& c : prop.enumDesc->constants)
+									{
+										bool selected = (c.value == currentVal);
+										if (ImGui::Selectable(c.name, selected))
+										{
+											int newVal = static_cast<int>(c.value);
+											std::memcpy(fieldPtr, &newVal, std::min(prop.size, sizeof(int)));
+										}
+										if (selected) ImGui::SetItemDefaultFocus();
+									}
+									ImGui::EndCombo();
+								}
+							}
+							break;
+						}
+
+						case agni::PropertyType::EntityID:
+							widgets::InfoRow(prop.displayName, "%llu", *static_cast<uint64_t*>(fieldPtr));
+							break;
+
+						default:
+							ImGui::TextDisabled("%s (unsupported type)", prop.displayName);
+							break;
+						}
+
+						// Tooltip
+						if (prop.tooltip && prop.tooltip[0] != '\0')
+							if (ImGui::IsItemHovered())
+								ImGui::SetTooltip("%s", prop.tooltip);
+
+						if (prop.readOnly) ImGui::EndDisabled();
+					}
+
+					ImGui::PopID();
+				}
+			}
+
+			// === "Add Component" button ===
+			ImGui::Spacing();
+			ImGui::Separator();
+			ImGui::Spacing();
+			if (ImGui::Button("Add Component", ImVec2(-1, 0)))
+				ImGui::OpenPopup("AddComponentPopup");
+
+			if (ImGui::BeginPopup("AddComponentPopup"))
+			{
+				for (const auto* desc : agni::ComponentRegistry::Instance().GetAll())
+				{
+					if (desc->has(entity)) continue; // already has it
+
+					if (ImGui::MenuItem(desc->name))
+					{
+						// Construct default component and set on entity
+						alignas(16) uint8_t buffer[512];
+						assert(desc->typeSize <= sizeof(buffer));
+						desc->construct(buffer);
+						desc->set(entity, buffer);
+						desc->destruct(buffer);
+					}
+				}
+				ImGui::EndPopup();
 			}
 
 			ImGui::EndChild();
@@ -436,7 +591,7 @@ namespace agni
 			if (widgets::PropertyVec3(
 			    "Position", glm::value_ptr(position), 0.0f, 0.1f))
 			{
-				m_world.setPosition(m_selectedEntity, position);
+				m_world.setPosition(m_editorManager.getSelectedEntity(), position);
 			}
 
 			// Show world position (read-only)
@@ -722,15 +877,15 @@ namespace agni
 
 		void ECSInspector::renderGizmo(Camera* camera, VkExtent2D windowExtent)
 		{
-			if (!camera || m_selectedEntity == NULL_ENTITY)
+			if (!camera || m_editorManager.getSelectedEntity() == NULL_ENTITY)
 				return;
 
-			auto entity = m_world.get().entity(m_selectedEntity);
+			auto entity = m_world.get().entity(m_editorManager.getSelectedEntity());
 			if (!entity.is_valid())
 				return;
 
 			TransformComponent* transform =
-			m_world.getComponent<TransformComponent>(m_selectedEntity);
+			m_world.getComponent<TransformComponent>(m_editorManager.getSelectedEntity());
 			if (!transform)
 				return;
 
@@ -740,13 +895,8 @@ namespace agni
 
 			// Get camera matrices
 			glm::mat4 view = camera->getViewMatrix();
-			// ImGuizmo expects OpenGL-style projection (no Y-flip, standard
-			// near/far order)
-			glm::mat4 projection = glm::perspective(glm::radians(70.f),
-			                                        (float) windowExtent.width /
-			                                        (float) windowExtent.height,
-			                                        0.1f,
-			                                        10000.f);
+			// ImGuizmo expects OpenGL-style projection (no Y-flip, standard near/far order)
+			glm::mat4 projection = camera->m_component.buildProjectionOpenGL(windowExtent);
 
 			// Set ImGuizmo rect to cover full viewport
 			ImGuizmo::SetRect(
@@ -779,7 +929,7 @@ namespace agni
 			// Get the SceneNode to check hierarchy
 			const agni::ecs::SceneNodeComponent* node =
 			m_world.getComponent<agni::ecs::SceneNodeComponent>(
-			m_selectedEntity);
+			m_editorManager.getSelectedEntity());
 
 			// Use local transform for root entities, world transform for
 			// children This ensures the gizmo shows the correct position
@@ -811,7 +961,7 @@ namespace agni
 				if (node && node->parent == NULL_ENTITY)
 				{
 					// No parent: directly set local transform
-					m_world.setLocalTransform(m_selectedEntity, matrix);
+					m_world.setLocalTransform(m_editorManager.getSelectedEntity(), matrix);
 				}
 				else if (node && node->parent != NULL_ENTITY)
 				{
@@ -827,7 +977,7 @@ namespace agni
 							glm::mat4 localTransform =
 							glm::inverse(parentTransform->worldTransform) *
 							matrix;
-							m_world.setLocalTransform(m_selectedEntity,
+							m_world.setLocalTransform(m_editorManager.getSelectedEntity(),
 							                          localTransform);
 						}
 					}
@@ -839,7 +989,7 @@ namespace agni
 				if (m_physicsManager)
 				{
 					const RigidBodyComponent* rigidbody =
-					m_world.getComponent<RigidBodyComponent>(m_selectedEntity);
+					m_world.getComponent<RigidBodyComponent>(m_editorManager.getSelectedEntity());
 					if (rigidbody && rigidbody->joltBodyID != 0)
 					{
 						// Update the physics body transform to match the new

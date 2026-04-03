@@ -78,6 +78,12 @@ public:
 	// Duplicate currently selected entity
 	void duplicateSelectedEntity();
 
+	// Save entity as a .prefab file
+	void savePrefab(EntityID entityId);
+
+	// Instantiate a prefab from file
+	void instantiatePrefab(const std::string& filePath, const glm::vec3& position);
+
 	// ========================================================================
 	// Undo/Redo
 	// ========================================================================
@@ -150,6 +156,15 @@ private:
 
 	// Editor state
 	EntityID m_selectedEntity = NULL_ENTITY;
+
+	// Deferred operations — queued during render, processed in update()
+	enum class DeferredOpType { DeleteEntity, DuplicateEntity, RenameEntity };
+	struct DeferredOperation {
+		DeferredOpType type;
+		EntityID entityId = NULL_ENTITY;
+		std::string stringArg;
+	};
+	std::vector<DeferredOperation> m_deferredOps;
 
 	// ========================================================================
 	// Async Asset Loading

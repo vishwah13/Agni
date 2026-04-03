@@ -3,19 +3,6 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 
-#include <imgui.h>
-#include <imgui_impl_sdl3.h>
-#include <imgui_impl_vulkan.h>
-
-#include <Editor/ContextMenus.hpp>
-#include <Editor/ECSInspector.hpp>
-#include <Editor/EditorIcons.hpp>
-#include <Editor/EditorManager.hpp>
-#include <Editor/EditorTheme.hpp>
-#include <Editor/EditorUI.hpp>
-#include <Editor/EditorWidgets.hpp>
-#include <Editor/InputManager.hpp>
-
 #include <Components.hpp>
 #include <ECS/PrefabManager.hpp>
 #include <Initializers.hpp>
@@ -44,8 +31,6 @@
 #else
 #include <dlfcn.h>
 #endif
-
-using namespace agni::editor;
 
 #ifdef NDEBUG
 constexpr bool bUseValidationLayers = false;
@@ -122,14 +107,9 @@ void AgniEngine::init()
 
 	initPipelines();
 
-	initImgui();
-
 	// Initialize ECS World and related systems
 	m_ecsWorld      = std::make_unique<agni::ecs::World>();
 	m_entityFactory = std::make_unique<agni::ecs::EntityFactory>(*m_ecsWorld);
-
-	// Create EditorManager (will be initialized after assets are loaded)
-	m_editorManager = std::make_unique<agni::editor::EditorManager>(*this);
 
 	// Give Renderer direct access to ECS World for queries
 	m_renderer.setWorld(m_ecsWorld.get());
@@ -165,25 +145,25 @@ void AgniEngine::cleanup()
 
 		vkDeviceWaitIdle(m_device);
 
+		// Reset command buffers to "initial" state — clears all resource
+		// references so the validation layer won't report them as "in use".
+		for (uint32_t i = 0; i < FRAME_OVERLAP; i++)
+			vkResetCommandBuffer(m_frames[i].m_mainCommandBuffer, 0);
+
+		// Now safe to destroy everything — CBs hold no references.
+		for (uint32_t i = 0; i < FRAME_OVERLAP; i++)
+			m_frames[i].m_descriptorBuffer.destroy();
+
+		for (uint32_t i = 0; i < FRAME_OVERLAP; i++)
+			m_frames[i].m_deletionQueue.flush();
+
 		for (uint32_t i = 0; i < FRAME_OVERLAP; i++)
 		{
 			vkDestroyCommandPool(m_device, m_frames[i].m_commandPool, nullptr);
-
-			// destroy sync objects
 			vkDestroyFence(m_device, m_frames[i].m_renderFence, nullptr);
-			vkDestroySemaphore(
-			m_device, m_frames[i].m_renderSemaphore, nullptr);
-			vkDestroySemaphore(
-			m_device, m_frames[i].m_swapchainSemaphore, nullptr);
-
-			m_frames[i].m_deletionQueue.flush();
+			vkDestroySemaphore(m_device, m_frames[i].m_renderSemaphore, nullptr);
+			vkDestroySemaphore(m_device, m_frames[i].m_swapchainSemaphore, nullptr);
 		}
-
-		// Cleanup ImGui (explicitly, so we can track VMA leaks properly)
-		ImGui_ImplVulkan_Shutdown();
-		ImGui_ImplSDL3_Shutdown();
-		ImGui::DestroyContext();
-		vkDestroyDescriptorPool(m_device, m_imguiPool, nullptr);
 
 		// Cleanup m_skybox resources
 		m_skybox.cleanup(this);
@@ -205,7 +185,6 @@ void AgniEngine::cleanup()
 			m_ecsWorld
 			->clearAllEntities(); // Explicitly destroy all entities first
 		}
-		m_editorManager.reset();
 		m_entityFactory.reset();
 		m_ecsWorld.reset();
 
@@ -244,7 +223,7 @@ void AgniEngine::cleanup()
 void AgniEngine::draw()
 {
 	// Update scene for this frame
-	m_renderer.updateScene(m_deltaTime, m_windowExtent);
+	m_renderer.updateScene();
 
 	// wait until the gpu has finished rendering the last frame. Timeout of 1
 	// second
@@ -349,158 +328,8 @@ void AgniEngine::draw()
 #endif
 }
 
-void AgniEngine::run()
-{
-	SDL_Event e;
-
-	// Initialize last frame time
-	m_lastFrameTime = std::chrono::high_resolution_clock::now();
-
-	// main loop
-	while (!m_shouldQuit)
-	{
-		// Calculate delta time
-		auto currentTime = std::chrono::high_resolution_clock::now();
-		std::chrono::duration<float> elapsed = currentTime - m_lastFrameTime;
-		m_deltaTime                          = elapsed.count();
-		m_lastFrameTime                      = currentTime;
-
-		// begin clock for frametime
-		auto start = std::chrono::system_clock::now();
-
-		// Handle events on queue
-		while (SDL_PollEvent(&e) != 0)
-		{
-			// close the window when user alt-f4s or clicks the X button
-			if (e.type == SDL_EVENT_QUIT)
-				m_shouldQuit = true;
-
-			// Process editor input first (handles shortcuts like Delete key)
-			if (m_editorManager)
-			{
-				m_editorManager->processInput(e);
-			}
-
-			// give SDL event to camera object to process keyboard/mouse
-			// movement for camera
-			m_mainCamera.processSDLEvent(e);
-
-			if (e.type == SDL_EVENT_WINDOW_MINIMIZED)
-			{
-				m_stopRendering = true;
-			}
-			if (e.type == SDL_EVENT_WINDOW_RESTORED)
-			{
-				m_stopRendering = false;
-			}
-
-			// Handle viewport picking on left mouse click
-			if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
-			    e.button.button == SDL_BUTTON_LEFT &&
-			    !ImGui::GetIO().WantCaptureMouse)
-			{
-				m_renderer.requestPicking(e.button.x, e.button.y);
-			}
-
-			ImGui_ImplSDL3_ProcessEvent(&e);
-		}
-
-		// do not draw if we are minimized
-		if (m_stopRendering)
-		{
-			// throttle the speed to avoid the endless spinning
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
-			continue;
-		}
-
-		if (m_swapchainManager.isResizeRequested())
-		{
-			resizeSwapchain();
-		}
-
-		// Update editor systems (processes async asset loads, input state,
-		// etc.)
-		if (m_editorManager)
-		{
-			m_editorManager->update();
-		}
-
-		// ====================================================================
-		// ImGui Frame and Editor Rendering
-		// ====================================================================
-		ImGui_ImplVulkan_NewFrame();
-		ImGui_ImplSDL3_NewFrame();
-		ImGui::NewFrame();
-
-		// Dockspace for window docking
-		ImGui::DockSpaceOverViewport(
-		0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
-
-		// Render all editor UI (menu bar, windows, inspector, gizmos)
-		if (m_editorManager)
-		{
-			m_editorManager->render();
-		}
-
-		// make imgui calculate internal draw structures
-		ImGui::Render();
-
-		// ====================================================================
-		// Game Systems Update
-		// ====================================================================
-
-		// Progress ECS systems (transform hierarchy, etc.)
-		m_ecsWorld->progress(m_deltaTime);
-
-#ifdef AGNI_HAS_JOLT
-		// Physics simulation step
-		if (m_physicsManager)
-		{
-			// 1. Initialize any new physics bodies
-			agni::ecs::PhysicsSystem::initializePhysicsBodies(
-			*m_ecsWorld, *m_physicsManager);
-
-			// 2. Sync kinematic bodies from ECS to Jolt
-			agni::ecs::PhysicsSystem::syncToPhysics(*m_ecsWorld,
-			                                        *m_physicsManager);
-
-			// 3. Run physics simulation
-			m_physicsManager->update(m_deltaTime);
-
-			// 4. Sync dynamic bodies from Jolt back to ECS
-			agni::ecs::PhysicsSystem::syncFromPhysics(*m_ecsWorld,
-			                                          *m_physicsManager);
-		}
-#endif
-
-		draw();
-
-		// Check for picking result and update selection
-		if (m_renderer.hasPickingResult() && m_editorManager)
-		{
-			uint64_t pickedEntityID = m_renderer.getPickedEntityID();
-			if (pickedEntityID != 0)
-			{
-				// Full 64-bit entity ID from GPU - use directly
-				flecs::entity pickedEntity =
-				m_ecsWorld->get().entity(pickedEntityID);
-				if (pickedEntity.is_alive())
-				{
-					m_editorManager->setSelectedEntity(pickedEntityID);
-				}
-			}
-			m_renderer.clearPickingResult();
-		}
-
-		// get clock again to compare with start clock
-		auto end = std::chrono::system_clock::now();
-		// convert to microseconds (integer), and then come back to miliseconds
-		auto frameElapsed =
-		std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-		m_renderer.getStats().m_frametime =
-		frameElapsed.count() / 1000.f; // in milliseconds
-	}
-}
+// Note: run() is now in Application::run() (Application.cpp).
+// AgniEngine provides init(), draw(), cleanup() — Application drives the loop.
 
 void AgniEngine::initVulkan()
 {
@@ -511,7 +340,7 @@ void AgniEngine::initVulkan()
 
 	auto vkbInstanceBuilder = builder.set_app_name("Agni")
 	                          .request_validation_layers(bUseValidationLayers)
-	                          .use_default_debug_messenger()
+	                          .set_debug_callback(vulkanDebugCallback)
 	                          .require_api_version(1, 4, 0)
 	                          .build();
 
@@ -634,6 +463,13 @@ void AgniEngine::initCommands()
 
 		VK_CHECK(vkAllocateCommandBuffers(
 		m_device, &cmdAllocInfo, &m_frames[i].m_mainCommandBuffer));
+
+		VkDebugName(m_device, VK_OBJECT_TYPE_COMMAND_POOL,
+		            (uint64_t)m_frames[i].m_commandPool,
+		            i == 0 ? "Frame0_CommandPool" : "Frame1_CommandPool");
+		VkDebugName(m_device, VK_OBJECT_TYPE_COMMAND_BUFFER,
+		            (uint64_t)m_frames[i].m_mainCommandBuffer,
+		            i == 0 ? "Frame0_CommandBuffer" : "Frame1_CommandBuffer");
 	}
 }
 
@@ -782,6 +618,14 @@ void AgniEngine::initDescriptors()
 
 		m_resourceManager.getMainDeletionQueue().push_function(
 		[&, i]() { m_frames[i].m_descriptorBuffer.destroy(); });
+
+		// Name for validation error identification
+		VkDebugUtilsObjectNameInfoEXT nameInfo {};
+		nameInfo.sType        = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+		nameInfo.objectType   = VK_OBJECT_TYPE_BUFFER;
+		nameInfo.objectHandle = (uint64_t)m_frames[i].m_descriptorBuffer.getBuffer();
+		nameInfo.pObjectName  = (i == 0) ? "PerFrame0_DescriptorBuffer" : "PerFrame1_DescriptorBuffer";
+		vkSetDebugUtilsObjectNameEXT(m_device, &nameInfo);
 	}
 
 	// adding vkDestroyDescriptorPool to the deletion queue
@@ -795,83 +639,7 @@ void AgniEngine::initPipelines()
 	m_skybox.buildPipelines(this);
 }
 
-void AgniEngine::initImgui()
-{
-
-	// 1: create descriptor pool for IMGUI
-	//  the size of the pool is very oversize, but it's copied from imgui demo
-	//  itself.
-	VkDescriptorPoolSize poolSizes[] = {
-	{VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
-	{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
-	{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
-	{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000},
-	{VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000},
-	{VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000},
-	{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
-	{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
-	{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000},
-	{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000},
-	{VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000}};
-
-	VkDescriptorPoolCreateInfo poolInfo = {};
-	poolInfo.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	poolInfo.flags         = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-	poolInfo.maxSets       = 1000;
-	poolInfo.poolSizeCount = (uint32_t) std::size(poolSizes);
-	poolInfo.pPoolSizes    = poolSizes;
-
-	VkDescriptorPool imguiPool;
-	VK_CHECK(vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &imguiPool));
-
-	// 2: initialize imgui library
-
-	// this initializes the core structures of imgui
-	ImGui::CreateContext();
-
-	// enable docking
-	ImGuiIO& io = ImGui::GetIO();
-	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-
-	// Apply dark modern theme
-	agni::editor::ThemeConfig themeConfig;
-	themeConfig.fontSize = 15.0f;
-	agni::editor::ConfigureFonts(io, themeConfig);
-	agni::editor::ApplyDarkModernTheme(themeConfig);
-
-	// this initializes imgui for SDL
-	ImGui_ImplSDL3_InitForVulkan(m_window);
-
-	// this initializes imgui for Vulkan
-	ImGui_ImplVulkan_InitInfo initInfo = {};
-	initInfo.ApiVersion                = VK_API_VERSION_1_4;
-	initInfo.Instance                  = m_instance;
-	initInfo.PhysicalDevice            = m_chosenGPU;
-	initInfo.Device                    = m_device;
-	initInfo.QueueFamily               = m_graphicsQueueFamily;
-	initInfo.Queue                     = m_graphicsQueue;
-	initInfo.DescriptorPool            = imguiPool;
-	initInfo.MinImageCount             = 3;
-	initInfo.ImageCount                = 3;
-	initInfo.UseDynamicRendering       = true;
-
-	// dynamic rendering parameters for imgui to use
-	initInfo.PipelineInfoMain.PipelineRenderingCreateInfo = {
-	.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
-	initInfo.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount =
-	1;
-	VkFormat swapchainFormat = m_swapchainManager.getSwapchainImageFormat();
-	initInfo.PipelineInfoMain.PipelineRenderingCreateInfo
-	.pColorAttachmentFormats = &swapchainFormat;
-
-	initInfo.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
-
-	ImGui_ImplVulkan_Init(&initInfo);
-
-	// Store imgui pool for explicit cleanup (not in deletion queue, so we can
-	// track VMA leaks)
-	m_imguiPool = imguiPool;
-}
+// Note: initImgui() moved to editor/ImGuiIntegration.cpp
 
 void AgniEngine::initDefaultData()
 {
@@ -937,12 +705,6 @@ void AgniEngine::initDefaultData()
 		return nullptr;
 	});
 	m_ecsWorld->getPrefabManager().registerBuiltinPrefabs();
-
-	// Initialize EditorManager (after assets are loaded)
-	m_editorManager->init();
-	m_editorManager->getInspector()->setMeshResources(meshPrimitivesFile);
-	m_editorManager->getInspector()->setContextMenus(
-	m_editorManager->getContextMenus());
 
 	// Initialize m_skybox
 	// Load cubemap faces (order: right, left, top, bottom, front, back for

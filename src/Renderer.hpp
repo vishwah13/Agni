@@ -7,6 +7,7 @@
 #include <Types.hpp>
 
 #include <array>
+#include <functional>
 #include <unordered_map>
 #include <vector>
 
@@ -113,7 +114,7 @@ public:
 	void renderFrame(VkCommandBuffer cmd,
 	                 uint32_t        swapchainImageIndex,
 	                 FrameData&      currentFrame);
-	void updateScene(float deltaTime, VkExtent2D windowExtent);
+	void updateScene();
 
 	// Accessors
 	float& getRenderScale()
@@ -170,6 +171,24 @@ public:
 
 	// GPU culling accessor
 	bool& getHiZOcclusionEnabled() { return m_hizOcclusionEnabled; }
+
+	// Active camera — call before updateScene() each frame
+	void setActiveCamera(const glm::vec3& position, const glm::mat4& view, const glm::mat4& proj)
+	{
+		m_activeCamPosition   = position;
+		m_activeCamView       = view;
+		m_activeCamProjection = proj;
+	}
+
+	// Debug line rendering
+	void setDebugLines(const void* data, uint32_t vertexCount)
+	{
+		m_debugLineData        = data;
+		m_debugLineVertexCount = vertexCount;
+	}
+
+	// UI draw callback (editor sets this to ImGui draw, runtime leaves null)
+	std::function<void(VkCommandBuffer, VkImageView)> m_uiDrawCallback;
 
 	// Multi-draw indirect accessors
 	bool& getMultiDrawIndirectEnabled() { return m_multiDrawIndirectEnabled; }
@@ -238,6 +257,11 @@ private:
 	float                     m_renderScale  = 1.f;
 	VkSampleCountFlagBits     m_msaaSamples  = VK_SAMPLE_COUNT_4_BIT;
 
+	// Active camera matrices (set by Application per frame)
+	glm::vec3 m_activeCamPosition   {0.0f};
+	glm::mat4 m_activeCamView       {1.0f};
+	glm::mat4 m_activeCamProjection {1.0f};
+
 	// Scene data
 	DrawContext                                              m_mainDrawContext;
 	GPUSceneData                                             m_sceneData;
@@ -268,6 +292,12 @@ private:
 
 	// ECS World for direct queries
 	agni::ecs::World* m_world {nullptr};
+
+	// Debug line rendering
+	VkPipeline       m_debugLinePipeline       = VK_NULL_HANDLE;
+	VkPipelineLayout m_debugLinePipelineLayout = VK_NULL_HANDLE;
+	const void*      m_debugLineData           = nullptr;
+	uint32_t         m_debugLineVertexCount    = 0;
 
 	// Object picking resources
 	AllocatedImage   m_objectIDImage;
@@ -356,7 +386,6 @@ private:
 	// Private rendering functions
 	void drawBackground(VkCommandBuffer cmd);
 	void drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame);
-	void drawImgui(VkCommandBuffer cmd, VkImageView targetImageView);
 	void drawObjectIDPass(VkCommandBuffer cmd, FrameData& currentFrame);
 
 	// Initialization helpers
@@ -365,6 +394,8 @@ private:
 	void initBackgroundPipelines();
 	void initPickingResources(VkExtent2D windowExtent);
 	void initObjectIDPipeline();
+	void initDebugLinePipeline();
+	void drawDebugLines(VkCommandBuffer cmd, FrameData& currentFrame);
 
 	// GPU culling
 	void initCullPipeline();

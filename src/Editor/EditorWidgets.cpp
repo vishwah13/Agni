@@ -1,5 +1,8 @@
 #include <Editor/EditorWidgets.hpp>
 #include <Editor/EditorTheme.hpp>
+#include <Editor/ExpressionEval.hpp>
+#include <imgui_internal.h>
+#include <algorithm>
 #include <cstdarg>
 #include <cstdio>
 
@@ -52,6 +55,52 @@ bool CollapsibleSection(const char* label, const char* icon, ImGuiTreeNodeFlags 
 }
 
 // ============================================================================
+// Expression evaluation fallback for DragFloat/DragInt text input
+// ============================================================================
+
+// Call after ImGui::DragFloat. If the user typed an expression like "1+1",
+// ImGui's parser may have rejected or misparsed it. We grab the raw text
+// from ImGui's internal buffer and evaluate it ourselves.
+static bool tryExpressionFallbackFloat(float* value, float min, float max)
+{
+	if (!ImGui::IsItemDeactivated())
+		return false;
+
+	ImGuiInputTextState* state = ImGui::GetInputTextState(ImGui::GetItemID());
+	if (!state || state->TextA.Data == nullptr || state->TextA.Data[0] == '\0')
+		return false;
+
+	float result = 0.0f;
+	if (!evaluateExpression(state->TextA.Data, result))
+		return false;
+
+	if (min != 0.0f || max != 0.0f)
+		result = std::clamp(result, min, max);
+	*value = result;
+	return true;
+}
+
+static bool tryExpressionFallbackInt(int* value, int min, int max)
+{
+	if (!ImGui::IsItemDeactivated())
+		return false;
+
+	ImGuiInputTextState* state = ImGui::GetInputTextState(ImGui::GetItemID());
+	if (!state || state->TextA.Data == nullptr || state->TextA.Data[0] == '\0')
+		return false;
+
+	float result = 0.0f;
+	if (!evaluateExpression(state->TextA.Data, result))
+		return false;
+
+	int iresult = static_cast<int>(result);
+	if (min != 0 || max != 0)
+		iresult = std::clamp(iresult, min, max);
+	*value = iresult;
+	return true;
+}
+
+// ============================================================================
 // Property Widgets
 // ============================================================================
 
@@ -94,9 +143,8 @@ bool PropertyVec3(const char* label, float* values, float resetValue,
     ImGui::SameLine();
     ImGui::SetNextItemWidth(inputWidth);
     if (ImGui::DragFloat("##val_x", &values[0], dragSpeed, 0.0f, 0.0f, "%.2f"))
-    {
         changed = true;
-    }
+    changed |= tryExpressionFallbackFloat(&values[0], 0.0f, 0.0f);
 
     // Y Component (Green)
     ImGui::SameLine();
@@ -113,9 +161,8 @@ bool PropertyVec3(const char* label, float* values, float resetValue,
     ImGui::SameLine();
     ImGui::SetNextItemWidth(inputWidth);
     if (ImGui::DragFloat("##val_y", &values[1], dragSpeed, 0.0f, 0.0f, "%.2f"))
-    {
         changed = true;
-    }
+    changed |= tryExpressionFallbackFloat(&values[1], 0.0f, 0.0f);
 
     // Z Component (Blue)
     ImGui::SameLine();
@@ -132,9 +179,8 @@ bool PropertyVec3(const char* label, float* values, float resetValue,
     ImGui::SameLine();
     ImGui::SetNextItemWidth(inputWidth);
     if (ImGui::DragFloat("##val_z", &values[2], dragSpeed, 0.0f, 0.0f, "%.2f"))
-    {
         changed = true;
-    }
+    changed |= tryExpressionFallbackFloat(&values[2], 0.0f, 0.0f);
 
     ImGui::PopStyleVar();
     ImGui::PopID();
@@ -156,14 +202,9 @@ bool PropertyFloat(const char* label, float* value, float min, float max,
     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 
     bool changed = false;
-    if (min == 0.0f && max == 0.0f)
-    {
-        changed = ImGui::DragFloat("##value", value, 0.1f, 0.0f, 0.0f, format);
-    }
-    else
-    {
-        changed = ImGui::SliderFloat("##value", value, min, max, format);
-    }
+    changed = ImGui::DragFloat("##value", value, 0.1f, min, max, format,
+                               (min != 0.0f || max != 0.0f) ? ImGuiSliderFlags_AlwaysClamp : 0);
+    changed |= tryExpressionFallbackFloat(value, min, max);
 
     ImGui::PopID();
     return changed;
@@ -182,14 +223,9 @@ bool PropertyInt(const char* label, int* value, int min, int max, float labelWid
     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 
     bool changed = false;
-    if (min == 0 && max == 0)
-    {
-        changed = ImGui::DragInt("##value", value);
-    }
-    else
-    {
-        changed = ImGui::SliderInt("##value", value, min, max);
-    }
+    changed = ImGui::DragInt("##value", value, 1.0f, min, max, "%d",
+                             (min != 0 || max != 0) ? ImGuiSliderFlags_AlwaysClamp : 0);
+    changed |= tryExpressionFallbackInt(value, min, max);
 
     ImGui::PopID();
     return changed;

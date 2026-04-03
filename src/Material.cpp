@@ -1,6 +1,7 @@
 #include <Material.hpp>
 
 #include <AgniEngine.hpp>
+#include <Debug.hpp>
 #include <FallbackShaders.hpp>
 #include <Initializers.hpp>
 #include <Pipelines.hpp>
@@ -86,6 +87,8 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 	// finally build the pipeline
 	m_opaquePipeline.m_pipeline =
 	pipelineBuilder.buildPipeline(engine->m_device);
+	VkDebugName(engine->m_device, VK_OBJECT_TYPE_PIPELINE,
+	            (uint64_t)m_opaquePipeline.m_pipeline, "MeshOpaquePipeline");
 
 	// create the transparent variant
 	pipelineBuilder.enableBlendingAdditive();
@@ -94,6 +97,8 @@ void GltfPbrMaterial::buildPipelines(AgniEngine* engine)
 
 	m_transparentPipeline.m_pipeline =
 	pipelineBuilder.buildPipeline(engine->m_device);
+	VkDebugName(engine->m_device, VK_OBJECT_TYPE_PIPELINE,
+	            (uint64_t)m_transparentPipeline.m_pipeline, "MeshTransparentPipeline");
 
 	vkDestroyShaderModule(engine->m_device, meshFragShader, nullptr);
 	vkDestroyShaderModule(engine->m_device, meshVertexShader, nullptr);

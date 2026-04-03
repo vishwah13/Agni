@@ -55,8 +55,8 @@ void EditorUI::renderMainMenuBar()
 
 		if (ImGui::BeginMenu("Edit"))
 		{
-			if (ImGui::MenuItem("Undo", "Ctrl+Z")) { /* TODO */ }
-			if (ImGui::MenuItem("Redo", "Ctrl+Y")) { /* TODO */ }
+			if (ImGui::MenuItem("Undo", "Ctrl+Z", false, m_editorManager.canUndo())) { m_editorManager.undo(); }
+			if (ImGui::MenuItem("Redo", "Ctrl+Y", false, m_editorManager.canRedo())) { m_editorManager.redo(); }
 			ImGui::Separator();
 			if (ImGui::MenuItem("Copy", "Ctrl+C")) { /* TODO */ }
 			if (ImGui::MenuItem("Paste", "Ctrl+V")) { /* TODO */ }
@@ -343,6 +343,24 @@ void EditorUI::renderRenderingWindow()
 			widgets::PropertyFloat("Sensitivity", &m_engine.getCamera().m_mouseSensitivity, 0.1f, 1.0f, "%.2f");
 			ImGui::PopID();
 		}
+
+#ifdef AGNI_HAS_JOLT
+		// Physics Debug Visualization
+		if (widgets::CollapsibleSection("Physics Debug", icons::Quality))
+		{
+			ImGui::PushID("PhysicsDebug");
+			auto& settings = m_engine.m_physicsDebugSettings;
+			widgets::PropertyCheckbox("Enable", &settings.enabled);
+			if (settings.enabled)
+			{
+				widgets::PropertyCheckbox("Draw Shapes", &settings.drawShapes);
+				widgets::PropertyCheckbox("Bounding Boxes", &settings.drawBoundingBox);
+				widgets::PropertyCheckbox("Velocity Arrows", &settings.drawVelocity);
+				widgets::PropertyCheckbox("Center of Mass Axes", &settings.drawCenterOfMass);
+			}
+			ImGui::PopID();
+		}
+#endif
 		}
 		ImGui::End();
 	}

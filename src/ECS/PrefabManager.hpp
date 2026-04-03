@@ -4,6 +4,7 @@
 
 #include <flecs.h>
 
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <string>
@@ -11,6 +12,9 @@
 
 // Forward declarations
 struct MeshAsset;
+class AgniEngine;
+
+namespace agni::scene { class SceneSerializer; }
 
 namespace agni::ecs
 {
@@ -53,6 +57,15 @@ public:
 
 	// === Mesh Resolution ===
 	std::shared_ptr<MeshAsset> getMesh(const std::string& meshName) const;
+
+	// === File-Based Prefabs ===
+	bool savePrefabToFile(EntityID entityId,
+	                      const std::filesystem::path& filePath,
+	                      agni::scene::SceneSerializer& serializer);
+
+	EntityID loadPrefabFromFile(const std::filesystem::path& filePath,
+	                            const glm::vec3& position,
+	                            agni::scene::SceneSerializer& serializer);
 
 private:
 	World& m_world;

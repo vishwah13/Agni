@@ -1,13 +1,79 @@
 {
   "version": "1.0",
   "metadata": {
-    "savedAt": "2026-01-26T21:37:56",
+    "savedAt": "2026-04-03T19:03:37",
     "engine": "Agni"
   },
   "entities": [
     {
+      "name": "Cube",
+      "id": 12884902488,
+      "components": {
+        "TransformComponent": {
+          "localTransform": [0.99966025,7.683903e-06,0.026064351,0,-8.166045e-06,1,1.8391705e-05,0,-0.026064351,-1.8598299e-05,0.99966025,0,7.5933185,1.1221923,7.9205914,1]
+        },
+        "SceneNodeComponent": {
+          "parent": 0,
+          "children": [],
+          "depth": 0
+        },
+        "AssetReferenceComponent": {
+          "assetPath": "",
+          "meshName": "Cube",
+          "assetType": "primitive"
+        },
+        "RenderMeshComponent": {
+          "visible": true
+        },
+        "RenderableTag": {
+          "visible": true
+        },
+        "RigidBodyComponent": {
+          "type": "Dynamic",
+          "mass": 1,
+          "friction": 0.5,
+          "restitution": 0,
+          "useGravity": true
+        },
+        "ColliderComponent": {
+          "type": "Box",
+          "boxHalfExtents": [1,1,1],
+          "sphereRadius": 0.5,
+          "capsuleRadius": 0.5,
+          "capsuleHalfHeight": 1,
+          "center": [0,0,0],
+          "isTrigger": false
+        }
+      },
+      "tags": ["MeshEntityTag"]
+    },
+    {
+      "name": "Directional Light",
+      "id": 12884902487,
+      "components": {
+        "TransformComponent": {
+          "localTransform": [1,0,0,0,0,0.26595414,-0.9639857,0,0,0.9639857,0.26595414,0,4.0890417,2.1045957,6.7717013,1]
+        },
+        "SceneNodeComponent": {
+          "parent": 0,
+          "children": [],
+          "depth": 0
+        },
+        "LightComponent": {
+          "type": "Directional",
+          "color": [1,1,1],
+          "intensity": 1,
+          "radius": 10,
+          "direction": [0,-1,0],
+          "innerConeAngle": 12.5,
+          "outerConeAngle": 17.5
+        }
+      },
+      "tags": ["LightEntityTag"]
+    },
+    {
       "name": "Plane",
-      "id": 4294967881,
+      "id": 12884902486,
       "components": {
         "TransformComponent": {
           "localTransform": [12.686098,0,0,0,0,1,0,0,0,0,9.637732,0,3.7971263,0.042169333,6.1523604,1]
@@ -43,16 +109,48 @@
           "capsuleHalfHeight": 1,
           "center": [0,0,0],
           "isTrigger": false
+        },
+        "EntityInfoComponent": {
+          "displayName": "",
+          "isPrefabInstance": false
         }
       },
       "tags": ["MeshEntityTag"]
     },
     {
-      "name": "Cube",
-      "id": 4294967880,
+      "name": "",
+      "id": 12884902485,
       "components": {
         "TransformComponent": {
-          "localTransform": [0.9996707,-1.4610856e-07,0.02566236,0,9.331533e-08,1,2.0584218e-06,0,-0.02566236,-2.0553491e-06,0.9996707,0,4.077429,0.6221696,6.8154936,1]
+          "localTransform": [1,0,0,0,0,1,0,0,0,0,1,0,6.4162526,1.8926766,5.509833,1]
+        },
+        "SceneNodeComponent": {
+          "parent": 0,
+          "children": [],
+          "depth": 0
+        },
+        "LightComponent": {
+          "type": "Spot",
+          "color": [0,0.8373984,0.10212166],
+          "intensity": 1,
+          "radius": 10,
+          "direction": [0,-1,0],
+          "innerConeAngle": 12.5,
+          "outerConeAngle": 17.5
+        },
+        "EntityInfoComponent": {
+          "displayName": "SpotLight_1",
+          "isPrefabInstance": true
+        }
+      },
+      "tags": ["LightEntityTag"]
+    },
+    {
+      "name": "",
+      "id": 12884902483,
+      "components": {
+        "TransformComponent": {
+          "localTransform": [0.99900985,-0.023237763,0.037937865,0,0.02341882,-0.4503616,-0.8925391,0,0.037826367,0.89254385,-0.44937146,0,7.4874635,3.3123717,9.152195,1]
         },
         "SceneNodeComponent": {
           "parent": 0,
@@ -61,11 +159,20 @@
         },
         "AssetReferenceComponent": {
           "assetPath": "",
-          "meshName": "Cube",
+          "meshName": "Sphere",
           "assetType": "primitive"
         },
         "RenderMeshComponent": {
           "visible": true
+        },
+        "LightComponent": {
+          "type": "Point",
+          "color": [1,1,1],
+          "intensity": 1,
+          "radius": 10,
+          "direction": [0,-1,0],
+          "innerConeAngle": 12.5,
+          "outerConeAngle": 17.5
         },
         "RenderableTag": {
           "visible": true
@@ -78,40 +185,234 @@
           "useGravity": true
         },
         "ColliderComponent": {
-          "type": "Box",
+          "type": "Sphere",
           "boxHalfExtents": [0.5,0.5,0.5],
-          "sphereRadius": 0.5,
+          "sphereRadius": 1,
           "capsuleRadius": 0.5,
           "capsuleHalfHeight": 1,
           "center": [0,0,0],
           "isTrigger": false
+        },
+        "EntityInfoComponent": {
+          "displayName": "Sphere_1",
+          "isPrefabInstance": true
         }
       },
       "tags": ["MeshEntityTag"]
     },
     {
-      "name": "Directional Light",
-      "id": 4294967879,
+      "name": "",
+      "id": 12884902482,
       "components": {
         "TransformComponent": {
-          "localTransform": [1,0,0,0,0,0.26595414,-0.9639857,0,0,0.9639857,0.26595414,0,4.0890417,2.1045957,6.7717013,1]
+          "localTransform": [1,0,0,0,0,1,0,0,0,0,1,0,-0.51259476,0.64216936,9.310509,1]
         },
         "SceneNodeComponent": {
           "parent": 0,
           "children": [],
           "depth": 0
         },
+        "AssetReferenceComponent": {
+          "assetPath": "",
+          "meshName": "Sphere",
+          "assetType": "primitive"
+        },
+        "RenderMeshComponent": {
+          "visible": true
+        },
         "LightComponent": {
-          "type": "Directional",
-          "color": [1,1,1],
+          "type": "Point",
+          "color": [1,0,0],
           "intensity": 1,
           "radius": 10,
           "direction": [0,-1,0],
           "innerConeAngle": 12.5,
           "outerConeAngle": 17.5
+        },
+        "RenderableTag": {
+          "visible": true
+        },
+        "RigidBodyComponent": {
+          "type": "Dynamic",
+          "mass": 1,
+          "friction": 0.5,
+          "restitution": 0,
+          "useGravity": true
+        },
+        "ColliderComponent": {
+          "type": "Sphere",
+          "boxHalfExtents": [0.5,0.5,0.5],
+          "sphereRadius": 0.5,
+          "capsuleRadius": 0.5,
+          "capsuleHalfHeight": 1,
+          "center": [0,0,0],
+          "isTrigger": false
+        },
+        "EntityInfoComponent": {
+          "displayName": "Sphere_1",
+          "isPrefabInstance": true
         }
       },
-      "tags": ["LightEntityTag"]
+      "tags": ["MeshEntityTag"]
+    },
+    {
+      "name": "",
+      "id": 12884902481,
+      "components": {
+        "TransformComponent": {
+          "localTransform": [1,0,0,0,0,1,0,0,0,0,1,0,3.712407,0.6221692,12.78837,1]
+        },
+        "SceneNodeComponent": {
+          "parent": 0,
+          "children": [],
+          "depth": 0
+        },
+        "AssetReferenceComponent": {
+          "assetPath": "",
+          "meshName": "Sphere",
+          "assetType": "primitive"
+        },
+        "RenderMeshComponent": {
+          "visible": true
+        },
+        "LightComponent": {
+          "type": "Point",
+          "color": [0.3658538,0,1],
+          "intensity": 1,
+          "radius": 10,
+          "direction": [0,-1,0],
+          "innerConeAngle": 12.5,
+          "outerConeAngle": 17.5
+        },
+        "RenderableTag": {
+          "visible": true
+        },
+        "RigidBodyComponent": {
+          "type": "Dynamic",
+          "mass": 1,
+          "friction": 0.5,
+          "restitution": 0,
+          "useGravity": true
+        },
+        "ColliderComponent": {
+          "type": "Sphere",
+          "boxHalfExtents": [0.5,0.5,0.5],
+          "sphereRadius": 0.5,
+          "capsuleRadius": 0.5,
+          "capsuleHalfHeight": 1,
+          "center": [0,0,0],
+          "isTrigger": false
+        },
+        "EntityInfoComponent": {
+          "displayName": "Sphere_1",
+          "isPrefabInstance": true
+        }
+      },
+      "tags": ["MeshEntityTag"]
+    },
+    {
+      "name": "",
+      "id": 12884902480,
+      "components": {
+        "TransformComponent": {
+          "localTransform": [1,0,0,0,0,1,0,0,0,0,1,0,2.092567,2.6401694,5.11525,1]
+        },
+        "SceneNodeComponent": {
+          "parent": 0,
+          "children": [],
+          "depth": 0
+        },
+        "AssetReferenceComponent": {
+          "assetPath": "",
+          "meshName": "Sphere",
+          "assetType": "primitive"
+        },
+        "RenderMeshComponent": {
+          "visible": true
+        },
+        "LightComponent": {
+          "type": "Point",
+          "color": [0,1,0.65853643],
+          "intensity": 1,
+          "radius": 10,
+          "direction": [0,-1,0],
+          "innerConeAngle": 12.5,
+          "outerConeAngle": 17.5
+        },
+        "RenderableTag": {
+          "visible": true
+        },
+        "RigidBodyComponent": {
+          "type": "Dynamic",
+          "mass": 1,
+          "friction": 0.5,
+          "restitution": 0,
+          "useGravity": true
+        },
+        "ColliderComponent": {
+          "type": "Sphere",
+          "boxHalfExtents": [0.5,0.5,0.5],
+          "sphereRadius": 1,
+          "capsuleRadius": 0.5,
+          "capsuleHalfHeight": 1,
+          "center": [0,0,0],
+          "isTrigger": false
+        },
+        "EntityInfoComponent": {
+          "displayName": "Sphere_1",
+          "isPrefabInstance": true
+        }
+      },
+      "tags": ["MeshEntityTag"]
+    },
+    {
+      "name": "",
+      "id": 12884902484,
+      "components": {
+        "TransformComponent": {
+          "localTransform": [1,0,0,0,0,1,0,0,0,0,1,0,5.568251,2.7204428,6.64078,1]
+        },
+        "SceneNodeComponent": {
+          "parent": 0,
+          "children": [],
+          "depth": 0
+        },
+        "AssetReferenceComponent": {
+          "assetPath": "",
+          "meshName": "Plane",
+          "assetType": "primitive"
+        },
+        "RenderMeshComponent": {
+          "visible": true
+        },
+        "CameraComponent": {
+          "position": [0,0,0],
+          "pitch": 0,
+          "yaw": 0,
+          "fov": 70,
+          "nearPlane": 0.1,
+          "farPlane": 10000,
+          "speed": 35,
+          "mouseSensitivity": 1
+        },
+        "RenderableTag": {
+          "visible": true
+        },
+        "CharacterControllerComponent": {
+          "height": 1.8,
+          "radius": 0.3,
+          "mass": 70,
+          "maxSlopeAngle": 50,
+          "maxSpeed": 5,
+          "jumpSpeed": 6,
+          "stairStepUp": 0.4
+        },
+        "EntityInfoComponent": {
+          "displayName": "Plane_1",
+          "isPrefabInstance": true
+        }
+      },
+      "tags": ["MeshEntityTag"]
     }
   ]
 }

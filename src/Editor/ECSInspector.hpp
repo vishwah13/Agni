@@ -46,18 +46,6 @@ public:
 		m_meshResources = meshResources;
 	}
 
-	// Set selected entity (for viewport picking)
-	void setSelectedEntity(EntityID entity)
-	{
-		m_selectedEntity = entity;
-	}
-
-	// Get selected entity
-	EntityID getSelectedEntity() const
-	{
-		return m_selectedEntity;
-	}
-
 	// Set physics manager reference (for gizmo physics sync)
 	void setPhysicsManager(agni::physics::JoltPhysicsManager* physicsManager)
 	{
@@ -70,6 +58,17 @@ public:
 		m_contextMenus = contextMenus;
 	}
 
+	// Gizmo operation: 0=Translate, 1=Rotate, 2=Scale
+	void setGizmoOperation(int op) { m_gizmoOperation = op; }
+	int  getGizmoOperation() const { return m_gizmoOperation; }
+
+	// Gizmo mode: 0=Local, 1=World
+	void setGizmoMode(int mode) { m_gizmoMode = mode; }
+	int  getGizmoMode() const   { return m_gizmoMode; }
+
+	// Toggle between Local and World mode
+	void toggleGizmoMode() { m_gizmoMode = (m_gizmoMode == 0) ? 1 : 0; }
+
 private:
 	EditorManager&            m_editorManager;
 	agni::ecs::World&         m_world;
@@ -78,8 +77,9 @@ private:
 	class ContextMenus* m_contextMenus = nullptr;
 	std::shared_ptr<LoadedGLTF> m_meshResources;
 
-	// Selected entity
-	EntityID m_selectedEntity {NULL_ENTITY};
+	// Selection is stored in EditorManager (single source of truth)
+	// Read via m_editorManager.getSelectedEntity()
+	// Write via m_editorManager.setSelectedEntity()
 
 	// Entity creation state
 	bool        m_showCreateEntityPopup {false};

@@ -5,6 +5,7 @@
 #include <Debug.hpp>
 #include <ECS/World.hpp>
 #include <Loader.hpp>
+#include <Reflection/ComponentRegistry.hpp>
 
 #include <fmt/format.h>
 #include <glm/gtc/type_ptr.hpp>
@@ -116,6 +117,196 @@ namespace agni::scene
 			i++;
 		}
 		return v;
+	}
+
+	// ================================================================
+	// Reflection-based serialization helpers
+	// ================================================================
+
+	static std::string serializeReflectedComponent(
+	    const agni::ComponentDescriptor& desc,
+	    const void*                      data,
+	    const std::string&               indent)
+	{
+		std::string json;
+		bool        firstField = true;
+
+		for (const auto& prop : desc.properties)
+		{
+			if (prop.noSerialize) continue;
+
+			const void* fieldPtr = static_cast<const char*>(data) + prop.offset;
+
+			if (!firstField) json += ",\n";
+			firstField = false;
+
+			json += indent + "  ";
+
+			switch (prop.type)
+			{
+			case agni::PropertyType::Float:
+				json += fmt::format("\"{}\": {}", prop.name, *static_cast<const float*>(fieldPtr));
+				break;
+			case agni::PropertyType::Int:
+				json += fmt::format("\"{}\": {}", prop.name, *static_cast<const int*>(fieldPtr));
+				break;
+			case agni::PropertyType::UInt32:
+				json += fmt::format("\"{}\": {}", prop.name, *static_cast<const uint32_t*>(fieldPtr));
+				break;
+			case agni::PropertyType::Bool:
+				json += fmt::format("\"{}\": {}", prop.name,
+				                    *static_cast<const bool*>(fieldPtr) ? "true" : "false");
+				break;
+			case agni::PropertyType::String:
+				json += fmt::format("\"{}\": \"{}\"", prop.name,
+				                    escapeJsonString(*static_cast<const std::string*>(fieldPtr)));
+				break;
+			case agni::PropertyType::Vec3:
+			case agni::PropertyType::Color3:
+				json += fmt::format("\"{}\": {}", prop.name,
+				                    vec3ToJson(*static_cast<const glm::vec3*>(fieldPtr)));
+				break;
+			case agni::PropertyType::Vec4:
+			case agni::PropertyType::Color4:
+			{
+				const auto* v = static_cast<const glm::vec4*>(fieldPtr);
+				json += fmt::format("\"{}\": [{},{},{},{}]", prop.name, v->x, v->y, v->z, v->w);
+				break;
+			}
+			case agni::PropertyType::Mat4:
+				json += fmt::format("\"{}\": {}", prop.name,
+				                    mat4ToJson(*static_cast<const glm::mat4*>(fieldPtr)));
+				break;
+			case agni::PropertyType::Enum:
+			{
+				if (prop.enumDesc)
+				{
+					int val = 0;
+					std::memcpy(&val, fieldPtr, std::min(prop.size, sizeof(int)));
+					const char* enumName = prop.enumDesc->nameFromValue(val);
+					json += fmt::format("\"{}\": \"{}\"", prop.name, enumName ? enumName : "Unknown");
+				}
+				break;
+			}
+			case agni::PropertyType::EntityID:
+				json += fmt::format("\"{}\": {}", prop.name, *static_cast<const uint64_t*>(fieldPtr));
+				break;
+			default:
+				break;
+			}
+		}
+
+		return json;
+	}
+
+	static void deserializeReflectedComponent(
+	    const agni::ComponentDescriptor& desc,
+	    void*                            data,
+	    simdjson::ondemand::object&      obj)
+	{
+		for (const auto& prop : desc.properties)
+		{
+			if (prop.noSerialize) continue;
+
+			void* fieldPtr = static_cast<char*>(data) + prop.offset;
+
+			auto fieldResult = obj.find_field_unordered(prop.name);
+			if (fieldResult.error()) continue;
+
+			auto field = fieldResult.value();
+
+			switch (prop.type)
+			{
+			case agni::PropertyType::Float:
+			{
+				auto val = field.get_double();
+				if (!val.error()) *static_cast<float*>(fieldPtr) = static_cast<float>(val.value());
+				break;
+			}
+			case agni::PropertyType::Int:
+			{
+				auto val = field.get_int64();
+				if (!val.error()) *static_cast<int*>(fieldPtr) = static_cast<int>(val.value());
+				break;
+			}
+			case agni::PropertyType::UInt32:
+			{
+				auto val = field.get_uint64();
+				if (!val.error()) *static_cast<uint32_t*>(fieldPtr) = static_cast<uint32_t>(val.value());
+				break;
+			}
+			case agni::PropertyType::Bool:
+			{
+				auto val = field.get_bool();
+				if (!val.error()) *static_cast<bool*>(fieldPtr) = val.value();
+				break;
+			}
+			case agni::PropertyType::String:
+			{
+				auto val = field.get_string();
+				if (!val.error()) *static_cast<std::string*>(fieldPtr) = std::string(val.value());
+				break;
+			}
+			case agni::PropertyType::Vec3:
+			case agni::PropertyType::Color3:
+			{
+				auto arr = field.get_array();
+				if (!arr.error()) *static_cast<glm::vec3*>(fieldPtr) = jsonToVec3(arr.value());
+				break;
+			}
+			case agni::PropertyType::Vec4:
+			case agni::PropertyType::Color4:
+			{
+				auto arr = field.get_array();
+				if (!arr.error())
+				{
+					auto*  v = static_cast<glm::vec4*>(fieldPtr);
+					size_t i = 0;
+					for (auto val : arr.value())
+					{
+						if (i < 4)
+						{
+							float f = static_cast<float>(val.get_double().value());
+							(*v)[static_cast<int>(i)] = f;
+						}
+						i++;
+					}
+				}
+				break;
+			}
+			case agni::PropertyType::Mat4:
+			{
+				auto arr = field.get_array();
+				if (!arr.error()) *static_cast<glm::mat4*>(fieldPtr) = jsonToMat4(arr.value());
+				break;
+			}
+			case agni::PropertyType::Enum:
+			{
+				if (prop.enumDesc)
+				{
+					auto val = field.get_string();
+					if (!val.error())
+					{
+						int64_t enumVal = 0;
+						if (prop.enumDesc->valueFromName(
+						        std::string(val.value()).c_str(), enumVal))
+						{
+							std::memcpy(fieldPtr, &enumVal, std::min(prop.size, sizeof(int)));
+						}
+					}
+				}
+				break;
+			}
+			case agni::PropertyType::EntityID:
+			{
+				auto val = field.get_uint64();
+				if (!val.error()) *static_cast<uint64_t*>(fieldPtr) = val.value();
+				break;
+			}
+			default:
+				break;
+			}
+		}
 	}
 
 	SceneSerializer::SceneSerializer(AgniEngine& engine) : m_engine(engine) {}
@@ -323,178 +514,26 @@ namespace agni::scene
 				json += indent4 + "}";
 			}
 
-			// LightComponent
-			if (const auto* lc = e.try_get<LightComponent>())
+			// === Reflection-based component serialization ===
+			// Automatically serializes all registered components (except
+			// TransformComponent, SceneNodeComponent, AssetReferenceComponent,
+			// RenderMeshComponent which are handled above as special cases).
+			for (const auto* desc : agni::ComponentRegistry::Instance().GetAll())
 			{
+				// Skip components already handled above
+				if (std::strcmp(desc->name, "TransformComponent") == 0) continue;
+				if (std::strcmp(desc->name, "AssetReferenceComponent") == 0) continue;
+
+				const void* compData = desc->getConst(e);
+				if (!compData) continue;
+
 				if (!firstComponent)
 					json += "," + newline;
 				firstComponent = false;
 
-				std::string typeStr;
-				switch (lc->type)
-				{
-					case LightType::Point:
-						typeStr = "Point";
-						break;
-					case LightType::Directional:
-						typeStr = "Directional";
-						break;
-					case LightType::Spot:
-						typeStr = "Spot";
-						break;
-				}
-
-				json += indent4 + "\"LightComponent\": {" + newline;
-				json +=
-				indent4 + fmt::format("  \"type\": \"{}\",", typeStr) + newline;
-				json += indent4 + "  \"color\": " + vec3ToJson(lc->color) +
-				        "," + newline;
-				json += indent4 +
-				        fmt::format("  \"intensity\": {},", lc->intensity) +
-				        newline;
-				json += indent4 + fmt::format("  \"radius\": {},", lc->radius) +
-				        newline;
-				json += indent4 +
-				        "  \"direction\": " + vec3ToJson(lc->direction) + "," +
-				        newline;
-				json +=
-				indent4 +
-				fmt::format("  \"innerConeAngle\": {},", lc->innerConeAngle) +
-				newline;
-				json +=
-				indent4 +
-				fmt::format("  \"outerConeAngle\": {}", lc->outerConeAngle) +
-				newline;
-				json += indent4 + "}";
-			}
-
-			// CameraComponent
-			if (const auto* cc = e.try_get<CameraComponent>())
-			{
-				if (!firstComponent)
-					json += "," + newline;
-				firstComponent = false;
-
-				json += indent4 + "\"CameraComponent\": {" + newline;
-				json += indent4 +
-				        "  \"position\": " + vec3ToJson(cc->position) + "," +
-				        newline;
-				json += indent4 +
-				        "  \"velocity\": " + vec3ToJson(cc->velocity) + "," +
-				        newline;
-				json +=
-				indent4 + fmt::format("  \"pitch\": {},", cc->pitch) + newline;
-				json +=
-				indent4 + fmt::format("  \"yaw\": {},", cc->yaw) + newline;
-				json +=
-				indent4 + fmt::format("  \"speed\": {},", cc->speed) + newline;
-				json += indent4 +
-				        fmt::format("  \"mouseSensitivity\": {}",
-				                    cc->mouseSensitivity) +
-				        newline;
-				json += indent4 + "}";
-			}
-
-			// RenderableTag
-			if (const auto* rt = e.try_get<RenderableTag>())
-			{
-				if (!firstComponent)
-					json += "," + newline;
-				firstComponent = false;
-
-				json += indent4 + "\"RenderableTag\": {" + newline;
-				json += indent4 +
-				        fmt::format("  \"visible\": {}",
-				                    rt->visible ? "true" : "false") +
-				        newline;
-				json += indent4 + "}";
-			}
-
-			// RigidBodyComponent
-			if (const auto* rbc = e.try_get<RigidBodyComponent>())
-			{
-				if (!firstComponent)
-					json += "," + newline;
-				firstComponent = false;
-
-				std::string typeStr;
-				switch (rbc->type)
-				{
-					case RigidBodyType::Static:
-						typeStr = "Static";
-						break;
-					case RigidBodyType::Dynamic:
-						typeStr = "Dynamic";
-						break;
-					case RigidBodyType::Kinematic:
-						typeStr = "Kinematic";
-						break;
-				}
-
-				json += indent4 + "\"RigidBodyComponent\": {" + newline;
-				json +=
-				indent4 + fmt::format("  \"type\": \"{}\",", typeStr) + newline;
-				json +=
-				indent4 + fmt::format("  \"mass\": {},", rbc->mass) + newline;
-				json += indent4 +
-				        fmt::format("  \"friction\": {},", rbc->friction) +
-				        newline;
-				json +=
-				indent4 +
-				fmt::format("  \"restitution\": {},", rbc->restitution) +
-				newline;
-				json += indent4 +
-				        fmt::format("  \"useGravity\": {}",
-				                    rbc->useGravity ? "true" : "false") +
-				        newline;
-				json += indent4 + "}";
-			}
-
-			// ColliderComponent
-			if (const auto* cc = e.try_get<ColliderComponent>())
-			{
-				if (!firstComponent)
-					json += "," + newline;
-				firstComponent = false;
-
-				std::string typeStr;
-				switch (cc->type)
-				{
-					case ColliderType::Box:
-						typeStr = "Box";
-						break;
-					case ColliderType::Sphere:
-						typeStr = "Sphere";
-						break;
-					case ColliderType::Capsule:
-						typeStr = "Capsule";
-						break;
-				}
-
-				json += indent4 + "\"ColliderComponent\": {" + newline;
-				json +=
-				indent4 + fmt::format("  \"type\": \"{}\",", typeStr) + newline;
-				json += indent4 + "  \"boxHalfExtents\": " +
-				        vec3ToJson(cc->boxHalfExtents) + "," + newline;
-				json +=
-				indent4 +
-				fmt::format("  \"sphereRadius\": {},", cc->sphereRadius) +
-				newline;
-				json +=
-				indent4 +
-				fmt::format("  \"capsuleRadius\": {},", cc->capsuleRadius) +
-				newline;
-				json += indent4 +
-				        fmt::format("  \"capsuleHalfHeight\": {},",
-				                    cc->capsuleHalfHeight) +
-				        newline;
-				json += indent4 + "  \"center\": " + vec3ToJson(cc->center) +
-				        "," + newline;
-				json += indent4 +
-				        fmt::format("  \"isTrigger\": {}",
-				                    cc->isTrigger ? "true" : "false") +
-				        newline;
-				json += indent4 + "}";
+				json += indent4 + fmt::format("\"{}\":", desc->name) + " {" + newline;
+				json += serializeReflectedComponent(*desc, compData, indent4);
+				json += newline + indent4 + "}";
 			}
 
 			json += newline + indent3 + "}," + newline;
@@ -704,210 +743,33 @@ namespace agni::scene
 					e.set<agni::ecs::RenderMeshComponent>(rmc);
 				}
 
-				// LightComponent
-				auto lcResult = components["LightComponent"].get_object();
-				if (!lcResult.error())
+				// === Reflection-based component deserialization ===
+				// Automatically deserializes all registered components (except
+				// TransformComponent, SceneNodeComponent, AssetReferenceComponent,
+				// RenderMeshComponent which are handled above).
+				for (const auto* desc : agni::ComponentRegistry::Instance().GetAll())
 				{
-					LightComponent lc {};
-					auto typeResult = lcResult.value()["type"].get_string();
-					if (!typeResult.error())
-					{
-						std::string_view t = typeResult.value();
-						if (t == "Point")
-							lc.type = LightType::Point;
-						else if (t == "Directional")
-							lc.type = LightType::Directional;
-						else if (t == "Spot")
-							lc.type = LightType::Spot;
-					}
-					auto colorResult = lcResult.value()["color"].get_array();
-					if (!colorResult.error())
-					{
-						lc.color = jsonToVec3(colorResult.value());
-					}
-					auto intResult = lcResult.value()["intensity"].get_double();
-					if (!intResult.error())
-					{
-						lc.intensity = static_cast<float>(intResult.value());
-					}
-					auto radResult = lcResult.value()["radius"].get_double();
-					if (!radResult.error())
-					{
-						lc.radius = static_cast<float>(radResult.value());
-					}
-					auto dirResult = lcResult.value()["direction"].get_array();
-					if (!dirResult.error())
-					{
-						lc.direction = jsonToVec3(dirResult.value());
-					}
-					auto innerResult =
-					lcResult.value()["innerConeAngle"].get_double();
-					if (!innerResult.error())
-					{
-						lc.innerConeAngle =
-						static_cast<float>(innerResult.value());
-					}
-					auto outerResult =
-					lcResult.value()["outerConeAngle"].get_double();
-					if (!outerResult.error())
-					{
-						lc.outerConeAngle =
-						static_cast<float>(outerResult.value());
-					}
-					e.set<LightComponent>(lc);
-				}
+					// Skip components already handled above
+					if (std::strcmp(desc->name, "TransformComponent") == 0) continue;
+					if (std::strcmp(desc->name, "AssetReferenceComponent") == 0) continue;
 
-				// CameraComponent
-				auto ccResult = components["CameraComponent"].get_object();
-				if (!ccResult.error())
-				{
-					CameraComponent cc {};
-					auto posResult = ccResult.value()["position"].get_array();
-					if (!posResult.error())
-					{
-						cc.position = jsonToVec3(posResult.value());
-					}
-					auto velResult = ccResult.value()["velocity"].get_array();
-					if (!velResult.error())
-					{
-						cc.velocity = jsonToVec3(velResult.value());
-					}
-					auto pitchResult = ccResult.value()["pitch"].get_double();
-					if (!pitchResult.error())
-					{
-						cc.pitch = static_cast<float>(pitchResult.value());
-					}
-					auto yawResult = ccResult.value()["yaw"].get_double();
-					if (!yawResult.error())
-					{
-						cc.yaw = static_cast<float>(yawResult.value());
-					}
-					auto speedResult = ccResult.value()["speed"].get_double();
-					if (!speedResult.error())
-					{
-						cc.speed = static_cast<float>(speedResult.value());
-					}
-					auto sensResult =
-					ccResult.value()["mouseSensitivity"].get_double();
-					if (!sensResult.error())
-					{
-						cc.mouseSensitivity =
-						static_cast<float>(sensResult.value());
-					}
-					e.set<CameraComponent>(cc);
-				}
+					auto compResult = components[desc->name].get_object();
+					if (compResult.error()) continue;
 
-				// RenderableTag
-				auto rtResult = components["RenderableTag"].get_object();
-				if (!rtResult.error())
-				{
-					RenderableTag rt {};
-					auto visResult = rtResult.value()["visible"].get_bool();
-					if (!visResult.error())
-					{
-						rt.visible = visResult.value();
-					}
-					e.set<RenderableTag>(rt);
-				}
+					// Construct default component on stack
+					alignas(16) uint8_t buffer[512];
+					assert(desc->typeSize <= sizeof(buffer));
+					desc->construct(buffer);
 
-				// RigidBodyComponent
-				auto rbcResult = components["RigidBodyComponent"].get_object();
-				if (!rbcResult.error())
-				{
-					RigidBodyComponent rbc {};
-					auto typeResult = rbcResult.value()["type"].get_string();
-					if (!typeResult.error())
-					{
-						std::string_view t = typeResult.value();
-						if (t == "Static")
-							rbc.type = RigidBodyType::Static;
-						else if (t == "Dynamic")
-							rbc.type = RigidBodyType::Dynamic;
-						else if (t == "Kinematic")
-							rbc.type = RigidBodyType::Kinematic;
-					}
-					auto massResult = rbcResult.value()["mass"].get_double();
-					if (!massResult.error())
-					{
-						rbc.mass = static_cast<float>(massResult.value());
-					}
-					auto fricResult =
-					rbcResult.value()["friction"].get_double();
-					if (!fricResult.error())
-					{
-						rbc.friction = static_cast<float>(fricResult.value());
-					}
-					auto restResult =
-					rbcResult.value()["restitution"].get_double();
-					if (!restResult.error())
-					{
-						rbc.restitution =
-						static_cast<float>(restResult.value());
-					}
-					auto gravResult =
-					rbcResult.value()["useGravity"].get_bool();
-					if (!gravResult.error())
-					{
-						rbc.useGravity = gravResult.value();
-					}
-					e.set<RigidBodyComponent>(rbc);
-				}
+					// Deserialize fields from JSON into the buffer
+					auto compObj = compResult.value();
+					deserializeReflectedComponent(*desc, buffer, compObj);
 
-				// ColliderComponent
-				auto collResult = components["ColliderComponent"].get_object();
-				if (!collResult.error())
-				{
-					ColliderComponent cc {};
-					auto typeResult = collResult.value()["type"].get_string();
-					if (!typeResult.error())
-					{
-						std::string_view t = typeResult.value();
-						if (t == "Box")
-							cc.type = ColliderType::Box;
-						else if (t == "Sphere")
-							cc.type = ColliderType::Sphere;
-						else if (t == "Capsule")
-							cc.type = ColliderType::Capsule;
-					}
-					auto boxResult =
-					collResult.value()["boxHalfExtents"].get_array();
-					if (!boxResult.error())
-					{
-						cc.boxHalfExtents = jsonToVec3(boxResult.value());
-					}
-					auto sphResult =
-					collResult.value()["sphereRadius"].get_double();
-					if (!sphResult.error())
-					{
-						cc.sphereRadius = static_cast<float>(sphResult.value());
-					}
-					auto capRadResult =
-					collResult.value()["capsuleRadius"].get_double();
-					if (!capRadResult.error())
-					{
-						cc.capsuleRadius =
-						static_cast<float>(capRadResult.value());
-					}
-					auto capHhResult =
-					collResult.value()["capsuleHalfHeight"].get_double();
-					if (!capHhResult.error())
-					{
-						cc.capsuleHalfHeight =
-						static_cast<float>(capHhResult.value());
-					}
-					auto centerResult =
-					collResult.value()["center"].get_array();
-					if (!centerResult.error())
-					{
-						cc.center = jsonToVec3(centerResult.value());
-					}
-					auto trigResult =
-					collResult.value()["isTrigger"].get_bool();
-					if (!trigResult.error())
-					{
-						cc.isTrigger = trigResult.value();
-					}
-					e.set<ColliderComponent>(cc);
+					// Set the component on the entity
+					desc->set(e, buffer);
+
+					// Destruct the temporary
+					desc->destruct(buffer);
 				}
 			}
 
@@ -1134,6 +996,114 @@ namespace agni::scene
 				}
 			}
 		});
+	}
+
+	std::string SceneSerializer::serializeSingleEntity(EntityID entityId)
+	{
+		auto& world = m_engine.getECSWorld();
+		flecs::entity e = world.get().entity(entityId);
+		if (!e.is_valid()) return "{}";
+
+		std::string json;
+		std::string indent  = "  ";
+		std::string indent2 = "    ";
+
+		json += "{\n";
+
+		// Entity name
+		const char* name = e.name().c_str();
+		json += indent + fmt::format("\"name\": \"{}\",\n", escapeJsonString(name ? name : ""));
+
+		// Components
+		json += indent + "\"components\": {\n";
+		bool firstComponent = true;
+
+		// TransformComponent (special — mat4)
+		if (const auto* tc = e.try_get<TransformComponent>())
+		{
+			if (!firstComponent) json += ",\n";
+			firstComponent = false;
+			json += indent2 + "\"TransformComponent\": {\n";
+			json += indent2 + "  \"localTransform\": " + mat4ToJson(tc->localTransform) + "\n";
+			json += indent2 + "}";
+		}
+
+		// AssetReferenceComponent (special — asset paths)
+		if (const auto* arc = e.try_get<AssetReferenceComponent>())
+		{
+			if (!firstComponent) json += ",\n";
+			firstComponent = false;
+			json += indent2 + "\"AssetReferenceComponent\": {\n";
+			json += indent2 + fmt::format("  \"assetPath\": \"{}\",\n", escapeJsonString(arc->assetPath));
+			json += indent2 + fmt::format("  \"meshName\": \"{}\",\n", escapeJsonString(arc->meshName));
+			json += indent2 + fmt::format("  \"assetType\": \"{}\"\n", escapeJsonString(arc->assetType));
+			json += indent2 + "}";
+		}
+
+		// RenderMeshComponent (special — visibility only)
+		if (const auto* rmc = e.try_get<agni::ecs::RenderMeshComponent>())
+		{
+			if (!firstComponent) json += ",\n";
+			firstComponent = false;
+			json += indent2 + "\"RenderMeshComponent\": {\n";
+			json += indent2 + fmt::format("  \"visible\": {}\n", rmc->visible ? "true" : "false");
+			json += indent2 + "}";
+		}
+
+		// Reflection-based components
+		for (const auto* desc : agni::ComponentRegistry::Instance().GetAll())
+		{
+			if (std::strcmp(desc->name, "TransformComponent") == 0) continue;
+			if (std::strcmp(desc->name, "AssetReferenceComponent") == 0) continue;
+
+			const void* compData = desc->getConst(e);
+			if (!compData) continue;
+
+			if (!firstComponent) json += ",\n";
+			firstComponent = false;
+
+			json += indent2 + fmt::format("\"{}\":", desc->name) + " {\n";
+			json += serializeReflectedComponent(*desc, compData, indent2);
+			json += "\n" + indent2 + "}";
+		}
+
+		json += "\n" + indent + "},\n";
+
+		// Tags
+		json += indent + "\"tags\": [";
+		bool firstTag = true;
+
+		{
+			bool hasMesh    = e.has<agni::ecs::MeshEntityTag>();
+			bool hasLight   = e.has<agni::ecs::LightEntityTag>();
+			bool hasCamera  = e.has<agni::ecs::CameraEntityTag>();
+			bool hasStatic  = e.has<agni::ecs::StaticTag>();
+			bool hasDynamic = e.has<agni::ecs::DynamicTag>();
+			bool hasPhysics = e.has<PhysicsEnabledTag>();
+
+			if (hasMesh)    { if (!firstTag) json += ", "; json += "\"MeshEntityTag\"";     firstTag = false; }
+			if (hasLight)   { if (!firstTag) json += ", "; json += "\"LightEntityTag\"";    firstTag = false; }
+			if (hasCamera)  { if (!firstTag) json += ", "; json += "\"CameraEntityTag\"";   firstTag = false; }
+			if (hasStatic)  { if (!firstTag) json += ", "; json += "\"StaticTag\"";         firstTag = false; }
+			if (hasDynamic) { if (!firstTag) json += ", "; json += "\"DynamicTag\"";        firstTag = false; }
+			if (hasPhysics) { if (!firstTag) json += ", "; json += "\"PhysicsEnabledTag\""; firstTag = false; }
+		}
+
+		json += "]\n";
+
+		json += "}";
+		return json;
+	}
+
+	std::string SceneSerializer::serializeToString(const SceneSaveOptions& options)
+	{
+		return serializeScene(options);
+	}
+
+	bool SceneSerializer::deserializeFromString(const std::string& json,
+	                                            const SceneLoadOptions& options)
+	{
+		return deserializeScene(json, options);
 	}
 
 	std::shared_ptr<MeshAsset>

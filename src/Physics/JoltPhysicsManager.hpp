@@ -2,12 +2,19 @@
 
 #include <Components.hpp>
 
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/gtc/quaternion.hpp>
 
 #include <memory>
 #include <unordered_map>
+#include <vector>
+
+#ifdef JPH_DEBUG_RENDERER
+namespace agni { namespace physics { class JoltDebugRenderer; } }
+#endif
+namespace agni { namespace physics { class AgniContactListener; struct CollisionEvent; } }
 
 // Forward declarations for Jolt types (avoid including Jolt headers in public header)
 namespace JPH
@@ -26,6 +33,25 @@ namespace agni
 {
 namespace physics
 {
+
+struct RaycastHit
+{
+	EntityID  entity   = NULL_ENTITY; // Mapped from Jolt BodyID
+	glm::vec3 position {0.0f};       // World-space hit point
+	glm::vec3 normal   {0.0f};       // Surface normal at hit point
+	float     fraction = 0.0f;       // 0.0 = ray origin, 1.0 = maxDistance
+	uint32_t  bodyID   = 0;          // Raw Jolt body ID
+};
+
+struct PhysicsDebugSettings
+{
+	bool enabled         = false;
+	bool drawShapes      = true;
+	bool drawWireframe   = true;
+	bool drawBoundingBox = false;
+	bool drawVelocity    = false;
+	bool drawCenterOfMass = false;
+};
 
 struct PhysicsSettings
 {
@@ -61,21 +87,29 @@ public:
 	                           const ColliderComponent& collider,
 	                           float                   mass,
 	                           float                   friction,
-	                           float                   restitution);
+	                           float                   restitution,
+	                           bool                    useGravity = true,
+	                           const glm::vec3&        scale = glm::vec3(1.0f));
 
 	uint32_t createStaticBody(const glm::vec3&        pos,
 	                          const glm::quat&        rot,
 	                          ColliderType            type,
 	                          const ColliderComponent& collider,
 	                          float                   friction,
-	                          float                   restitution);
+	                          float                   restitution,
+	                          const glm::vec3&        scale = glm::vec3(1.0f));
 
 	uint32_t createKinematicBody(const glm::vec3&        pos,
 	                             const glm::quat&        rot,
 	                             ColliderType            type,
-	                             const ColliderComponent& collider);
+	                             const ColliderComponent& collider,
+	                             const glm::vec3&        scale = glm::vec3(1.0f));
 
 	void removeBody(uint32_t bodyID);
+	void removeAllBodies();
+
+	// Broadphase optimization (call after bulk body creation)
+	void optimizeBroadPhase();
 
 	// Transform sync
 	void      setBodyTransform(uint32_t bodyID, const glm::mat4& transform);
@@ -97,6 +131,32 @@ public:
 	void      setGravity(const glm::vec3& gravity);
 	glm::vec3 getGravity() const;
 
+	// Collision events (drain once per frame after physics update)
+	std::vector<CollisionEvent> drainCollisionEvents();
+
+	// Character controller
+	uint64_t createCharacterController(const glm::vec3& pos, const CharacterControllerComponent& settings);
+	void     updateCharacterController(uint64_t handle, float deltaTime,
+	                                    const glm::vec3& inputDir, float maxSpeed, bool jump, float jumpSpeed);
+	glm::vec3 getCharacterPosition(uint64_t handle) const;
+	glm::vec3 getCharacterVelocity(uint64_t handle) const;
+	bool      isCharacterOnGround(uint64_t handle) const;
+	void      destroyCharacterController(uint64_t handle);
+	void      destroyAllCharacterControllers();
+
+	// Raycasting
+	bool raycast(const glm::vec3& origin, const glm::vec3& direction,
+	             float maxDistance, RaycastHit& outHit) const;
+	bool raycastAll(const glm::vec3& origin, const glm::vec3& direction,
+	                float maxDistance, std::vector<RaycastHit>& outHits) const;
+
+	// Screen-to-world ray conversion
+	static void screenToWorldRay(const glm::mat4& invViewProj,
+	                              const glm::vec2& screenPos,
+	                              const glm::vec2& viewportSize,
+	                              glm::vec3& outOrigin,
+	                              glm::vec3& outDirection);
+
 	// Entity <-> Body mapping
 	void     registerEntityBody(EntityID entity, uint32_t bodyID);
 	void     unregisterEntity(EntityID entity);
@@ -104,6 +164,15 @@ public:
 
 	// Access to body interface (for advanced use)
 	JPH::BodyInterface* getBodyInterface();
+
+#ifdef JPH_DEBUG_RENDERER
+	// Debug visualization (Play mode — draws from Jolt bodies)
+	void drawDebug(const glm::vec3& cameraPos, const PhysicsDebugSettings& settings);
+	// Debug visualization (Edit mode — draws from ECS component data)
+	void drawDebugFromECS(const glm::vec3& cameraPos,
+	                      const std::vector<std::tuple<TransformComponent, ColliderComponent, RigidBodyComponent>>& entities);
+	JoltDebugRenderer* getDebugRenderer() const { return m_debugRenderer.get(); }
+#endif
 
 private:
 	std::unique_ptr<JPH::PhysicsSystem>                m_physicsSystem;
@@ -116,8 +185,18 @@ private:
 	std::unordered_map<uint32_t, EntityID> m_bodyToEntity;
 	std::unordered_map<EntityID, uint32_t> m_entityToBody;
 
+	std::unique_ptr<AgniContactListener> m_contactListener;
+
+	// Character controllers — storage is in .cpp (Jolt types not visible in header)
+	struct CharacterStorage;
+	std::unique_ptr<CharacterStorage> m_characters;
+
 	PhysicsSettings m_settings;
 	float           m_accumulator {0.0f}; // For fixed timestep
+
+#ifdef JPH_DEBUG_RENDERER
+	std::unique_ptr<JoltDebugRenderer> m_debugRenderer;
+#endif
 
 	// Helper to convert body ID
 	JPH::BodyID toJoltBodyID(uint32_t bodyID) const;

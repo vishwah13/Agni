@@ -99,8 +99,9 @@ namespace agni
 			{
 				m_inspector->render(m_editorUI->getHierarchyVisible(),
 				                    m_editorUI->getInspectorVisible());
-				m_inspector->renderGizmo(&m_engine.getCamera(),
-				                         m_engine.getWindowExtent());
+				if (m_engine.m_simulationPaused)
+					m_inspector->renderGizmo(&m_engine.getCamera(),
+					                         m_engine.getWindowExtent());
 			}
 
 			// Render asset browser (controlled by EditorUI visibility flag)
@@ -130,6 +131,38 @@ namespace agni
 
 		void EditorManager::update()
 		{
+			// Process deferred operations (queued during render, safe to execute here)
+			for (auto& op : m_deferredOps)
+			{
+				switch (op.type)
+				{
+				case DeferredOpType::DeleteEntity:
+				{
+					auto command = std::make_unique<DeleteEntityCommand>(
+					    m_engine.getECSWorld(),
+					    m_engine.getECSWorld().getPrefabManager(),
+					    op.entityId);
+					m_commandHistory->execute(std::move(command));
+					break;
+				}
+				case DeferredOpType::DuplicateEntity:
+				{
+					auto command = std::make_unique<DuplicateEntityCommand>(
+					    m_engine.getECSWorld(), op.entityId);
+					m_commandHistory->execute(std::move(command));
+					break;
+				}
+				case DeferredOpType::RenameEntity:
+				{
+					auto command = std::make_unique<RenameEntityCommand>(
+					    m_engine.getECSWorld(), op.entityId, op.stringArg);
+					m_commandHistory->execute(std::move(command));
+					break;
+				}
+				}
+			}
+			m_deferredOps.clear();
+
 			if (m_inputManager)
 			{
 				m_inputManager->update();
@@ -226,6 +259,24 @@ namespace agni
 			m_inputManager->registerShortcut({SDLK_Y, true, false, false},
 			                                 [this]() { redo(); });
 
+			// Gizmo operation shortcuts (only when an entity is selected)
+			m_inputManager->registerShortcut(
+			{SDLK_W, false, false, false},
+			[this]() { if (m_inspector && m_selectedEntity != NULL_ENTITY) m_inspector->setGizmoOperation(0); }); // Translate
+
+			m_inputManager->registerShortcut(
+			{SDLK_E, false, false, false},
+			[this]() { if (m_inspector && m_selectedEntity != NULL_ENTITY) m_inspector->setGizmoOperation(1); }); // Rotate
+
+			m_inputManager->registerShortcut(
+			{SDLK_R, false, false, false},
+			[this]() { if (m_inspector && m_selectedEntity != NULL_ENTITY) m_inspector->setGizmoOperation(2); }); // Scale
+
+			// Toggle Local/World space (only when an entity is selected)
+			m_inputManager->registerShortcut(
+			{SDLK_X, false, false, false},
+			[this]() { if (m_inspector && m_selectedEntity != NULL_ENTITY) m_inspector->toggleGizmoMode(); });
+
 			AGNI_PRINT("[EditorManager] Keyboard shortcuts registered\n");
 		}
 
@@ -269,21 +320,9 @@ namespace agni
 		{
 			if (m_selectedEntity != NULL_ENTITY)
 			{
-				// Use command for undo/redo support
-				auto command = std::make_unique<DeleteEntityCommand>(
-				m_engine.getECSWorld(),
-				m_engine.getECSWorld().getPrefabManager(),
-				m_selectedEntity);
-				m_commandHistory->execute(std::move(command));
-
-				// Clear selection
+				// Queue deletion — processed in update() outside Flecs iteration
+				m_deferredOps.push_back({DeferredOpType::DeleteEntity, m_selectedEntity, {}});
 				m_selectedEntity = NULL_ENTITY;
-
-				// Update inspector
-				if (m_inspector)
-				{
-					m_inspector->setSelectedEntity(NULL_ENTITY);
-				}
 			}
 		}
 
@@ -292,11 +331,50 @@ namespace agni
 			if (m_selectedEntity == NULL_ENTITY)
 				return;
 
-			// TODO: Implement entity duplication
-			// - Clone all components
-			// - Offset position slightly
-			// - Select the new entity
-			AGNI_PRINT("[EditorManager] Duplicate not yet implemented\n");
+			m_deferredOps.push_back({DeferredOpType::DuplicateEntity, m_selectedEntity, {}});
+		}
+
+		void EditorManager::savePrefab(EntityID entityId)
+		{
+			if (entityId == NULL_ENTITY) return;
+
+			auto& world = m_engine.getECSWorld();
+			auto  e     = world.get().entity(entityId);
+			if (!e.is_valid()) return;
+
+			// Build filename from display name (or Flecs name as fallback)
+			std::string safeName = "unnamed";
+			const auto* info = e.try_get<EntityInfoComponent>();
+			if (info && !info->displayName.empty())
+				safeName = info->displayName;
+			else if (const char* n = e.name().c_str(); n && n[0])
+				safeName = n;
+
+			// Save to assets/prefabs/ directory
+			std::filesystem::path prefabDir = resPath("assets/prefabs");
+			std::filesystem::path filePath  = prefabDir / (safeName + ".prefab");
+
+			agni::scene::SceneSerializer serializer(m_engine);
+			if (world.getPrefabManager().savePrefabToFile(entityId, filePath, serializer))
+			{
+				AGNI_PRINT("[EditorManager] Saved prefab: {}\n", filePath.string());
+			}
+		}
+
+		void EditorManager::instantiatePrefab(const std::string& filePath,
+		                                      const glm::vec3&   position)
+		{
+			auto& world = m_engine.getECSWorld();
+			agni::scene::SceneSerializer serializer(m_engine);
+
+			EntityID newId = world.getPrefabManager().loadPrefabFromFile(
+			    filePath, position, serializer);
+
+			if (newId != NULL_ENTITY)
+			{
+				setSelectedEntity(newId);
+				AGNI_PRINT("[EditorManager] Instantiated prefab: {}\n", filePath);
+			}
 		}
 
 		void EditorManager::undo()
@@ -332,11 +410,6 @@ namespace agni
 		void EditorManager::setSelectedEntity(EntityID entity)
 		{
 			m_selectedEntity = entity;
-
-			if (m_inspector)
-			{
-				m_inspector->setSelectedEntity(entity);
-			}
 		}
 
 		ECSInspector* EditorManager::getInspector()

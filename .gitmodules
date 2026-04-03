@@ -53,3 +53,6 @@
 [submodule "third_party/googletest"]
 	path = third_party/googletest
 	url = https://github.com/google/googletest.git
+[submodule "third_party/imgui_test_engine"]
+	path = third_party/imgui_test_engine
+	url = https://github.com/ocornut/imgui_test_engine.git

@@ -1,0 +1,40 @@
+{
+  "prefab": "Cube",
+  "version": "1.0",
+  "entity": {
+  "name": "Cube",
+  "components": {
+    "TransformComponent": {
+      "localTransform": [0.9996707,-1.4610862e-07,0.025662368,0,9.331538e-08,1,2.0584218e-06,0,-0.025662368,-2.0553491e-06,0.9996707,0,4.0774307,0.6221696,6.8154936,1]
+    },
+    "AssetReferenceComponent": {
+      "assetPath": "",
+      "meshName": "Cube",
+      "assetType": "primitive"
+    },
+    "RenderMeshComponent": {
+      "visible": true
+    },
+    "RenderableTag": {
+      "visible": true
+    },
+    "RigidBodyComponent": {
+      "type": "Dynamic",
+      "mass": 1,
+      "friction": 0.5,
+      "restitution": 0,
+      "useGravity": true
+    },
+    "ColliderComponent": {
+      "type": "Box",
+      "boxHalfExtents": [0.5,0.5,0.5],
+      "sphereRadius": 0.5,
+      "capsuleRadius": 0.5,
+      "capsuleHalfHeight": 1,
+      "center": [0,0,0],
+      "isTrigger": false
+    }
+  },
+  "tags": ["MeshEntityTag"]
+}
+}

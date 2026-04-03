@@ -9,11 +9,9 @@
 #include <Pipelines.hpp>
 #include <VulkanTools.hpp>
 
-#include <imgui.h>
-#include <imgui_impl_vulkan.h>
-
 #include <algorithm>
 #include <chrono>
+
 
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
@@ -81,6 +79,7 @@ void Renderer::init(VkDevice                          device,
 
 	initPickingResources(windowExtent);
 	initObjectIDPipeline();
+	initDebugLinePipeline();
 }
 
 void Renderer::initBindlessSamplers(VkSampler linearSampler,
@@ -112,6 +111,10 @@ void Renderer::cleanup()
 		vkDestroyPipeline(m_device, m_objectIDPipeline, nullptr);
 	if (m_objectIDPipelineLayout != VK_NULL_HANDLE)
 		vkDestroyPipelineLayout(m_device, m_objectIDPipelineLayout, nullptr);
+	if (m_debugLinePipeline != VK_NULL_HANDLE)
+		vkDestroyPipeline(m_device, m_debugLinePipeline, nullptr);
+	if (m_debugLinePipelineLayout != VK_NULL_HANDLE)
+		vkDestroyPipelineLayout(m_device, m_debugLinePipelineLayout, nullptr);
 
 	// Cleanup shadow resources
 	m_resourceManager->destroyImage(m_shadowMap);
@@ -277,6 +280,15 @@ void Renderer::resize(VkExtent2D newExtent, VkSampleCountFlagBits msaaSamples)
 	                  VK_IMAGE_LAYOUT_GENERAL,
 	                  VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer.updateSet(m_device, m_drawImageDescriptors);
+
+	// Rebuild debug line pipeline with new MSAA settings
+	if (m_debugLinePipeline != VK_NULL_HANDLE)
+		vkDestroyPipeline(m_device, m_debugLinePipeline, nullptr);
+	if (m_debugLinePipelineLayout != VK_NULL_HANDLE)
+		vkDestroyPipelineLayout(m_device, m_debugLinePipelineLayout, nullptr);
+	m_debugLinePipeline       = VK_NULL_HANDLE;
+	m_debugLinePipelineLayout = VK_NULL_HANDLE;
+	initDebugLinePipeline();
 }
 
 void Renderer::initRenderTargets(VkExtent2D windowExtent)
@@ -454,6 +466,9 @@ void Renderer::initDescriptors()
 	m_drawImageDescriptors = m_globalDescriptorAllocator->allocate(
 	m_device, m_drawImageDescriptorLayout);
 
+	VkDebugName(m_device, VK_OBJECT_TYPE_DESCRIPTOR_SET,
+	             (uint64_t)m_drawImageDescriptors, "DrawImageDescriptorSet");
+
 	// Create descriptor set layout for GPU scene data + lights + shadow maps
 	// (using descriptor buffer)
 	{
@@ -575,6 +590,7 @@ void Renderer::initShadowPipeline()
 	builder.enableDescriptorBuffer();
 
 	m_shadowPipeline = builder.buildPipeline(m_device);
+	VkDebugName(m_device, VK_OBJECT_TYPE_PIPELINE, (uint64_t)m_shadowPipeline, "ShadowPipeline");
 
 	vkDestroyShaderModule(m_device, shadowVertShader, nullptr);
 
@@ -649,6 +665,7 @@ void Renderer::initPointShadowPipeline()
 	builder.enableDescriptorBuffer();
 
 	m_pointShadowPipeline = builder.buildPipeline(m_device);
+	VkDebugName(m_device, VK_OBJECT_TYPE_PIPELINE, (uint64_t)m_pointShadowPipeline, "PointShadowPipeline");
 
 	vkDestroyShaderModule(m_device, pointShadowVertShader, nullptr);
 	vkDestroyShaderModule(m_device, pointShadowFragShader, nullptr);
@@ -1549,6 +1566,24 @@ void Renderer::renderFrame(VkCommandBuffer cmd,
 
 	drawGeometry(cmd, currentFrame);
 
+	// Debug lines in separate pass (isolated from geometry descriptor buffer state)
+	if (m_debugLineVertexCount > 0 && m_debugLineData && m_debugLinePipeline != VK_NULL_HANDLE)
+	{
+		VkRenderingAttachmentInfo colorAtt = vkinit::attachmentInfoMsaa(
+		    m_msaaColorImage.m_imageView, m_drawImage.m_imageView,
+		    nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		colorAtt.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD; // preserve geometry
+
+		VkRenderingAttachmentInfo depthAtt = vkinit::depthAttachmentInfo(
+		    m_depthImage.m_imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+		depthAtt.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD; // preserve depth for testing
+
+		VkRenderingInfo renderInfo = vkinit::renderingInfo(m_drawExtent, &colorAtt, &depthAtt);
+		vkCmdBeginRendering(cmd, &renderInfo);
+		drawDebugLines(cmd, currentFrame);
+		vkCmdEndRendering(cmd);
+	}
+
 	// Build Hi-Z pyramid for next frame's occlusion culling
 	if (m_hizOcclusionEnabled && m_hizDownsamplePipeline != VK_NULL_HANDLE)
 	{
@@ -1582,8 +1617,9 @@ void Renderer::renderFrame(VkCommandBuffer cmd,
 	VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 	VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-	drawImgui(
-	cmd, m_swapchainManager->getSwapchainImageViews()[swapchainImageIndex]);
+	// Draw UI overlay (editor sets this to ImGui, runtime leaves null)
+	if (m_uiDrawCallback)
+		m_uiDrawCallback(cmd, m_swapchainManager->getSwapchainImageViews()[swapchainImageIndex]);
 
 	// make the swapchain image into presentable mode
 	vkutil::transitionImage(
@@ -1630,23 +1666,6 @@ void Renderer::drawBackground(VkCommandBuffer cmd)
 	              1);
 }
 
-void Renderer::drawImgui(VkCommandBuffer cmd, VkImageView targetImageView)
-{
-#ifdef TRACY_ENABLE
-	ZoneScoped;
-#endif
-
-	VkRenderingAttachmentInfo colorAttachment = vkinit::attachmentInfo(
-	targetImageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	VkRenderingInfo renderInfo = vkinit::renderingInfo(
-	m_swapchainManager->getSwapchainExtent(), &colorAttachment, nullptr);
-
-	vkCmdBeginRendering(cmd, &renderInfo);
-
-	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
-
-	vkCmdEndRendering(cmd);
-}
 
 void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 {
@@ -1746,6 +1765,11 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	                                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
 	                                VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 	                                VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+	VkDebugName(m_device, VK_OBJECT_TYPE_BUFFER,
+	             (uint64_t)gpuSceneDataBuffer.m_buffer, "PerFrame_SceneDataUBO");
+	VkDebugName(m_device, VK_OBJECT_TYPE_BUFFER,
+	             (uint64_t)gpuLightDataBuffer.m_buffer, "PerFrame_LightDataSSBO");
 
 	// add buffers to the deletion queue of this frame so they get deleted once
 	// used
@@ -2311,7 +2335,7 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	m_stats.m_meshDrawTime = elapsed.count() / 1000.f;
 }
 
-void Renderer::updateScene(float deltaTime, VkExtent2D windowExtent)
+void Renderer::updateScene()
 {
 #ifdef TRACY_ENABLE
 	ZoneScoped;
@@ -2327,21 +2351,10 @@ void Renderer::updateScene(float deltaTime, VkExtent2D windowExtent)
 	m_mainDrawContext.m_DirectionalLight =
 	DirectionalLightData {}; // Reset directional light
 
-	m_camera->update(deltaTime);
-	// camera view
-	glm::mat4 view = m_camera->getViewMatrix();
-	// camera projection
-	glm::mat4 projection =
-	glm::perspective(glm::radians(70.f),
-	                 (float) windowExtent.width / (float) windowExtent.height,
-	                 10000.f,
-	                 0.1f);
-
-	// invert the Y direction on projection matrix so that we are more similar
-	// to opengl and gltf axis
-	projection[1][1] *= -1;
-
-	glm::mat4 viewProj = projection * view;
+	// Use active camera matrices (set by Application via setActiveCamera)
+	glm::mat4 view       = m_activeCamView;
+	glm::mat4 projection = m_activeCamProjection;
+	glm::mat4 viewProj   = projection * view;
 
 	// === QUERY RENDERABLES DIRECTLY FROM ECS ===
 	if (m_world)
@@ -2475,7 +2488,7 @@ void Renderer::updateScene(float deltaTime, VkExtent2D windowExtent)
 		m_sceneData.m_sunlightColor     = glm::vec4(1.f);
 	}
 
-	m_sceneData.m_cameraPosition = m_camera->m_position;
+	m_sceneData.m_cameraPosition = m_activeCamPosition;
 
 	// Gribb-Hartmann: extract + normalize 6 frustum planes from viewProj
 	// Each plane stored as (nx, ny, nz, d) where nx*x + ny*y + nz*z + d = 0
@@ -2657,10 +2670,118 @@ void Renderer::initObjectIDPipeline()
 	builder.enableDescriptorBuffer();
 
 	m_objectIDPipeline = builder.buildPipeline(m_device);
+	VkDebugName(m_device, VK_OBJECT_TYPE_PIPELINE, (uint64_t)m_objectIDPipeline, "ObjectIDPipeline");
 
 	// Cleanup shader modules
 	vkDestroyShaderModule(m_device, vertexShader, nullptr);
 	vkDestroyShaderModule(m_device, fragmentShader, nullptr);
+}
+
+void Renderer::initDebugLinePipeline()
+{
+	VkShaderModule vertexShader;
+	VkShaderModule fragmentShader;
+
+	if (!vkutil::loadShaderModule(
+	    resPath("shaders/slang/DebugLines.vert.spv").c_str(), m_device, &vertexShader))
+	{
+		AGNI_PRINT("Failed to load debug lines vertex shader\n");
+		return;
+	}
+
+	if (!vkutil::loadShaderModule(
+	    resPath("shaders/slang/DebugLines.frag.spv").c_str(), m_device, &fragmentShader))
+	{
+		AGNI_PRINT("Failed to load debug lines fragment shader\n");
+		vkDestroyShaderModule(m_device, vertexShader, nullptr);
+		return;
+	}
+
+	VkPushConstantRange pushConstantRange {};
+	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+	pushConstantRange.offset     = 0;
+	pushConstantRange.size       = sizeof(DebugLinePushConstants);
+
+	VkPipelineLayoutCreateInfo layoutInfo {};
+	layoutInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	layoutInfo.setLayoutCount         = 0;       // No descriptor sets — fully push-constant driven
+	layoutInfo.pSetLayouts            = nullptr;
+	layoutInfo.pushConstantRangeCount = 1;
+	layoutInfo.pPushConstantRanges    = &pushConstantRange;
+
+	VK_CHECK(vkCreatePipelineLayout(m_device, &layoutInfo, nullptr, &m_debugLinePipelineLayout));
+
+	PipelineBuilder builder;
+	builder.setShaders(vertexShader, fragmentShader);
+	builder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
+	builder.setPolygonMode(VK_POLYGON_MODE_FILL);
+	builder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+	builder.enableMultisampling(m_msaaSamples);
+	builder.enableBlendingAlphablend();
+	builder.enableDepthtest(false, VK_COMPARE_OP_GREATER_OR_EQUAL);
+	builder.setColorAttachmentFormat(VK_FORMAT_R16G16B16A16_SFLOAT);
+	builder.setDepthFormat(VK_FORMAT_D32_SFLOAT);
+	builder.m_pipelineLayout = m_debugLinePipelineLayout;
+	builder.enableDescriptorBuffer(); // Required: descriptor buffers are bound in drawGeometry
+
+	m_debugLinePipeline = builder.buildPipeline(m_device);
+	VkDebugName(m_device, VK_OBJECT_TYPE_PIPELINE, (uint64_t)m_debugLinePipeline, "DebugLinePipeline");
+
+	vkDestroyShaderModule(m_device, vertexShader, nullptr);
+	vkDestroyShaderModule(m_device, fragmentShader, nullptr);
+
+	AGNI_PRINT("[Renderer] Debug line pipeline created\n");
+}
+
+void Renderer::drawDebugLines(VkCommandBuffer cmd, FrameData& currentFrame)
+{
+	if (m_debugLineVertexCount == 0 || !m_debugLineData || m_debugLinePipeline == VK_NULL_HANDLE)
+		return;
+
+	const size_t bufferSize = m_debugLineVertexCount * 16; // 16 bytes per LineVertex
+
+	AllocatedBuffer lineBuffer = m_resourceManager->createBuffer(
+	    bufferSize,
+	    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+	    VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+	std::memcpy(lineBuffer.m_info.pMappedData, m_debugLineData, bufferSize);
+
+	VkDebugName(m_device, VK_OBJECT_TYPE_BUFFER,
+	             (uint64_t)lineBuffer.m_buffer, "PerFrame_DebugLineBuffer");
+
+	auto* rm = m_resourceManager;
+	currentFrame.m_deletionQueue.push_function([rm, lineBuffer]() {
+		rm->destroyBuffer(lineBuffer);
+	});
+
+	VkBufferDeviceAddressInfo addrInfo {};
+	addrInfo.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+	addrInfo.buffer = lineBuffer.m_buffer;
+	VkDeviceAddress lineBufferAddress = vkGetBufferDeviceAddress(m_device, &addrInfo);
+
+	// Set viewport and scissor (required for new render pass)
+	VkViewport viewport = {};
+	viewport.width  = static_cast<float>(m_drawExtent.width);
+	viewport.height = static_cast<float>(m_drawExtent.height);
+	viewport.minDepth = 0.f;
+	viewport.maxDepth = 1.f;
+	vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+	VkRect2D scissor = {};
+	scissor.extent = m_drawExtent;
+	vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_debugLinePipeline);
+
+	DebugLinePushConstants pc {};
+	pc.m_viewproj     = m_sceneData.m_viewproj;
+	pc.m_vertexBuffer = lineBufferAddress;
+	vkCmdPushConstants(cmd, m_debugLinePipelineLayout,
+	                   VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+	                   0, sizeof(DebugLinePushConstants), &pc);
+
+	vkCmdDraw(cmd, m_debugLineVertexCount, 1, 0, 0);
 }
 
 void Renderer::requestPicking(float x, float y)

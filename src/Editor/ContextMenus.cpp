@@ -16,57 +16,46 @@ ContextMenus::ContextMenus(EditorManager& editorManager, AgniEngine& engine)
 {
 }
 
-void ContextMenus::showHierarchyContextMenu(EntityID entityUnderMouse)
+// showHierarchyContextMenu() removed — replaced by renderHierarchyMenuItems()
+// called from ECSInspector via BeginPopupContextItem() (correct ImGui pattern)
+
+void ContextMenus::renderHierarchyMenuItems(EntityID entityId)
 {
-	// Open popup on right-click
-	if (ImGui::BeginPopupContextWindow("HierarchyContextMenu", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
+	// Get camera position for spawning
+	glm::mat4 cameraRotation = m_engine.getCamera().getRotationMatrix();
+	glm::vec3 forward = glm::vec3(cameraRotation * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f));
+	glm::vec3 spawnPos = m_engine.getCamera().m_position + forward * 5.0f;
+
+	// Create submenu
+	if (ImGui::BeginMenu("Create"))
 	{
-		// If right-clicked on an entity, select it first
-		if (entityUnderMouse != NULL_ENTITY)
+		renderCreateSubmenu(spawnPos);
+		ImGui::EndMenu();
+	}
+
+	// Entity-specific actions
+	if (entityId != NULL_ENTITY)
+	{
+		ImGui::Separator();
+
+		if (ImGui::MenuItem("Duplicate", "Ctrl+D"))
 		{
-			m_editorManager.setSelectedEntity(entityUnderMouse);
+			m_editorManager.duplicateSelectedEntity();
 		}
 
-		// Get camera position for spawning
-		glm::mat4 cameraRotation = m_engine.getCamera().getRotationMatrix();
-		glm::vec3 forward = glm::vec3(cameraRotation * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f));
-		glm::vec3 spawnPos = m_engine.getCamera().m_position + forward * 5.0f;
-
-		// Create submenu
-		if (ImGui::BeginMenu("Create"))
+		if (ImGui::MenuItem("Save as Prefab"))
 		{
-			renderCreateSubmenu(spawnPos);
-			ImGui::EndMenu();
+			m_editorManager.savePrefab(entityId);
 		}
 
-		// Entity-specific actions (only if an entity is selected)
-		EntityID selected = m_editorManager.getSelectedEntity();
-		if (selected != NULL_ENTITY)
+		ImGui::Separator();
+
+		ImGui::PushStyleColor(ImGuiCol_Text, colors::Error);
+		if (ImGui::MenuItem("Delete", "Delete"))
 		{
-			ImGui::Separator();
-
-			if (ImGui::MenuItem("Duplicate", "Ctrl+D"))
-			{
-				m_editorManager.duplicateSelectedEntity();
-			}
-
-			if (ImGui::MenuItem("Rename"))
-			{
-				// TODO: Implement rename
-			}
-
-			ImGui::Separator();
-
-			// Delete in red
-			ImGui::PushStyleColor(ImGuiCol_Text, colors::Error);
-			if (ImGui::MenuItem("Delete", "Delete"))
-			{
-				m_editorManager.deleteSelectedEntity();
-			}
-			ImGui::PopStyleColor();
+			m_editorManager.deleteSelectedEntity();
 		}
-
-		ImGui::EndPopup();
+		ImGui::PopStyleColor();
 	}
 }
 
