@@ -1,6 +1,10 @@
 #include <Application.hpp>
 #include <AgniEngine.hpp>
 
+#ifdef JPH_DEBUG_RENDERER
+#include <Physics/JoltDebugRenderer.hpp>
+#endif
+
 #include <SDL3/SDL_events.h>
 
 #include <chrono>
@@ -98,6 +102,28 @@ int Application::run([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 			}
 #endif
 		}
+
+		// Physics debug visualization
+#ifdef AGNI_HAS_JOLT
+		if (engine.m_physicsManager && engine.m_physicsDebugSettings.enabled)
+		{
+#ifdef JPH_DEBUG_RENDERER
+			engine.m_physicsManager->drawDebug(
+			    engine.getCamera().m_position, engine.m_physicsDebugSettings);
+			auto* dr = engine.m_physicsManager->getDebugRenderer();
+			if (dr && dr->hasData())
+				engine.m_renderer.setDebugLines(
+				    dr->getLineVertices().data(),
+				    dr->getVertexCount());
+			else
+				engine.m_renderer.setDebugLines(nullptr, 0);
+#endif
+		}
+		else
+		{
+			engine.m_renderer.setDebugLines(nullptr, 0);
+		}
+#endif
 
 		// Render
 		engine.draw();

@@ -343,6 +343,25 @@ void EditorUI::renderRenderingWindow()
 			widgets::PropertyFloat("Sensitivity", &m_engine.getCamera().m_mouseSensitivity, 0.1f, 1.0f, "%.2f");
 			ImGui::PopID();
 		}
+
+#ifdef AGNI_HAS_JOLT
+		// Physics Debug Visualization
+		if (widgets::CollapsibleSection("Physics Debug", icons::Quality))
+		{
+			ImGui::PushID("PhysicsDebug");
+			auto& settings = m_engine.m_physicsDebugSettings;
+			widgets::PropertyCheckbox("Enable", &settings.enabled);
+			if (settings.enabled)
+			{
+				widgets::PropertyCheckbox("Draw Shapes", &settings.drawShapes);
+				widgets::PropertyCheckbox("Wireframe", &settings.drawWireframe);
+				widgets::PropertyCheckbox("Bounding Boxes", &settings.drawBoundingBox);
+				widgets::PropertyCheckbox("Velocity", &settings.drawVelocity);
+				widgets::PropertyCheckbox("Center of Mass", &settings.drawCenterOfMass);
+			}
+			ImGui::PopID();
+		}
+#endif
 		}
 		ImGui::End();
 	}

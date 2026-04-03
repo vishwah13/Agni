@@ -77,6 +77,8 @@ if(AGNI_ENABLE_JOLT)
     target_sources(agni PRIVATE
         Physics/JoltPhysicsManager.hpp
         Physics/JoltPhysicsManager.cpp
+        Physics/JoltDebugRenderer.hpp
+        Physics/JoltDebugRenderer.cpp
         ECS/Systems/PhysicsSystem.hpp
         ECS/Systems/PhysicsSystem.cpp
     )

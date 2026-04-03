@@ -105,6 +105,7 @@ if(AGNI_COMPILE_SHADERS)
         "${PROJECT_SOURCE_DIR}/shaders/slang/PointShadow.slang"
         "${PROJECT_SOURCE_DIR}/shaders/slang/MeshFallback.slang"
         "${PROJECT_SOURCE_DIR}/shaders/slang/SkyboxFallback.slang"
+        "${PROJECT_SOURCE_DIR}/shaders/slang/DebugLines.slang"
     )
 
     set(SLANG_FRAGMENT_ONLY_SHADERS

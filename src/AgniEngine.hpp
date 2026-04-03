@@ -367,6 +367,7 @@ public:
 #ifdef AGNI_HAS_JOLT
 	// Physics Manager
 	std::unique_ptr<agni::physics::JoltPhysicsManager> m_physicsManager;
+	agni::physics::PhysicsDebugSettings m_physicsDebugSettings;
 
 	agni::physics::JoltPhysicsManager& getPhysicsManager()
 	{

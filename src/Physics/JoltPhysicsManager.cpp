@@ -15,6 +15,11 @@
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/Shape/ScaledShape.h>
 
+#ifdef JPH_DEBUG_RENDERER
+#include <Physics/JoltDebugRenderer.hpp>
+#include <Jolt/Physics/Body/BodyManager.h>
+#endif
+
 // Free function for Jolt trace callback (GCC cannot convert variadic lambdas to function pointers)
 static void JoltTraceNoop(const char*, ...) {}
 
@@ -257,6 +262,12 @@ bool JoltPhysicsManager::initialize(const PhysicsSettings& settings)
 	AGNI_PRINT("  Max bodies: {}\n", settings.maxBodies);
 	AGNI_PRINT("  Gravity: ({:.2f}, {:.2f}, {:.2f})\n", settings.gravity.x, settings.gravity.y, settings.gravity.z);
 
+#ifdef JPH_DEBUG_RENDERER
+	m_debugRenderer = std::make_unique<JoltDebugRenderer>();
+	DebugRenderer::sInstance = m_debugRenderer.get();
+	AGNI_PRINT("[JoltPhysicsManager] Debug renderer created\n");
+#endif
+
 	return true;
 }
 
@@ -264,6 +275,10 @@ void JoltPhysicsManager::shutdown()
 {
 	if (m_physicsSystem)
 	{
+#ifdef JPH_DEBUG_RENDERER
+		// DebugRenderer destructor asserts sInstance == this, then clears it
+		m_debugRenderer.reset();
+#endif
 		m_physicsSystem.reset();
 		m_jobSystem.reset();
 		m_tempAllocator.reset();
@@ -584,6 +599,27 @@ void JoltPhysicsManager::optimizeBroadPhase()
 	if (m_physicsSystem)
 		m_physicsSystem->OptimizeBroadPhase();
 }
+
+#ifdef JPH_DEBUG_RENDERER
+void JoltPhysicsManager::drawDebug(const glm::vec3& cameraPos, const PhysicsDebugSettings& settings)
+{
+	if (!m_physicsSystem || !m_debugRenderer)
+		return;
+
+	m_debugRenderer->beginFrame(cameraPos);
+
+	// Map our settings to Jolt's DrawSettings
+	BodyManager::DrawSettings drawSettings;
+	drawSettings.mDrawShape              = settings.drawShapes;
+	drawSettings.mDrawShapeWireframe     = settings.drawWireframe;
+	drawSettings.mDrawBoundingBox        = settings.drawBoundingBox;
+	drawSettings.mDrawVelocity           = settings.drawVelocity;
+	drawSettings.mDrawCenterOfMassTransform = settings.drawCenterOfMass;
+	drawSettings.mDrawShapeColor         = BodyManager::EShapeColor::MotionTypeColor;
+
+	m_physicsSystem->DrawBodies(drawSettings, m_debugRenderer.get());
+}
+#endif
 
 void JoltPhysicsManager::registerEntityBody(EntityID entity, uint32_t bodyID)
 {

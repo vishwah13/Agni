@@ -9,6 +9,10 @@
 #include <memory>
 #include <unordered_map>
 
+#ifdef JPH_DEBUG_RENDERER
+namespace agni { namespace physics { class JoltDebugRenderer; } }
+#endif
+
 // Forward declarations for Jolt types (avoid including Jolt headers in public header)
 namespace JPH
 {
@@ -26,6 +30,16 @@ namespace agni
 {
 namespace physics
 {
+
+struct PhysicsDebugSettings
+{
+	bool enabled         = false;
+	bool drawShapes      = true;
+	bool drawWireframe   = true;
+	bool drawBoundingBox = false;
+	bool drawVelocity    = false;
+	bool drawCenterOfMass = false;
+};
 
 struct PhysicsSettings
 {
@@ -113,6 +127,12 @@ public:
 	// Access to body interface (for advanced use)
 	JPH::BodyInterface* getBodyInterface();
 
+#ifdef JPH_DEBUG_RENDERER
+	// Debug visualization
+	void drawDebug(const glm::vec3& cameraPos, const PhysicsDebugSettings& settings);
+	JoltDebugRenderer* getDebugRenderer() const { return m_debugRenderer.get(); }
+#endif
+
 private:
 	std::unique_ptr<JPH::PhysicsSystem>                m_physicsSystem;
 	std::unique_ptr<JPH::TempAllocator>                m_tempAllocator;
@@ -126,6 +146,10 @@ private:
 
 	PhysicsSettings m_settings;
 	float           m_accumulator {0.0f}; // For fixed timestep
+
+#ifdef JPH_DEBUG_RENDERER
+	std::unique_ptr<JoltDebugRenderer> m_debugRenderer;
+#endif
 
 	// Helper to convert body ID
 	JPH::BodyID toJoltBodyID(uint32_t bodyID) const;

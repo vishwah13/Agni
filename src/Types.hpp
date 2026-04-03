@@ -94,6 +94,12 @@ struct IndirectDrawPushConstants
 	VkDeviceAddress m_drawDataBufferPtr = 0;  // 8 bytes
 };
 
+// Push constants for debug line rendering (just BDA to line vertex buffer)
+struct DebugLinePushConstants
+{
+	VkDeviceAddress m_vertexBuffer = 0; // 8 bytes
+};
+
 // push constants for object ID picking pass (64-bit entity ID support)
 struct ObjectIDPushConstants
 {

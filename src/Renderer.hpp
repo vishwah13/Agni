@@ -172,6 +172,13 @@ public:
 	// GPU culling accessor
 	bool& getHiZOcclusionEnabled() { return m_hizOcclusionEnabled; }
 
+	// Debug line rendering
+	void setDebugLines(const void* data, uint32_t vertexCount)
+	{
+		m_debugLineData        = data;
+		m_debugLineVertexCount = vertexCount;
+	}
+
 	// UI draw callback (editor sets this to ImGui draw, runtime leaves null)
 	std::function<void(VkCommandBuffer, VkImageView)> m_uiDrawCallback;
 
@@ -273,6 +280,12 @@ private:
 	// ECS World for direct queries
 	agni::ecs::World* m_world {nullptr};
 
+	// Debug line rendering
+	VkPipeline       m_debugLinePipeline       = VK_NULL_HANDLE;
+	VkPipelineLayout m_debugLinePipelineLayout = VK_NULL_HANDLE;
+	const void*      m_debugLineData           = nullptr;
+	uint32_t         m_debugLineVertexCount    = 0;
+
 	// Object picking resources
 	AllocatedImage   m_objectIDImage;
 	AllocatedImage   m_pickingDepthImage;  // Non-MSAA depth for picking
@@ -368,6 +381,8 @@ private:
 	void initBackgroundPipelines();
 	void initPickingResources(VkExtent2D windowExtent);
 	void initObjectIDPipeline();
+	void initDebugLinePipeline();
+	void drawDebugLines(VkCommandBuffer cmd, FrameData& currentFrame);
 
 	// GPU culling
 	void initCullPipeline();
