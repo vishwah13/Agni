@@ -1,5 +1,5 @@
-// Debug line rendering — position + packed RGBA color per vertex
-import InputStructures;
+// Debug line rendering — fully self-contained via push constants only.
+// No descriptor sets — avoids descriptor buffer EXT tracking issues on shutdown.
 
 struct DebugLineVertex
 {
@@ -9,15 +9,12 @@ struct DebugLineVertex
 
 struct DebugLinePushConstants
 {
+    float4x4 viewproj;
     uint64_t vertexBufferPtr;
 };
 
 [[vk::push_constant]]
 ConstantBuffer<DebugLinePushConstants> pc;
-
-// Scene data (set 0, binding 0) — reuses existing layout
-[[vk::binding(0, 0)]]
-ConstantBuffer<SceneData> sceneData;
 
 struct VSOut
 {
@@ -32,9 +29,8 @@ VSOut vertexMain(uint vertexIndex : SV_VertexID)
     DebugLineVertex v = verts[vertexIndex];
 
     VSOut output;
-    output.position = mul(sceneData.viewproj, float4(v.position, 1.0));
+    output.position = mul(pc.viewproj, float4(v.position, 1.0));
 
-    // Unpack RGBA from uint32 (little-endian: R in low byte)
     output.color = float4(
         float((v.packedColor >>  0) & 0xFF) / 255.0,
         float((v.packedColor >>  8) & 0xFF) / 255.0,

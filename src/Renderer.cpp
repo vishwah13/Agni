@@ -1560,6 +1560,24 @@ void Renderer::renderFrame(VkCommandBuffer cmd,
 
 	drawGeometry(cmd, currentFrame);
 
+	// Debug lines in separate pass (isolated from geometry descriptor buffer state)
+	if (m_debugLineVertexCount > 0 && m_debugLineData && m_debugLinePipeline != VK_NULL_HANDLE)
+	{
+		VkRenderingAttachmentInfo colorAtt = vkinit::attachmentInfoMsaa(
+		    m_msaaColorImage.m_imageView, m_drawImage.m_imageView,
+		    nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		colorAtt.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD; // preserve geometry
+
+		VkRenderingAttachmentInfo depthAtt = vkinit::depthAttachmentInfo(
+		    m_depthImage.m_imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+		depthAtt.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD; // preserve depth for testing
+
+		VkRenderingInfo renderInfo = vkinit::renderingInfo(m_drawExtent, &colorAtt, &depthAtt);
+		vkCmdBeginRendering(cmd, &renderInfo);
+		drawDebugLines(cmd, currentFrame);
+		vkCmdEndRendering(cmd);
+	}
+
 	// Build Hi-Z pyramid for next frame's occlusion culling
 	if (m_hizOcclusionEnabled && m_hizDownsamplePipeline != VK_NULL_HANDLE)
 	{
@@ -2292,9 +2310,6 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 		               m_resourceManager->getGlobalIndexBuffer());
 	}
 
-	// Draw physics debug lines (inside same render pass for MSAA + depth testing)
-	drawDebugLines(cmd, currentFrame);
-
 	vkCmdEndRendering(cmd);
 
 	// End pipeline statistics query and advance frame index (must be outside render pass)
@@ -2688,8 +2703,8 @@ void Renderer::initDebugLinePipeline()
 
 	VkPipelineLayoutCreateInfo layoutInfo {};
 	layoutInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	layoutInfo.setLayoutCount         = 1;
-	layoutInfo.pSetLayouts            = &m_gpuSceneDataDescriptorLayout;
+	layoutInfo.setLayoutCount         = 0;       // No descriptor sets — fully push-constant driven
+	layoutInfo.pSetLayouts            = nullptr;
 	layoutInfo.pushConstantRangeCount = 1;
 	layoutInfo.pPushConstantRanges    = &pushConstantRange;
 
@@ -2702,11 +2717,11 @@ void Renderer::initDebugLinePipeline()
 	builder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
 	builder.enableMultisampling(m_msaaSamples);
 	builder.enableBlendingAlphablend();
-	builder.enableDepthtest(false, VK_COMPARE_OP_GREATER_OR_EQUAL); // Test but don't write
+	builder.enableDepthtest(false, VK_COMPARE_OP_GREATER_OR_EQUAL);
 	builder.setColorAttachmentFormat(VK_FORMAT_R16G16B16A16_SFLOAT);
 	builder.setDepthFormat(VK_FORMAT_D32_SFLOAT);
 	builder.m_pipelineLayout = m_debugLinePipelineLayout;
-	builder.enableDescriptorBuffer();
+	builder.enableDescriptorBuffer(); // Required: descriptor buffers are bound in drawGeometry
 
 	m_debugLinePipeline = builder.buildPipeline(m_device);
 
@@ -2740,9 +2755,22 @@ void Renderer::drawDebugLines(VkCommandBuffer cmd, FrameData& currentFrame)
 	addrInfo.buffer = lineBuffer.m_buffer;
 	VkDeviceAddress lineBufferAddress = vkGetBufferDeviceAddress(m_device, &addrInfo);
 
+	// Set viewport and scissor (required for new render pass)
+	VkViewport viewport = {};
+	viewport.width  = static_cast<float>(m_drawExtent.width);
+	viewport.height = static_cast<float>(m_drawExtent.height);
+	viewport.minDepth = 0.f;
+	viewport.maxDepth = 1.f;
+	vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+	VkRect2D scissor = {};
+	scissor.extent = m_drawExtent;
+	vkCmdSetScissor(cmd, 0, 1, &scissor);
+
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_debugLinePipeline);
 
 	DebugLinePushConstants pc {};
+	pc.m_viewproj     = m_sceneData.m_viewproj;
 	pc.m_vertexBuffer = lineBufferAddress;
 	vkCmdPushConstants(cmd, m_debugLinePipelineLayout,
 	                   VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
