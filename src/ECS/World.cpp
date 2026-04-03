@@ -62,6 +62,7 @@ namespace agni
 			registry.Register<RenderableTag>();
 			registry.Register<RigidBodyComponent>();
 			registry.Register<ColliderComponent>();
+			registry.Register<CharacterControllerComponent>();
 			registry.Register<AssetReferenceComponent>();
 			registry.Register<EntityInfoComponent>();
 

@@ -267,6 +267,43 @@ struct ColliderComponent
 struct PhysicsEnabledTag {};
 
 // ============================================================================
+// Character Controller Component (Jolt CharacterVirtual)
+// ============================================================================
+
+struct CharacterControllerComponent
+{
+	// Settings (editable in inspector, serialized)
+	float height        {1.8f};     // Capsule total height (m)
+	float radius        {0.3f};     // Capsule radius (m)
+	float mass          {70.0f};    // Character mass (kg)
+	float maxSlopeAngle {50.0f};    // Steepest climbable slope (degrees)
+	float maxSpeed      {5.0f};     // Walk speed (m/s)
+	float jumpSpeed     {6.0f};     // Jump impulse (m/s)
+	float stairStepUp   {0.4f};     // Max stair step height (m)
+
+	// Runtime state (not serialized, managed by CharacterSystem)
+	uint64_t  characterHandle {0};
+	bool      onGround        {false};
+	bool      wantsJump       {false};
+	glm::vec3 inputDirection  {0.0f}; // Set by game systems each frame
+
+	static void ReflectType(agni::TypeDesc<CharacterControllerComponent>& desc)
+	{
+		desc.SetName("CharacterControllerComponent");
+		desc.SetCategory("Physics");
+		desc.AddMember(&CharacterControllerComponent::height, "height", "Height").SetRange(0.5f, 5.0f).SetUnit("m");
+		desc.AddMember(&CharacterControllerComponent::radius, "radius", "Radius").SetRange(0.1f, 2.0f).SetUnit("m");
+		desc.AddMember(&CharacterControllerComponent::mass, "mass", "Mass").SetRange(1.0f, 500.0f).SetUnit("kg");
+		desc.AddMember(&CharacterControllerComponent::maxSlopeAngle, "maxSlopeAngle", "Max Slope Angle").SetRange(0.0f, 89.0f).SetUnit("deg");
+		desc.AddMember(&CharacterControllerComponent::maxSpeed, "maxSpeed", "Max Speed").SetRange(0.1f, 50.0f).SetUnit("m/s");
+		desc.AddMember(&CharacterControllerComponent::jumpSpeed, "jumpSpeed", "Jump Speed").SetRange(0.0f, 20.0f).SetUnit("m/s");
+		desc.AddMember(&CharacterControllerComponent::stairStepUp, "stairStepUp", "Stair Step Up").SetRange(0.0f, 1.0f).SetUnit("m");
+		desc.AddMember(&CharacterControllerComponent::onGround, "onGround", "On Ground").SetReadOnly().SetHidden().SetNoSerialize();
+		desc.AddMember(&CharacterControllerComponent::characterHandle, "characterHandle", "Handle").SetReadOnly().SetHidden().SetNoSerialize();
+	}
+};
+
+// ============================================================================
 // Asset Reference Component (for scene serialization)
 // ============================================================================
 

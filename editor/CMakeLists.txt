@@ -21,7 +21,7 @@ add_executable(agni_editor
 
 set_property(TARGET agni_editor PROPERTY CXX_STANDARD 20)
 
-target_link_libraries(agni_editor PRIVATE agni imgui imguizmo)
+target_link_libraries(agni_editor PRIVATE agni agni_game imgui imguizmo)
 
 target_include_directories(agni_editor PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"

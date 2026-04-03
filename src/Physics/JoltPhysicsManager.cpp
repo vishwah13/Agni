@@ -12,6 +12,7 @@
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Body/BodyActivationListener.h>
+#include <Jolt/Physics/Character/CharacterVirtual.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/Shape/ScaledShape.h>
 #include <Physics/AgniContactListener.hpp>
@@ -208,6 +209,12 @@ static RefConst<Shape> createCollisionShape(ColliderType            type,
 	return baseShape;
 }
 
+struct JoltPhysicsManager::CharacterStorage
+{
+	std::unordered_map<uint64_t, Ref<CharacterVirtual>> characters;
+	uint64_t nextHandle = 1;
+};
+
 JoltPhysicsManager::JoltPhysicsManager() = default;
 
 JoltPhysicsManager::~JoltPhysicsManager()
@@ -262,6 +269,8 @@ bool JoltPhysicsManager::initialize(const PhysicsSettings& settings)
 
 	// Set gravity
 	m_physicsSystem->SetGravity(toJoltVec3(settings.gravity));
+
+	m_characters = std::make_unique<CharacterStorage>();
 
 	// Register contact listener for collision events
 	m_contactListener = std::make_unique<AgniContactListener>();
@@ -754,6 +763,139 @@ void JoltPhysicsManager::screenToWorldRay(const glm::mat4& invViewProj,
 
 	outOrigin    = glm::vec3(nearWorld);
 	outDirection = glm::normalize(glm::vec3(farWorld) - glm::vec3(nearWorld));
+}
+
+uint64_t JoltPhysicsManager::createCharacterController(const glm::vec3& pos,
+                                                        const CharacterControllerComponent& settings)
+{
+	if (!m_physicsSystem || !m_characters)
+		return 0;
+
+	// Create capsule shape — half height is (total height - 2*radius) / 2
+	float halfHeight = std::max(0.0f, (settings.height - 2.0f * settings.radius) * 0.5f);
+
+	CharacterVirtualSettings charSettings;
+	charSettings.mShape = new CapsuleShape(halfHeight, settings.radius);
+	charSettings.mMass  = settings.mass;
+	charSettings.mMaxSlopeAngle = glm::radians(settings.maxSlopeAngle);
+	charSettings.mMaxStrength   = 100.0f;
+	charSettings.mPenetrationRecoverySpeed = 1.0f;
+
+	Ref<CharacterVirtual> character = new CharacterVirtual(
+	    &charSettings,
+	    RVec3(pos.x, pos.y, pos.z),
+	    Quat::sIdentity(),
+	    0,
+	    m_physicsSystem.get());
+
+	uint64_t handle = m_characters->nextHandle++;
+	m_characters->characters[handle] = character;
+
+	AGNI_PRINT("[JoltPhysicsManager] Created character controller (handle: {})\n", handle);
+	return handle;
+}
+
+void JoltPhysicsManager::updateCharacterController(uint64_t handle, float deltaTime,
+                                                    const glm::vec3& inputDir, float maxSpeed,
+                                                    bool jump, float jumpSpeed)
+{
+	if (!m_physicsSystem || !m_characters)
+		return;
+
+	auto it = m_characters->characters.find(handle);
+	if (it == m_characters->characters.end())
+		return;
+
+	CharacterVirtual* character = it->second.GetPtr();
+
+	Vec3 up = character->GetUp();
+	Vec3 gravity = m_physicsSystem->GetGravity();
+
+	// Current velocity
+	Vec3 currentVelocity = character->GetLinearVelocity();
+	Vec3 verticalVelocity = currentVelocity.Dot(up) * up;
+
+	// Ground velocity (for moving platforms)
+	Vec3 groundVelocity(0, 0, 0);
+	if (character->GetGroundState() == CharacterVirtual::EGroundState::OnGround)
+		groundVelocity = character->GetGroundVelocity();
+
+	Vec3 newVelocity;
+	if (character->GetGroundState() == CharacterVirtual::EGroundState::OnGround)
+	{
+		newVelocity = groundVelocity;
+		if (jump)
+			newVelocity += up * jumpSpeed;
+	}
+	else
+	{
+		// In air — preserve vertical velocity + apply gravity
+		newVelocity = verticalVelocity + gravity * deltaTime;
+	}
+
+	// Add horizontal input
+	Vec3 horizontalInput(inputDir.x, 0.0f, inputDir.z);
+	float inputLength = horizontalInput.Length();
+	if (inputLength > 1.0f)
+		horizontalInput /= inputLength;
+	newVelocity += horizontalInput * maxSpeed;
+
+	character->SetLinearVelocity(newVelocity);
+
+	// Extended update with stair stepping
+	CharacterVirtual::ExtendedUpdateSettings updateSettings;
+	updateSettings.mStickToFloorStepDown = Vec3(0, -0.5f, 0);
+	updateSettings.mWalkStairsStepUp     = Vec3(0, 0.4f, 0);
+
+	character->ExtendedUpdate(
+	    deltaTime,
+	    gravity,
+	    updateSettings,
+	    m_physicsSystem->GetDefaultBroadPhaseLayerFilter(Layers::MOVING),
+	    m_physicsSystem->GetDefaultLayerFilter(Layers::MOVING),
+	    {},
+	    {},
+	    *m_tempAllocator);
+}
+
+glm::vec3 JoltPhysicsManager::getCharacterPosition(uint64_t handle) const
+{
+	if (!m_characters) return glm::vec3(0.0f);
+	auto it = m_characters->characters.find(handle);
+	if (it == m_characters->characters.end()) return glm::vec3(0.0f);
+	RVec3 pos = it->second->GetPosition();
+	return glm::vec3(static_cast<float>(pos.GetX()),
+	                 static_cast<float>(pos.GetY()),
+	                 static_cast<float>(pos.GetZ()));
+}
+
+glm::vec3 JoltPhysicsManager::getCharacterVelocity(uint64_t handle) const
+{
+	if (!m_characters) return glm::vec3(0.0f);
+	auto it = m_characters->characters.find(handle);
+	if (it == m_characters->characters.end()) return glm::vec3(0.0f);
+	Vec3 vel = it->second->GetLinearVelocity();
+	return glm::vec3(vel.GetX(), vel.GetY(), vel.GetZ());
+}
+
+bool JoltPhysicsManager::isCharacterOnGround(uint64_t handle) const
+{
+	if (!m_characters) return false;
+	auto it = m_characters->characters.find(handle);
+	if (it == m_characters->characters.end()) return false;
+	return it->second->GetGroundState() == CharacterVirtual::EGroundState::OnGround;
+}
+
+void JoltPhysicsManager::destroyCharacterController(uint64_t handle)
+{
+	if (!m_characters) return;
+	m_characters->characters.erase(handle);
+}
+
+void JoltPhysicsManager::destroyAllCharacterControllers()
+{
+	if (!m_characters) return;
+	m_characters->characters.clear();
 }
 
 std::vector<CollisionEvent> JoltPhysicsManager::drainCollisionEvents()

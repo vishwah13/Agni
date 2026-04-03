@@ -1,6 +1,7 @@
 #include <Application.hpp>
 #include <AgniEngine.hpp>
 #include <ECS/World.hpp>
+#include <ECS/Systems/CharacterSystem.hpp>
 
 #ifdef JPH_DEBUG_RENDERER
 #include <Physics/JoltDebugRenderer.hpp>
@@ -142,6 +143,15 @@ int Application::run([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 				engine.m_physicsManager->update(engine.m_deltaTime);
 				agni::ecs::PhysicsSystem::syncFromPhysics(
 				    *engine.m_ecsWorld, *engine.m_physicsManager);
+			}
+
+			// Update character controllers
+			if (engine.m_physicsManager)
+			{
+				agni::ecs::CharacterSystem::initializeCharacters(
+				    *engine.m_ecsWorld, *engine.m_physicsManager);
+				agni::ecs::CharacterSystem::updateCharacters(
+				    *engine.m_ecsWorld, *engine.m_physicsManager, engine.m_deltaTime);
 			}
 
 			// Drain collision events for game systems

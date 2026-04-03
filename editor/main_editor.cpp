@@ -12,11 +12,13 @@ extern void RegisterEditorTests(ImGuiTestEngine* engine);
 
 #include <Editor/EditorManager.hpp>
 #include <Scene/SceneSerializer.hpp>
+#include <GameApp.hpp>
 
 class EditorApp : public agni::Application
 {
 	ImGuiIntegration m_imgui;
 	std::unique_ptr<agni::editor::EditorManager> m_editor;
+	GameApp m_game;
 
 #ifdef AGNI_ENABLE_EDITOR_TESTS
 	ImGuiTestEngine* m_testEngine = nullptr;
@@ -69,6 +71,7 @@ public:
 		// Remove all Jolt physics bodies before restoring snapshot
 		// (prevents stale body accumulation)
 		engine.m_physicsManager->removeAllBodies();
+		engine.m_physicsManager->destroyAllCharacterControllers();
 #endif
 
 		if (!m_worldSnapshot.empty())
@@ -115,6 +118,7 @@ protected:
 		auto& engine = getEngine();
 		m_editor = std::make_unique<agni::editor::EditorManager>(engine);
 		m_editor->init();
+		m_game.init(engine);
 
 		engine.m_renderer.m_uiDrawCallback =
 		    [this](VkCommandBuffer cmd, VkImageView view)
@@ -123,9 +127,11 @@ protected:
 		};
 	}
 
-	void onUpdate(float /*dt*/) override
+	void onUpdate(float dt) override
 	{
 		if (m_editor) m_editor->update();
+		if (m_mode == Mode::Playing)
+			m_game.update(getEngine(), dt);
 	}
 
 	void onEvent(SDL_Event& e) override

@@ -134,6 +134,16 @@ public:
 	// Collision events (drain once per frame after physics update)
 	std::vector<CollisionEvent> drainCollisionEvents();
 
+	// Character controller
+	uint64_t createCharacterController(const glm::vec3& pos, const CharacterControllerComponent& settings);
+	void     updateCharacterController(uint64_t handle, float deltaTime,
+	                                    const glm::vec3& inputDir, float maxSpeed, bool jump, float jumpSpeed);
+	glm::vec3 getCharacterPosition(uint64_t handle) const;
+	glm::vec3 getCharacterVelocity(uint64_t handle) const;
+	bool      isCharacterOnGround(uint64_t handle) const;
+	void      destroyCharacterController(uint64_t handle);
+	void      destroyAllCharacterControllers();
+
 	// Raycasting
 	bool raycast(const glm::vec3& origin, const glm::vec3& direction,
 	             float maxDistance, RaycastHit& outHit) const;
@@ -176,6 +186,10 @@ private:
 	std::unordered_map<EntityID, uint32_t> m_entityToBody;
 
 	std::unique_ptr<AgniContactListener> m_contactListener;
+
+	// Character controllers — storage is in .cpp (Jolt types not visible in header)
+	struct CharacterStorage;
+	std::unique_ptr<CharacterStorage> m_characters;
 
 	PhysicsSettings m_settings;
 	float           m_accumulator {0.0f}; // For fixed timestep

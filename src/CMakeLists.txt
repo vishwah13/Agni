@@ -83,6 +83,8 @@ if(AGNI_ENABLE_JOLT)
         Physics/AgniContactListener.cpp
         ECS/Systems/PhysicsSystem.hpp
         ECS/Systems/PhysicsSystem.cpp
+        ECS/Systems/CharacterSystem.hpp
+        ECS/Systems/CharacterSystem.cpp
     )
 endif()
 
