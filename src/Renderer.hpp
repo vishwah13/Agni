@@ -172,6 +172,14 @@ public:
 	// GPU culling accessor
 	bool& getHiZOcclusionEnabled() { return m_hizOcclusionEnabled; }
 
+	// Active camera — call before updateScene() each frame
+	void setActiveCamera(const glm::vec3& position, const glm::mat4& view, const glm::mat4& proj)
+	{
+		m_activeCamPosition   = position;
+		m_activeCamView       = view;
+		m_activeCamProjection = proj;
+	}
+
 	// Debug line rendering
 	void setDebugLines(const void* data, uint32_t vertexCount)
 	{
@@ -248,6 +256,11 @@ private:
 	// Render settings
 	float                     m_renderScale  = 1.f;
 	VkSampleCountFlagBits     m_msaaSamples  = VK_SAMPLE_COUNT_4_BIT;
+
+	// Active camera matrices (set by Application per frame)
+	glm::vec3 m_activeCamPosition   {0.0f};
+	glm::mat4 m_activeCamView       {1.0f};
+	glm::mat4 m_activeCamProjection {1.0f};
 
 	// Scene data
 	DrawContext                                              m_mainDrawContext;

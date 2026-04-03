@@ -1,5 +1,6 @@
 #include <Application.hpp>
 #include <AgniEngine.hpp>
+#include <ECS/World.hpp>
 
 #ifdef JPH_DEBUG_RENDERER
 #include <Physics/JoltDebugRenderer.hpp>
@@ -7,11 +8,51 @@
 
 #include <SDL3/SDL_events.h>
 
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
+#include <glm/gtx/quaternion.hpp>
+
 #include <chrono>
 #include <thread>
 
 namespace agni
 {
+
+// Find the first entity with CameraComponent and build view/projection from it
+static bool findGameCamera(AgniEngine& engine, glm::vec3& outPos, glm::mat4& outView, glm::mat4& outProj)
+{
+	if (!engine.m_ecsWorld) return false;
+
+	bool found = false;
+	engine.m_ecsWorld->get()
+	    .query<const CameraComponent, const TransformComponent>()
+	    .each([&](const CameraComponent& /*cam*/, const TransformComponent& transform) {
+		    if (found) return; // Use first camera found
+
+		    // Decompose worldTransform to get position and rotation
+		    glm::vec3 scale, translation, skew;
+		    glm::quat rotation;
+		    glm::vec4 perspective;
+		    glm::decompose(transform.worldTransform, scale, rotation, translation, skew, perspective);
+
+		    outPos = translation;
+
+		    // Build view matrix from transform (inverse of world transform, rotation only)
+		    outView = glm::inverse(
+		        glm::translate(glm::mat4(1.0f), translation) * glm::toMat4(rotation));
+
+		    // Build projection (reversed-Z, Y-flipped for Vulkan)
+		    outProj = glm::perspective(glm::radians(70.f),
+		        (float)engine.m_windowExtent.width / (float)engine.m_windowExtent.height,
+		        10000.f, 0.1f);
+		    outProj[1][1] *= -1;
+
+		    found = true;
+	    });
+
+	return found;
+}
 
 int Application::run([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 {
@@ -47,16 +88,18 @@ int Application::run([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 			// Application handles event first (editor input, ImGui event processing)
 			onEvent(e);
 
-			// Camera input
-			engine.m_mainCamera.processSDLEvent(e);
+			// Camera input — only process editor camera when NOT in Play mode
+			if (engine.m_simulationPaused)
+				engine.m_mainCamera.processSDLEvent(e);
 
 			if (e.type == SDL_EVENT_WINDOW_MINIMIZED)
 				engine.m_stopRendering = true;
 			if (e.type == SDL_EVENT_WINDOW_RESTORED)
 				engine.m_stopRendering = false;
 
-			// Viewport picking (only if UI doesn't want the mouse)
-			if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
+			// Viewport picking — editor only (disabled in Play mode)
+			if (engine.m_simulationPaused &&
+			    e.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
 			    e.button.button == SDL_BUTTON_LEFT &&
 			    !wantCaptureMouse())
 			{
@@ -141,6 +184,31 @@ int Application::run([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 			engine.m_renderer.setDebugLines(nullptr, 0);
 		}
 #endif
+
+		// Select active camera: editor camera in Edit mode, game camera in Play mode
+		{
+			engine.m_mainCamera.update(engine.m_deltaTime);
+
+			glm::vec3 camPos;
+			glm::mat4 camView, camProj;
+
+			if (!engine.m_simulationPaused && findGameCamera(engine, camPos, camView, camProj))
+			{
+				// Play mode with a game camera entity
+				engine.m_renderer.setActiveCamera(camPos, camView, camProj);
+			}
+			else
+			{
+				// Edit mode or no game camera — use editor camera
+				camPos  = engine.m_mainCamera.m_position;
+				camView = engine.m_mainCamera.getViewMatrix();
+				camProj = glm::perspective(glm::radians(70.f),
+				    (float)engine.m_windowExtent.width / (float)engine.m_windowExtent.height,
+				    10000.f, 0.1f);
+				camProj[1][1] *= -1;
+				engine.m_renderer.setActiveCamera(camPos, camView, camProj);
+			}
+		}
 
 		// Render
 		engine.draw();

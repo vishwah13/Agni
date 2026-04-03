@@ -2335,7 +2335,7 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	m_stats.m_meshDrawTime = elapsed.count() / 1000.f;
 }
 
-void Renderer::updateScene(float deltaTime, VkExtent2D windowExtent)
+void Renderer::updateScene(float /*deltaTime*/, VkExtent2D /*windowExtent*/)
 {
 #ifdef TRACY_ENABLE
 	ZoneScoped;
@@ -2351,21 +2351,10 @@ void Renderer::updateScene(float deltaTime, VkExtent2D windowExtent)
 	m_mainDrawContext.m_DirectionalLight =
 	DirectionalLightData {}; // Reset directional light
 
-	m_camera->update(deltaTime);
-	// camera view
-	glm::mat4 view = m_camera->getViewMatrix();
-	// camera projection
-	glm::mat4 projection =
-	glm::perspective(glm::radians(70.f),
-	                 (float) windowExtent.width / (float) windowExtent.height,
-	                 10000.f,
-	                 0.1f);
-
-	// invert the Y direction on projection matrix so that we are more similar
-	// to opengl and gltf axis
-	projection[1][1] *= -1;
-
-	glm::mat4 viewProj = projection * view;
+	// Use active camera matrices (set by Application via setActiveCamera)
+	glm::mat4 view       = m_activeCamView;
+	glm::mat4 projection = m_activeCamProjection;
+	glm::mat4 viewProj   = projection * view;
 
 	// === QUERY RENDERABLES DIRECTLY FROM ECS ===
 	if (m_world)
@@ -2499,7 +2488,7 @@ void Renderer::updateScene(float deltaTime, VkExtent2D windowExtent)
 		m_sceneData.m_sunlightColor     = glm::vec4(1.f);
 	}
 
-	m_sceneData.m_cameraPosition = m_camera->m_position;
+	m_sceneData.m_cameraPosition = m_activeCamPosition;
 
 	// Gribb-Hartmann: extract + normalize 6 frustum planes from viewProj
 	// Each plane stored as (nx, ny, nz, d) where nx*x + ny*y + nz*z + d = 0

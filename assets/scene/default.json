@@ -1,13 +1,13 @@
 {
   "version": "1.0",
   "metadata": {
-    "savedAt": "2026-04-03T14:07:29",
+    "savedAt": "2026-04-03T17:33:49",
     "engine": "Agni"
   },
   "entities": [
     {
       "name": "Cube",
-      "id": 17179869776,
+      "id": 17179869780,
       "components": {
         "TransformComponent": {
           "localTransform": [0.99966025,7.683903e-06,0.026064351,0,-8.166045e-06,1,1.8391705e-05,0,-0.026064351,-1.8598299e-05,0.99966025,0,7.5933185,1.1221923,7.9205914,1]
@@ -147,7 +147,7 @@
     },
     {
       "name": "",
-      "id": 17179869780,
+      "id": 17179869776,
       "components": {
         "TransformComponent": {
           "localTransform": [1,0,0,0,0,1,0,0,0,0,1,0,5.568251,2.7204428,6.64078,1]
@@ -180,7 +180,7 @@
       "id": 17179869781,
       "components": {
         "TransformComponent": {
-          "localTransform": [1,0,0,0,0,1,0,0,0,0,1,0,9.459857,0.6221692,9.967412,1]
+          "localTransform": [0.99900985,-0.023237763,0.037937865,0,0.02341882,-0.4503616,-0.8925391,0,0.037826367,0.89254385,-0.44937146,0,7.4874635,3.3123717,9.152195,1]
         },
         "SceneNodeComponent": {
           "parent": 0,
@@ -217,7 +217,7 @@
         "ColliderComponent": {
           "type": "Sphere",
           "boxHalfExtents": [0.5,0.5,0.5],
-          "sphereRadius": 0.5,
+          "sphereRadius": 1,
           "capsuleRadius": 0.5,
           "capsuleHalfHeight": 1,
           "center": [0,0,0],
@@ -400,7 +400,7 @@
       "id": 17179869785,
       "components": {
         "TransformComponent": {
-          "localTransform": [0.99900985,-0.023237763,0.037937865,0,0.02341882,-0.4503616,-0.8925391,0,0.037826367,0.89254385,-0.44937146,0,7.4874635,3.3123717,9.152195,1]
+          "localTransform": [1,0,0,0,0,1,0,0,0,0,1,0,9.459857,2.1462035,9.967412,1]
         },
         "SceneNodeComponent": {
           "parent": 0,
@@ -414,6 +414,13 @@
         },
         "RenderMeshComponent": {
           "visible": true
+        },
+        "CameraComponent": {
+          "position": [0,0,0],
+          "pitch": 0,
+          "yaw": 0,
+          "speed": 42.3,
+          "mouseSensitivity": 1
         },
         "LightComponent": {
           "type": "Point",
@@ -437,7 +444,7 @@
         "ColliderComponent": {
           "type": "Sphere",
           "boxHalfExtents": [0.5,0.5,0.5],
-          "sphereRadius": 1,
+          "sphereRadius": 0.5,
           "capsuleRadius": 0.5,
           "capsuleHalfHeight": 1,
           "center": [0,0,0],

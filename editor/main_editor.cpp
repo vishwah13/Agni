@@ -27,12 +27,23 @@ class EditorApp : public agni::Application
 	Mode        m_mode = Mode::Editing;
 	std::string m_worldSnapshot;
 
+	// Editor camera state saved on Play, restored on Stop
+	glm::vec3 m_savedCamPos   {0.0f};
+	float     m_savedCamPitch {0.0f};
+	float     m_savedCamYaw   {0.0f};
+
 public:
 	void play()
 	{
 		auto& engine = getEngine();
 		agni::scene::SceneSerializer serializer(engine);
 		m_worldSnapshot = serializer.serializeToString();
+
+		// Save editor camera state
+		m_savedCamPos   = engine.getCamera().m_position;
+		m_savedCamPitch = engine.getCamera().m_pitch;
+		m_savedCamYaw   = engine.getCamera().m_yaw;
+
 		engine.m_simulationPaused = false;
 		m_mode = Mode::Playing;
 	}
@@ -69,6 +80,11 @@ public:
 			serializer.deserializeFromString(m_worldSnapshot, opts);
 			m_worldSnapshot.clear();
 		}
+
+		// Restore editor camera state
+		engine.getCamera().m_position = m_savedCamPos;
+		engine.getCamera().m_pitch    = m_savedCamPitch;
+		engine.getCamera().m_yaw      = m_savedCamYaw;
 
 		m_mode = Mode::Editing;
 	}

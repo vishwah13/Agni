@@ -99,8 +99,9 @@ namespace agni
 			{
 				m_inspector->render(m_editorUI->getHierarchyVisible(),
 				                    m_editorUI->getInspectorVisible());
-				m_inspector->renderGizmo(&m_engine.getCamera(),
-				                         m_engine.getWindowExtent());
+				if (m_engine.m_simulationPaused)
+					m_inspector->renderGizmo(&m_engine.getCamera(),
+					                         m_engine.getWindowExtent());
 			}
 
 			// Render asset browser (controlled by EditorUI visibility flag)
