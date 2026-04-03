@@ -85,13 +85,13 @@ namespace agni
 					if (widgets::ButtonToggle(
 					    "L##local", m_gizmoMode == 0, ImVec2(24, 0)))
 						m_gizmoMode = 0;
-					widgets::TooltipOnHover("Local Space");
+					widgets::TooltipOnHover("Local Space (X)");
 
 					ImGui::SameLine();
 					if (widgets::ButtonToggle(
 					    "W##world", m_gizmoMode == 1, ImVec2(24, 0)))
 						m_gizmoMode = 1;
-					widgets::TooltipOnHover("World Space");
+					widgets::TooltipOnHover("World Space (X)");
 					ImGui::PopID();
 
 					ImGui::SameLine();

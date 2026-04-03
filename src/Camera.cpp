@@ -30,60 +30,44 @@ glm::mat4 Camera::getRotationMatrix() const
 // TO-DO: Add zoom functionality
 void Camera::processSDLEvent(const SDL_Event& e)
 {
-	if (e.type == SDL_EVENT_KEY_DOWN)
+	// Camera movement only active while right mouse is held (fly mode)
+	if (e.type == SDL_EVENT_KEY_DOWN && m_rightMousePressed)
 	{
 		if (e.key.key == SDLK_W)
-		{
 			m_velocity.z = -1;
-		}
 		if (e.key.key == SDLK_S)
-		{
 			m_velocity.z = 1;
-		}
 		if (e.key.key == SDLK_A)
-		{
 			m_velocity.x = -1;
-		}
 		if (e.key.key == SDLK_D)
-		{
 			m_velocity.x = 1;
-		}
 		if (e.key.key == SDLK_E)
-		{
-			m_velocity.y = 1; // Up
-		}
+			m_velocity.y = 1;
 		if (e.key.key == SDLK_Q)
-		{
-			m_velocity.y = -1; // Down
-		}
+			m_velocity.y = -1;
 	}
 
 	if (e.type == SDL_EVENT_KEY_UP)
 	{
 		if (e.key.key == SDLK_W)
-		{
 			m_velocity.z = 0;
-		}
 		if (e.key.key == SDLK_S)
-		{
 			m_velocity.z = 0;
-		}
 		if (e.key.key == SDLK_A)
-		{
 			m_velocity.x = 0;
-		}
 		if (e.key.key == SDLK_D)
-		{
 			m_velocity.x = 0;
-		}
 		if (e.key.key == SDLK_E)
-		{
 			m_velocity.y = 0;
-		}
 		if (e.key.key == SDLK_Q)
-		{
 			m_velocity.y = 0;
-		}
+	}
+
+	// Stop all movement when right mouse is released
+	if (e.type == SDL_EVENT_MOUSE_BUTTON_UP &&
+	    e.button.button == SDL_BUTTON_RIGHT)
+	{
+		m_velocity = glm::vec3(0.f);
 	}
 
 	if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&

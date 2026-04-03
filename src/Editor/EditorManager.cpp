@@ -259,6 +259,24 @@ namespace agni
 			m_inputManager->registerShortcut({SDLK_Y, true, false, false},
 			                                 [this]() { redo(); });
 
+			// Gizmo operation shortcuts (only when an entity is selected)
+			m_inputManager->registerShortcut(
+			{SDLK_W, false, false, false},
+			[this]() { if (m_inspector && m_selectedEntity != NULL_ENTITY) m_inspector->setGizmoOperation(0); }); // Translate
+
+			m_inputManager->registerShortcut(
+			{SDLK_E, false, false, false},
+			[this]() { if (m_inspector && m_selectedEntity != NULL_ENTITY) m_inspector->setGizmoOperation(1); }); // Rotate
+
+			m_inputManager->registerShortcut(
+			{SDLK_R, false, false, false},
+			[this]() { if (m_inspector && m_selectedEntity != NULL_ENTITY) m_inspector->setGizmoOperation(2); }); // Scale
+
+			// Toggle Local/World space (only when an entity is selected)
+			m_inputManager->registerShortcut(
+			{SDLK_X, false, false, false},
+			[this]() { if (m_inspector && m_selectedEntity != NULL_ENTITY) m_inspector->toggleGizmoMode(); });
+
 			AGNI_PRINT("[EditorManager] Keyboard shortcuts registered\n");
 		}
 

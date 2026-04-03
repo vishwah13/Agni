@@ -60,9 +60,10 @@ private:
 
 	// Track pressed keys this frame
 	std::vector<SDL_Keycode> m_keysPressed;
-	bool m_ctrlPressed  = false;
-	bool m_shiftPressed = false;
-	bool m_altPressed   = false;
+	bool m_ctrlPressed      = false;
+	bool m_shiftPressed     = false;
+	bool m_altPressed       = false;
+	bool m_rightMousePressed = false;
 
 	// Helper to check modifier state
 	bool isModifierPressed(SDL_Keymod mod, SDL_Keymod check) const;

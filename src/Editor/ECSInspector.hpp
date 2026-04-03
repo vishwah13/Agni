@@ -58,6 +58,17 @@ public:
 		m_contextMenus = contextMenus;
 	}
 
+	// Gizmo operation: 0=Translate, 1=Rotate, 2=Scale
+	void setGizmoOperation(int op) { m_gizmoOperation = op; }
+	int  getGizmoOperation() const { return m_gizmoOperation; }
+
+	// Gizmo mode: 0=Local, 1=World
+	void setGizmoMode(int mode) { m_gizmoMode = mode; }
+	int  getGizmoMode() const   { return m_gizmoMode; }
+
+	// Toggle between Local and World mode
+	void toggleGizmoMode() { m_gizmoMode = (m_gizmoMode == 0) ? 1 : 0; }
+
 private:
 	EditorManager&            m_editorManager;
 	agni::ecs::World&         m_world;
