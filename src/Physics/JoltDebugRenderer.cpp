@@ -2,6 +2,10 @@
 
 #ifdef JPH_DEBUG_RENDERER
 
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/matrix_decompose.hpp>
+#include <glm/gtx/quaternion.hpp>
+
 using namespace JPH;
 
 namespace agni
@@ -50,6 +54,61 @@ void JoltDebugRenderer::DrawText3D(RVec3Arg /*inPosition*/, const JPH::string_vi
                                    ColorArg /*inColor*/, float /*inHeight*/)
 {
 	// No-op — text rendering not implemented yet
+}
+
+void JoltDebugRenderer::drawColliderShape(const TransformComponent& transform,
+                                          const ColliderComponent& collider,
+                                          const RigidBodyComponent& rigidbody)
+{
+	// Decompose world transform to get position, rotation, scale
+	glm::vec3 scale, translation, skew;
+	glm::quat rotation;
+	glm::vec4 perspective;
+	glm::decompose(transform.worldTransform, scale, rotation, translation, skew, perspective);
+
+	// Build Jolt transform (position + rotation, applying collider center offset)
+	glm::vec3 center = translation + rotation * (collider.center * scale);
+	RVec3 joltPos(center.x, center.y, center.z);
+	Quat  joltRot(rotation.x, rotation.y, rotation.z, rotation.w);
+	RMat44 bodyTransform = RMat44::sRotationTranslation(joltRot, joltPos);
+
+	// Color based on body type: static=grey, dynamic=green, kinematic=blue
+	Color color(128, 128, 128, 255);
+	switch (rigidbody.type)
+	{
+	case RigidBodyType::Static:    color = Color(128, 128, 128, 255); break;
+	case RigidBodyType::Dynamic:   color = Color(0, 255, 128, 255);   break;
+	case RigidBodyType::Kinematic: color = Color(64, 128, 255, 255);  break;
+	}
+
+	// Draw the shape using inherited DebugRenderer helpers
+	switch (collider.type)
+	{
+	case ColliderType::Box:
+	{
+		glm::vec3 halfExt = collider.boxHalfExtents * scale;
+		AABox box(Vec3(-halfExt.x, -halfExt.y, -halfExt.z),
+		          Vec3(halfExt.x, halfExt.y, halfExt.z));
+		DrawWireBox(bodyTransform, box, color);
+		break;
+	}
+	case ColliderType::Sphere:
+	{
+		float uniformScale = std::max({scale.x, scale.y, scale.z});
+		float r = collider.sphereRadius * uniformScale;
+		DrawWireSphere(joltPos, r, color);
+		break;
+	}
+	case ColliderType::Capsule:
+	{
+		float radiusScale = std::max(scale.x, scale.z);
+		float halfHeight = collider.capsuleHalfHeight * scale.y;
+		float radius = collider.capsuleRadius * radiusScale;
+		// Jolt capsule is along Y axis
+		DrawCapsule(bodyTransform, halfHeight, radius, color, ECastShadow::Off, EDrawMode::Wireframe);
+		break;
+	}
+	}
 }
 
 } // namespace physics

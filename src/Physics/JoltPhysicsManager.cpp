@@ -611,13 +611,28 @@ void JoltPhysicsManager::drawDebug(const glm::vec3& cameraPos, const PhysicsDebu
 	// Map our settings to Jolt's DrawSettings
 	BodyManager::DrawSettings drawSettings;
 	drawSettings.mDrawShape              = settings.drawShapes;
-	drawSettings.mDrawShapeWireframe     = settings.drawWireframe;
+	drawSettings.mDrawShapeWireframe     = true; // Always wireframe (we only render lines)
 	drawSettings.mDrawBoundingBox        = settings.drawBoundingBox;
 	drawSettings.mDrawVelocity           = settings.drawVelocity;
 	drawSettings.mDrawCenterOfMassTransform = settings.drawCenterOfMass;
 	drawSettings.mDrawShapeColor         = BodyManager::EShapeColor::MotionTypeColor;
 
 	m_physicsSystem->DrawBodies(drawSettings, m_debugRenderer.get());
+}
+
+void JoltPhysicsManager::drawDebugFromECS(
+    const glm::vec3& cameraPos,
+    const std::vector<std::tuple<TransformComponent, ColliderComponent, RigidBodyComponent>>& entities)
+{
+	if (!m_debugRenderer)
+		return;
+
+	m_debugRenderer->beginFrame(cameraPos);
+
+	for (const auto& [transform, collider, rigidbody] : entities)
+	{
+		m_debugRenderer->drawColliderShape(transform, collider, rigidbody);
+	}
 }
 #endif
 

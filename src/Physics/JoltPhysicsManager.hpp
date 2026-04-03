@@ -128,8 +128,11 @@ public:
 	JPH::BodyInterface* getBodyInterface();
 
 #ifdef JPH_DEBUG_RENDERER
-	// Debug visualization
+	// Debug visualization (Play mode — draws from Jolt bodies)
 	void drawDebug(const glm::vec3& cameraPos, const PhysicsDebugSettings& settings);
+	// Debug visualization (Edit mode — draws from ECS component data)
+	void drawDebugFromECS(const glm::vec3& cameraPos,
+	                      const std::vector<std::tuple<TransformComponent, ColliderComponent, RigidBodyComponent>>& entities);
 	JoltDebugRenderer* getDebugRenderer() const { return m_debugRenderer.get(); }
 #endif
 

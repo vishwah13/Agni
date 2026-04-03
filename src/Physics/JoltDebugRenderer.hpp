@@ -6,7 +6,10 @@
 
 #include <Jolt/Renderer/DebugRendererSimple.h>
 
+#include <Components.hpp>
+
 #include <glm/vec3.hpp>
+#include <glm/mat4x4.hpp>
 
 #include <cstdint>
 #include <vector>
@@ -37,6 +40,11 @@ public:
 	                  JPH::ColorArg inColor, ECastShadow inCastShadow) override;
 	void DrawText3D(JPH::RVec3Arg inPosition, const JPH::string_view& inString,
 	                JPH::ColorArg inColor, float inHeight) override;
+
+	// Draw a collider shape from ECS data (for Edit mode — no Jolt bodies needed)
+	void drawColliderShape(const TransformComponent& transform,
+	                       const ColliderComponent& collider,
+	                       const RigidBodyComponent& rigidbody);
 
 	// Access collected line data for GPU upload
 	const std::vector<LineVertex>& getLineVertices() const { return m_lines; }

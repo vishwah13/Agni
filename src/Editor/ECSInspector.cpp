@@ -456,7 +456,8 @@ namespace agni
 						{
 							int intMin = prop.hasRange ? static_cast<int>(prop.rangeMin) : 0;
 							int intMax = prop.hasRange ? static_cast<int>(prop.rangeMax) : 0;
-							ImGui::DragInt(prop.displayName, static_cast<int*>(fieldPtr), 1.0f, intMin, intMax);
+							ImGuiSliderFlags flags = (intMin != 0 || intMax != 0) ? ImGuiSliderFlags_AlwaysClamp : 0;
+							ImGui::DragInt(prop.displayName, static_cast<int*>(fieldPtr), 1.0f, intMin, intMax, "%d", flags);
 							if (prop.unit) { ImGui::SameLine(); ImGui::TextDisabled("%s", prop.unit); }
 							break;
 						}
@@ -465,7 +466,7 @@ namespace agni
 						{
 							int val = static_cast<int>(*static_cast<uint32_t*>(fieldPtr));
 							int uintMax = prop.hasRange ? static_cast<int>(prop.rangeMax) : INT_MAX;
-							if (ImGui::DragInt(prop.displayName, &val, 1.0f, 0, uintMax))
+							if (ImGui::DragInt(prop.displayName, &val, 1.0f, 0, uintMax, "%d", ImGuiSliderFlags_AlwaysClamp))
 								*static_cast<uint32_t*>(fieldPtr) = static_cast<uint32_t>(val);
 							if (prop.unit) { ImGui::SameLine(); ImGui::TextDisabled("%s", prop.unit); }
 							break;

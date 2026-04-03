@@ -104,12 +104,30 @@ int Application::run([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 		}
 
 		// Physics debug visualization
-#ifdef AGNI_HAS_JOLT
+#if defined(AGNI_HAS_JOLT) && defined(JPH_DEBUG_RENDERER)
 		if (engine.m_physicsManager && engine.m_physicsDebugSettings.enabled)
 		{
-#ifdef JPH_DEBUG_RENDERER
-			engine.m_physicsManager->drawDebug(
-			    engine.getCamera().m_position, engine.m_physicsDebugSettings);
+			if (!engine.m_simulationPaused)
+			{
+				// Play mode: draw from Jolt bodies (full state: sleep colors, velocity, etc.)
+				engine.m_physicsManager->drawDebug(
+				    engine.getCamera().m_position, engine.m_physicsDebugSettings);
+			}
+			else
+			{
+				// Edit mode: draw from ECS component data (no Jolt bodies exist)
+				std::vector<std::tuple<TransformComponent, ColliderComponent, RigidBodyComponent>> entities;
+				engine.m_ecsWorld->get()
+				    .query<const TransformComponent, const ColliderComponent, const RigidBodyComponent>()
+				    .each([&entities](const TransformComponent& t,
+				                      const ColliderComponent& c,
+				                      const RigidBodyComponent& r) {
+					    entities.emplace_back(t, c, r);
+				    });
+				engine.m_physicsManager->drawDebugFromECS(
+				    engine.getCamera().m_position, entities);
+			}
+
 			auto* dr = engine.m_physicsManager->getDebugRenderer();
 			if (dr && dr->hasData())
 				engine.m_renderer.setDebugLines(
@@ -117,7 +135,6 @@ int Application::run([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 				    dr->getVertexCount());
 			else
 				engine.m_renderer.setDebugLines(nullptr, 0);
-#endif
 		}
 		else
 		{

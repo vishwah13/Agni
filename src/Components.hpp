@@ -144,7 +144,7 @@ struct LightComponent
 		desc.AddMember(&LightComponent::type, "type", "Light Type").SetEnum(&lightTypeEnum);
 		desc.AddMember(&LightComponent::color, "color", "Color").SetAsColor();
 		desc.AddMember(&LightComponent::intensity, "intensity", "Intensity").SetRange(0.0f, 100.0f);
-		desc.AddMember(&LightComponent::radius, "radius", "Radius", "Attenuation radius").SetRange(0.0f, 1000.0f).SetUnit("m");
+		desc.AddMember(&LightComponent::radius, "radius", "Radius", "Attenuation radius").SetRange(0.0f, 200.0f).SetUnit("m");
 		desc.AddMember(&LightComponent::direction, "direction", "Direction");
 		desc.AddMember(&LightComponent::innerConeAngle, "innerConeAngle", "Inner Cone Angle").SetRange(0.0f, 90.0f).SetUnit("deg");
 		desc.AddMember(&LightComponent::outerConeAngle, "outerConeAngle", "Outer Cone Angle").SetRange(0.0f, 90.0f).SetUnit("deg");
@@ -255,9 +255,9 @@ struct ColliderComponent
 		desc.SetCategory("Physics");
 		desc.AddMember(&ColliderComponent::type, "type", "Collider Type").SetEnum(&colliderTypeEnum);
 		desc.AddMember(&ColliderComponent::boxHalfExtents, "boxHalfExtents", "Box Half Extents");
-		desc.AddMember(&ColliderComponent::sphereRadius, "sphereRadius", "Sphere Radius").SetRange(0.01f, 1000.0f).SetUnit("m");
-		desc.AddMember(&ColliderComponent::capsuleRadius, "capsuleRadius", "Capsule Radius").SetRange(0.01f, 1000.0f).SetUnit("m");
-		desc.AddMember(&ColliderComponent::capsuleHalfHeight, "capsuleHalfHeight", "Capsule Half Height").SetRange(0.01f, 1000.0f).SetUnit("m");
+		desc.AddMember(&ColliderComponent::sphereRadius, "sphereRadius", "Sphere Radius").SetRange(0.01f, 50.0f).SetUnit("m");
+		desc.AddMember(&ColliderComponent::capsuleRadius, "capsuleRadius", "Capsule Radius").SetRange(0.01f, 50.0f).SetUnit("m");
+		desc.AddMember(&ColliderComponent::capsuleHalfHeight, "capsuleHalfHeight", "Capsule Half Height").SetRange(0.01f, 50.0f).SetUnit("m");
 		desc.AddMember(&ColliderComponent::center, "center", "Center Offset");
 		desc.AddMember(&ColliderComponent::isTrigger, "isTrigger", "Is Trigger");
 	}

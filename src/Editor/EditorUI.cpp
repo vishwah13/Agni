@@ -354,10 +354,9 @@ void EditorUI::renderRenderingWindow()
 			if (settings.enabled)
 			{
 				widgets::PropertyCheckbox("Draw Shapes", &settings.drawShapes);
-				widgets::PropertyCheckbox("Wireframe", &settings.drawWireframe);
 				widgets::PropertyCheckbox("Bounding Boxes", &settings.drawBoundingBox);
-				widgets::PropertyCheckbox("Velocity", &settings.drawVelocity);
-				widgets::PropertyCheckbox("Center of Mass", &settings.drawCenterOfMass);
+				widgets::PropertyCheckbox("Velocity Arrows", &settings.drawVelocity);
+				widgets::PropertyCheckbox("Center of Mass Axes", &settings.drawCenterOfMass);
 			}
 			ImGui::PopID();
 		}

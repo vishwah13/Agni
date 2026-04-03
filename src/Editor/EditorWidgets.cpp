@@ -156,14 +156,9 @@ bool PropertyFloat(const char* label, float* value, float min, float max,
     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 
     bool changed = false;
-    if (min == 0.0f && max == 0.0f)
-    {
-        changed = ImGui::DragFloat("##value", value, 0.1f, 0.0f, 0.0f, format);
-    }
-    else
-    {
-        changed = ImGui::SliderFloat("##value", value, min, max, format);
-    }
+    // Always use DragFloat — supports Ctrl+Click to type precise values
+    changed = ImGui::DragFloat("##value", value, 0.1f, min, max, format,
+                               (min != 0.0f || max != 0.0f) ? ImGuiSliderFlags_AlwaysClamp : 0);
 
     ImGui::PopID();
     return changed;
@@ -182,14 +177,9 @@ bool PropertyInt(const char* label, int* value, int min, int max, float labelWid
     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 
     bool changed = false;
-    if (min == 0 && max == 0)
-    {
-        changed = ImGui::DragInt("##value", value);
-    }
-    else
-    {
-        changed = ImGui::SliderInt("##value", value, min, max);
-    }
+    // Always use DragInt — supports Ctrl+Click to type precise values
+    changed = ImGui::DragInt("##value", value, 1.0f, min, max, "%d",
+                             (min != 0 || max != 0) ? ImGuiSliderFlags_AlwaysClamp : 0);
 
     ImGui::PopID();
     return changed;
