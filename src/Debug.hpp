@@ -69,3 +69,32 @@ void PrintVmaAllocationStats();
 
 // Print detailed VMA statistics (including suballocations)
 void PrintDetailedVmaStats(VmaAllocator allocator);
+
+// Vulkan validation layer debug callback — set breakpoint on the AGNI_PRINT line to catch errors
+inline VKAPI_ATTR VkBool32 VKAPI_CALL vulkanDebugCallback(
+    VkDebugUtilsMessageSeverityFlagBitsEXT      messageSeverity,
+    VkDebugUtilsMessageTypeFlagsEXT             messageTypes,
+    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+    void*                                       pUserData)
+{
+	(void)messageTypes;
+	(void)pUserData;
+	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+		AGNI_PRINT("[ERROR: Validation] - {}\n{}\n", pCallbackData->pMessageIdName, pCallbackData->pMessage);
+	else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+		AGNI_PRINT("[WARNING: Validation] - {}\n{}\n", pCallbackData->pMessageIdName, pCallbackData->pMessage);
+	return VK_FALSE;
+}
+
+// Name a Vulkan object for validation error identification (debug builds only)
+inline void VkDebugName(VkDevice device, VkObjectType type, uint64_t handle, const char* name)
+{
+#ifndef NDEBUG
+	VkDebugUtilsObjectNameInfoEXT info {};
+	info.sType        = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+	info.objectType   = type;
+	info.objectHandle = handle;
+	info.pObjectName  = name;
+	vkSetDebugUtilsObjectNameEXT(device, &info);
+#endif
+}

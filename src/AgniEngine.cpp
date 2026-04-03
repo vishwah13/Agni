@@ -145,18 +145,24 @@ void AgniEngine::cleanup()
 
 		vkDeviceWaitIdle(m_device);
 
+		// Reset command buffers to "initial" state — clears all resource
+		// references so the validation layer won't report them as "in use".
+		for (uint32_t i = 0; i < FRAME_OVERLAP; i++)
+			vkResetCommandBuffer(m_frames[i].m_mainCommandBuffer, 0);
+
+		// Now safe to destroy everything — CBs hold no references.
+		for (uint32_t i = 0; i < FRAME_OVERLAP; i++)
+			m_frames[i].m_descriptorBuffer.destroy();
+
+		for (uint32_t i = 0; i < FRAME_OVERLAP; i++)
+			m_frames[i].m_deletionQueue.flush();
+
 		for (uint32_t i = 0; i < FRAME_OVERLAP; i++)
 		{
 			vkDestroyCommandPool(m_device, m_frames[i].m_commandPool, nullptr);
-
-			// destroy sync objects
 			vkDestroyFence(m_device, m_frames[i].m_renderFence, nullptr);
-			vkDestroySemaphore(
-			m_device, m_frames[i].m_renderSemaphore, nullptr);
-			vkDestroySemaphore(
-			m_device, m_frames[i].m_swapchainSemaphore, nullptr);
-
-			m_frames[i].m_deletionQueue.flush();
+			vkDestroySemaphore(m_device, m_frames[i].m_renderSemaphore, nullptr);
+			vkDestroySemaphore(m_device, m_frames[i].m_swapchainSemaphore, nullptr);
 		}
 
 		// Cleanup m_skybox resources
@@ -334,7 +340,7 @@ void AgniEngine::initVulkan()
 
 	auto vkbInstanceBuilder = builder.set_app_name("Agni")
 	                          .request_validation_layers(bUseValidationLayers)
-	                          .use_default_debug_messenger()
+	                          .set_debug_callback(vulkanDebugCallback)
 	                          .require_api_version(1, 4, 0)
 	                          .build();
 
@@ -457,6 +463,13 @@ void AgniEngine::initCommands()
 
 		VK_CHECK(vkAllocateCommandBuffers(
 		m_device, &cmdAllocInfo, &m_frames[i].m_mainCommandBuffer));
+
+		VkDebugName(m_device, VK_OBJECT_TYPE_COMMAND_POOL,
+		            (uint64_t)m_frames[i].m_commandPool,
+		            i == 0 ? "Frame0_CommandPool" : "Frame1_CommandPool");
+		VkDebugName(m_device, VK_OBJECT_TYPE_COMMAND_BUFFER,
+		            (uint64_t)m_frames[i].m_mainCommandBuffer,
+		            i == 0 ? "Frame0_CommandBuffer" : "Frame1_CommandBuffer");
 	}
 }
 
@@ -605,6 +618,14 @@ void AgniEngine::initDescriptors()
 
 		m_resourceManager.getMainDeletionQueue().push_function(
 		[&, i]() { m_frames[i].m_descriptorBuffer.destroy(); });
+
+		// Name for validation error identification
+		VkDebugUtilsObjectNameInfoEXT nameInfo {};
+		nameInfo.sType        = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+		nameInfo.objectType   = VK_OBJECT_TYPE_BUFFER;
+		nameInfo.objectHandle = (uint64_t)m_frames[i].m_descriptorBuffer.getBuffer();
+		nameInfo.pObjectName  = (i == 0) ? "PerFrame0_DescriptorBuffer" : "PerFrame1_DescriptorBuffer";
+		vkSetDebugUtilsObjectNameEXT(m_device, &nameInfo);
 	}
 
 	// adding vkDestroyDescriptorPool to the deletion queue

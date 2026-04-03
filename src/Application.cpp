@@ -167,6 +167,12 @@ int Application::run([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 		    frameElapsed.count() / 1000.f;
 	}
 
+	// Reset command buffers before cleanup — clears resource references
+	// so ImGui and engine can safely destroy buffers/pipelines/descriptors.
+	vkDeviceWaitIdle(engine.m_device);
+	for (uint32_t i = 0; i < FRAME_OVERLAP; i++)
+		vkResetCommandBuffer(engine.m_frames[i].m_mainCommandBuffer, 0);
+
 	onCleanup();
 	engine.cleanup();
 	m_engine = nullptr;

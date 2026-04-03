@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <chrono>
 
+
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
 #endif
@@ -465,6 +466,9 @@ void Renderer::initDescriptors()
 	m_drawImageDescriptors = m_globalDescriptorAllocator->allocate(
 	m_device, m_drawImageDescriptorLayout);
 
+	VkDebugName(m_device, VK_OBJECT_TYPE_DESCRIPTOR_SET,
+	             (uint64_t)m_drawImageDescriptors, "DrawImageDescriptorSet");
+
 	// Create descriptor set layout for GPU scene data + lights + shadow maps
 	// (using descriptor buffer)
 	{
@@ -586,6 +590,7 @@ void Renderer::initShadowPipeline()
 	builder.enableDescriptorBuffer();
 
 	m_shadowPipeline = builder.buildPipeline(m_device);
+	VkDebugName(m_device, VK_OBJECT_TYPE_PIPELINE, (uint64_t)m_shadowPipeline, "ShadowPipeline");
 
 	vkDestroyShaderModule(m_device, shadowVertShader, nullptr);
 
@@ -660,6 +665,7 @@ void Renderer::initPointShadowPipeline()
 	builder.enableDescriptorBuffer();
 
 	m_pointShadowPipeline = builder.buildPipeline(m_device);
+	VkDebugName(m_device, VK_OBJECT_TYPE_PIPELINE, (uint64_t)m_pointShadowPipeline, "PointShadowPipeline");
 
 	vkDestroyShaderModule(m_device, pointShadowVertShader, nullptr);
 	vkDestroyShaderModule(m_device, pointShadowFragShader, nullptr);
@@ -1760,6 +1766,11 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	                                VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 	                                VMA_MEMORY_USAGE_CPU_TO_GPU);
 
+	VkDebugName(m_device, VK_OBJECT_TYPE_BUFFER,
+	             (uint64_t)gpuSceneDataBuffer.m_buffer, "PerFrame_SceneDataUBO");
+	VkDebugName(m_device, VK_OBJECT_TYPE_BUFFER,
+	             (uint64_t)gpuLightDataBuffer.m_buffer, "PerFrame_LightDataSSBO");
+
 	// add buffers to the deletion queue of this frame so they get deleted once
 	// used
 	currentFrame.m_deletionQueue.push_function(
@@ -2670,6 +2681,7 @@ void Renderer::initObjectIDPipeline()
 	builder.enableDescriptorBuffer();
 
 	m_objectIDPipeline = builder.buildPipeline(m_device);
+	VkDebugName(m_device, VK_OBJECT_TYPE_PIPELINE, (uint64_t)m_objectIDPipeline, "ObjectIDPipeline");
 
 	// Cleanup shader modules
 	vkDestroyShaderModule(m_device, vertexShader, nullptr);
@@ -2724,6 +2736,7 @@ void Renderer::initDebugLinePipeline()
 	builder.enableDescriptorBuffer(); // Required: descriptor buffers are bound in drawGeometry
 
 	m_debugLinePipeline = builder.buildPipeline(m_device);
+	VkDebugName(m_device, VK_OBJECT_TYPE_PIPELINE, (uint64_t)m_debugLinePipeline, "DebugLinePipeline");
 
 	vkDestroyShaderModule(m_device, vertexShader, nullptr);
 	vkDestroyShaderModule(m_device, fragmentShader, nullptr);
@@ -2744,6 +2757,9 @@ void Renderer::drawDebugLines(VkCommandBuffer cmd, FrameData& currentFrame)
 	    VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 	std::memcpy(lineBuffer.m_info.pMappedData, m_debugLineData, bufferSize);
+
+	VkDebugName(m_device, VK_OBJECT_TYPE_BUFFER,
+	             (uint64_t)lineBuffer.m_buffer, "PerFrame_DebugLineBuffer");
 
 	auto* rm = m_resourceManager;
 	currentFrame.m_deletionQueue.push_function([rm, lineBuffer]() {
