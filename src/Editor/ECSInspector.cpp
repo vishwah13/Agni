@@ -895,13 +895,8 @@ namespace agni
 
 			// Get camera matrices
 			glm::mat4 view = camera->getViewMatrix();
-			// ImGuizmo expects OpenGL-style projection (no Y-flip, standard
-			// near/far order)
-			glm::mat4 projection = glm::perspective(glm::radians(70.f),
-			                                        (float) windowExtent.width /
-			                                        (float) windowExtent.height,
-			                                        0.1f,
-			                                        10000.f);
+			// ImGuizmo expects OpenGL-style projection (no Y-flip, standard near/far order)
+			glm::mat4 projection = camera->m_component.buildProjectionOpenGL(windowExtent);
 
 			// Set ImGuizmo rect to cover full viewport
 			ImGuizmo::SetRect(

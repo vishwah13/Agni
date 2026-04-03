@@ -56,8 +56,28 @@ struct CameraComponent
 	float pitch {0.0f};
 	float yaw {0.0f};
 
+	float fov      {70.0f};   // Vertical FOV in degrees
+	float nearPlane {0.1f};
+	float farPlane  {10000.0f};
+
 	float speed {35.0f};
 	float mouseSensitivity {1.0f};
+
+	// Vulkan projection: reversed-Z, Y-flipped
+	glm::mat4 buildProjection(VkExtent2D extent) const
+	{
+		float aspect = (float)extent.width / (float)extent.height;
+		glm::mat4 proj = glm::perspective(glm::radians(fov), aspect, farPlane, nearPlane);
+		proj[1][1] *= -1;
+		return proj;
+	}
+
+	// OpenGL-style projection (for ImGuizmo): standard near/far, no Y-flip
+	glm::mat4 buildProjectionOpenGL(VkExtent2D extent) const
+	{
+		float aspect = (float)extent.width / (float)extent.height;
+		return glm::perspective(glm::radians(fov), aspect, nearPlane, farPlane);
+	}
 
 	static void ReflectType(agni::TypeDesc<CameraComponent>& desc)
 	{
@@ -67,6 +87,9 @@ struct CameraComponent
 		desc.AddMember(&CameraComponent::velocity, "velocity", "Velocity").SetReadOnly().SetNoSerialize();
 		desc.AddMember(&CameraComponent::pitch, "pitch", "Pitch").SetRange(-89.0f, 89.0f).SetUnit("deg");
 		desc.AddMember(&CameraComponent::yaw, "yaw", "Yaw").SetRange(-360.0f, 360.0f).SetUnit("deg");
+		desc.AddMember(&CameraComponent::fov, "fov", "FOV").SetRange(1.0f, 179.0f).SetUnit("deg");
+		desc.AddMember(&CameraComponent::nearPlane, "nearPlane", "Near Plane").SetRange(0.001f, 1000.0f).SetUnit("m");
+		desc.AddMember(&CameraComponent::farPlane, "farPlane", "Far Plane").SetRange(1.0f, 100000.0f).SetUnit("m");
 		desc.AddMember(&CameraComponent::speed, "speed", "Speed").SetRange(0.1f, 500.0f).SetUnit("m/s");
 		desc.AddMember(&CameraComponent::mouseSensitivity, "mouseSensitivity", "Mouse Sensitivity").SetRange(0.01f, 10.0f);
 	}

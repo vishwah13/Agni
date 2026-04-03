@@ -28,7 +28,7 @@ static bool findGameCamera(AgniEngine& engine, glm::vec3& outPos, glm::mat4& out
 	bool found = false;
 	engine.m_ecsWorld->get()
 	    .query<const CameraComponent, const TransformComponent>()
-	    .each([&](const CameraComponent& /*cam*/, const TransformComponent& transform) {
+	    .each([&](const CameraComponent& cam, const TransformComponent& transform) {
 		    if (found) return; // Use first camera found
 
 		    // Decompose worldTransform to get position and rotation
@@ -43,11 +43,7 @@ static bool findGameCamera(AgniEngine& engine, glm::vec3& outPos, glm::mat4& out
 		    outView = glm::inverse(
 		        glm::translate(glm::mat4(1.0f), translation) * glm::toMat4(rotation));
 
-		    // Build projection (reversed-Z, Y-flipped for Vulkan)
-		    outProj = glm::perspective(glm::radians(70.f),
-		        (float)engine.m_windowExtent.width / (float)engine.m_windowExtent.height,
-		        10000.f, 0.1f);
-		    outProj[1][1] *= -1;
+		    outProj = cam.buildProjection(engine.m_windowExtent);
 
 		    found = true;
 	    });
@@ -222,10 +218,7 @@ int Application::run([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 				// Edit mode or no game camera — use editor camera
 				camPos  = engine.m_mainCamera.m_position;
 				camView = engine.m_mainCamera.getViewMatrix();
-				camProj = glm::perspective(glm::radians(70.f),
-				    (float)engine.m_windowExtent.width / (float)engine.m_windowExtent.height,
-				    10000.f, 0.1f);
-				camProj[1][1] *= -1;
+				camProj = engine.m_mainCamera.m_component.buildProjection(engine.m_windowExtent);
 				engine.m_renderer.setActiveCamera(camPos, camView, camProj);
 			}
 		}
