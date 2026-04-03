@@ -114,7 +114,7 @@ public:
 	void renderFrame(VkCommandBuffer cmd,
 	                 uint32_t        swapchainImageIndex,
 	                 FrameData&      currentFrame);
-	void updateScene(float deltaTime, VkExtent2D windowExtent);
+	void updateScene();
 
 	// Accessors
 	float& getRenderScale()

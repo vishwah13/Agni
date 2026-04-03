@@ -2335,7 +2335,7 @@ void Renderer::drawGeometry(VkCommandBuffer cmd, FrameData& currentFrame)
 	m_stats.m_meshDrawTime = elapsed.count() / 1000.f;
 }
 
-void Renderer::updateScene(float /*deltaTime*/, VkExtent2D /*windowExtent*/)
+void Renderer::updateScene()
 {
 #ifdef TRACY_ENABLE
 	ZoneScoped;

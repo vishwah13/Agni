@@ -223,7 +223,7 @@ void AgniEngine::cleanup()
 void AgniEngine::draw()
 {
 	// Update scene for this frame
-	m_renderer.updateScene(m_deltaTime, m_windowExtent);
+	m_renderer.updateScene();
 
 	// wait until the gpu has finished rendering the last frame. Timeout of 1
 	// second
