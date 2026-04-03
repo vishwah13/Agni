@@ -14,6 +14,7 @@
 #include <Jolt/Physics/Body/BodyActivationListener.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/Shape/ScaledShape.h>
+#include <Physics/AgniContactListener.hpp>
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
@@ -262,6 +263,13 @@ bool JoltPhysicsManager::initialize(const PhysicsSettings& settings)
 	// Set gravity
 	m_physicsSystem->SetGravity(toJoltVec3(settings.gravity));
 
+	// Register contact listener for collision events
+	m_contactListener = std::make_unique<AgniContactListener>();
+	m_contactListener->setEntityLookup([this](uint32_t bodyID) {
+		return getEntityFromBody(bodyID);
+	});
+	m_physicsSystem->SetContactListener(m_contactListener.get());
+
 	AGNI_PRINT("[JoltPhysicsManager] Initialized successfully\n");
 	AGNI_PRINT("  Max bodies: {}\n", settings.maxBodies);
 	AGNI_PRINT("  Gravity: ({:.2f}, {:.2f}, {:.2f})\n", settings.gravity.x, settings.gravity.y, settings.gravity.z);
@@ -364,6 +372,7 @@ uint32_t JoltPhysicsManager::createDynamicBody(const glm::vec3&        pos,
 
 	// Respect useGravity flag
 	bodySettings.mGravityFactor = useGravity ? 1.0f : 0.0f;
+	bodySettings.mIsSensor      = collider.isTrigger;
 
 	// Create and add body to physics system
 	BodyInterface& bodyInterface = m_physicsSystem->GetBodyInterface();
@@ -403,6 +412,7 @@ uint32_t JoltPhysicsManager::createStaticBody(const glm::vec3&        pos,
 
 	bodySettings.mFriction    = friction;
 	bodySettings.mRestitution = restitution;
+	bodySettings.mIsSensor    = collider.isTrigger;
 
 	// Create and add body
 	BodyInterface& bodyInterface = m_physicsSystem->GetBodyInterface();
@@ -431,6 +441,8 @@ uint32_t JoltPhysicsManager::createKinematicBody(const glm::vec3&        pos,
 	    toJoltQuat(rot),
 	    EMotionType::Kinematic,
 	    Layers::MOVING);
+
+	bodySettings.mIsSensor = collider.isTrigger;
 
 	// Create and add body
 	BodyInterface& bodyInterface = m_physicsSystem->GetBodyInterface();
@@ -742,6 +754,13 @@ void JoltPhysicsManager::screenToWorldRay(const glm::mat4& invViewProj,
 
 	outOrigin    = glm::vec3(nearWorld);
 	outDirection = glm::normalize(glm::vec3(farWorld) - glm::vec3(nearWorld));
+}
+
+std::vector<CollisionEvent> JoltPhysicsManager::drainCollisionEvents()
+{
+	if (m_contactListener)
+		return m_contactListener->drainEvents();
+	return {};
 }
 
 void JoltPhysicsManager::registerEntityBody(EntityID entity, uint32_t bodyID)

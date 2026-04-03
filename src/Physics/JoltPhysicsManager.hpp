@@ -14,6 +14,7 @@
 #ifdef JPH_DEBUG_RENDERER
 namespace agni { namespace physics { class JoltDebugRenderer; } }
 #endif
+namespace agni { namespace physics { class AgniContactListener; struct CollisionEvent; } }
 
 // Forward declarations for Jolt types (avoid including Jolt headers in public header)
 namespace JPH
@@ -130,6 +131,9 @@ public:
 	void      setGravity(const glm::vec3& gravity);
 	glm::vec3 getGravity() const;
 
+	// Collision events (drain once per frame after physics update)
+	std::vector<CollisionEvent> drainCollisionEvents();
+
 	// Raycasting
 	bool raycast(const glm::vec3& origin, const glm::vec3& direction,
 	             float maxDistance, RaycastHit& outHit) const;
@@ -170,6 +174,8 @@ private:
 
 	std::unordered_map<uint32_t, EntityID> m_bodyToEntity;
 	std::unordered_map<EntityID, uint32_t> m_entityToBody;
+
+	std::unique_ptr<AgniContactListener> m_contactListener;
 
 	PhysicsSettings m_settings;
 	float           m_accumulator {0.0f}; // For fixed timestep

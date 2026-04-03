@@ -143,6 +143,16 @@ int Application::run([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 				agni::ecs::PhysicsSystem::syncFromPhysics(
 				    *engine.m_ecsWorld, *engine.m_physicsManager);
 			}
+
+			// Drain collision events for game systems
+			if (engine.m_physicsManager)
+				engine.m_collisionEvents = engine.m_physicsManager->drainCollisionEvents();
+#endif
+		}
+		else
+		{
+#ifdef AGNI_HAS_JOLT
+			engine.m_collisionEvents.clear();
 #endif
 		}
 

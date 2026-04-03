@@ -22,6 +22,7 @@
 #ifdef AGNI_HAS_JOLT
 #include <ECS/Systems/PhysicsSystem.hpp>
 #include <Physics/JoltPhysicsManager.hpp>
+#include <Physics/AgniContactListener.hpp>
 #endif
 
 #include <deque>
@@ -368,6 +369,7 @@ public:
 	// Physics Manager
 	std::unique_ptr<agni::physics::JoltPhysicsManager> m_physicsManager;
 	agni::physics::PhysicsDebugSettings m_physicsDebugSettings;
+	std::vector<agni::physics::CollisionEvent> m_collisionEvents;
 
 	agni::physics::JoltPhysicsManager& getPhysicsManager()
 	{

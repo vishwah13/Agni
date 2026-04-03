@@ -79,6 +79,8 @@ if(AGNI_ENABLE_JOLT)
         Physics/JoltPhysicsManager.cpp
         Physics/JoltDebugRenderer.hpp
         Physics/JoltDebugRenderer.cpp
+        Physics/AgniContactListener.hpp
+        Physics/AgniContactListener.cpp
         ECS/Systems/PhysicsSystem.hpp
         ECS/Systems/PhysicsSystem.cpp
     )
