@@ -16,7 +16,7 @@ void CharacterSystem::initializeCharacters(World& world, agni::physics::JoltPhys
 	auto& flecsWorld = world.get();
 
 	flecsWorld.query<const TransformComponent, CharacterControllerComponent>()
-	    .each([&physics](flecs::entity e,
+	    .each([&physics]([[maybe_unused]] flecs::entity e,
 	                      const TransformComponent& transform,
 	                      CharacterControllerComponent& controller) {
 		    if (controller.characterHandle != 0)
