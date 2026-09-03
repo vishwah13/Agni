@@ -126,7 +126,6 @@ struct GPUSceneData
 	float     m_pointShadowPadding = 0.0f;   // Alignment padding
 	glm::vec3 m_cameraPosition {0.0f};
 	float     m_padding = 0.0f;              // Alignment padding
-	glm::vec4 m_frustumPlanes[6] {};         // Gribb-Hartmann frustum planes for GPU culling
 };
 
 // Shadow mapping constants

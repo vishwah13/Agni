@@ -95,11 +95,11 @@ if(AGNI_COMPILE_SHADERS)
 
     file(GLOB SLANG_SOURCE_FILES "${PROJECT_SOURCE_DIR}/shaders/slang/*.slang")
 
-    # Separate shader files by type based on naming convention or content
-    # Graphics shaders (mesh, skybox, tex_image) have vertex/fragment entry points
-    # Compute shaders (gradient, gradient_color, sky, raymarching) have compute entry points
+    # Separate shader files by type based on their entry points.
+    # Graphics shaders have both vertexMain and fragmentMain; the vertex- and
+    # compute-only lists below have just the one entry point each.
     set(SLANG_GRAPHICS_SHADERS
-        "${PROJECT_SOURCE_DIR}/shaders/slang/Mesh.slang"
+        "${PROJECT_SOURCE_DIR}/shaders/slang/ForwardPBR.slang"
         "${PROJECT_SOURCE_DIR}/shaders/slang/Skybox.slang"
         "${PROJECT_SOURCE_DIR}/shaders/slang/ObjectId.slang"
         "${PROJECT_SOURCE_DIR}/shaders/slang/PointShadow.slang"
@@ -108,19 +108,13 @@ if(AGNI_COMPILE_SHADERS)
         "${PROJECT_SOURCE_DIR}/shaders/slang/DebugLines.slang"
     )
 
-    set(SLANG_FRAGMENT_ONLY_SHADERS
-        "${PROJECT_SOURCE_DIR}/shaders/slang/TexImage.slang"
-    )
-
     set(SLANG_VERTEX_ONLY_SHADERS
         "${PROJECT_SOURCE_DIR}/shaders/slang/Shadow.slang"
     )
 
     set(SLANG_COMPUTE_SHADERS
-        "${PROJECT_SOURCE_DIR}/shaders/slang/Gradient.slang"
         "${PROJECT_SOURCE_DIR}/shaders/slang/GradientColor.slang"
         "${PROJECT_SOURCE_DIR}/shaders/slang/Sky.slang"
-        "${PROJECT_SOURCE_DIR}/shaders/slang/Raymarching.slang"
         "${PROJECT_SOURCE_DIR}/shaders/slang/IndirectCull.slang"
         "${PROJECT_SOURCE_DIR}/shaders/slang/HiZDownsample.slang"
     )
@@ -152,25 +146,6 @@ if(AGNI_COMPILE_SHADERS)
         )
 
         list(APPEND SPIRV_BINARY_FILES ${SPIRV_VERT} ${SPIRV_FRAG})
-    endforeach()
-
-    # Compile fragment-only shaders
-    foreach(SLANG_FILE ${SLANG_FRAGMENT_ONLY_SHADERS})
-        get_filename_component(FILE_NAME_WE ${SLANG_FILE} NAME_WE)
-        message(STATUS "Configuring Slang fragment shader: ${FILE_NAME_WE}")
-
-        set(SPIRV_FRAG "${PROJECT_SOURCE_DIR}/shaders/slang/${FILE_NAME_WE}.frag.spv")
-
-        # Compile fragment shader
-        add_custom_command(
-            OUTPUT ${SPIRV_FRAG}
-            COMMAND $<TARGET_FILE:slangc> ${SLANGC_BASE_FLAGS} -entry fragmentMain -stage fragment -I "${PROJECT_SOURCE_DIR}/shaders/slang" -o ${SPIRV_FRAG} ${SLANG_FILE}
-            DEPENDS ${SLANG_FILE} slangc
-            COMMENT "Compiling Slang fragment shader ${FILE_NAME_WE}"
-            VERBATIM
-        )
-
-        list(APPEND SPIRV_BINARY_FILES ${SPIRV_FRAG})
     endforeach()
 
     # Compile vertex-only shaders (e.g., shadow pass depth-only)

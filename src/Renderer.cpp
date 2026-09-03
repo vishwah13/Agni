@@ -2490,32 +2490,6 @@ void Renderer::updateScene()
 
 	m_sceneData.m_cameraPosition = m_activeCamPosition;
 
-	// Gribb-Hartmann: extract + normalize 6 frustum planes from viewProj
-	// Each plane stored as (nx, ny, nz, d) where nx*x + ny*y + nz*z + d = 0
-	{
-		const glm::mat4& m = viewProj;
-		// Left
-		m_sceneData.m_frustumPlanes[0] = glm::vec4(m[0][3] + m[0][0], m[1][3] + m[1][0], m[2][3] + m[2][0], m[3][3] + m[3][0]);
-		// Right
-		m_sceneData.m_frustumPlanes[1] = glm::vec4(m[0][3] - m[0][0], m[1][3] - m[1][0], m[2][3] - m[2][0], m[3][3] - m[3][0]);
-		// Bottom
-		m_sceneData.m_frustumPlanes[2] = glm::vec4(m[0][3] + m[0][1], m[1][3] + m[1][1], m[2][3] + m[2][1], m[3][3] + m[3][1]);
-		// Top
-		m_sceneData.m_frustumPlanes[3] = glm::vec4(m[0][3] - m[0][1], m[1][3] - m[1][1], m[2][3] - m[2][1], m[3][3] - m[3][1]);
-		// Near (reverse-Z: w+z for near plane)
-		m_sceneData.m_frustumPlanes[4] = glm::vec4(m[0][3] + m[0][2], m[1][3] + m[1][2], m[2][3] + m[2][2], m[3][3] + m[3][2]);
-		// Far (reverse-Z: w-z for far plane)
-		m_sceneData.m_frustumPlanes[5] = glm::vec4(m[0][3] - m[0][2], m[1][3] - m[1][2], m[2][3] - m[2][2], m[3][3] - m[3][2]);
-
-		// Normalize each plane
-		for (int i = 0; i < 6; i++)
-		{
-			float len = glm::length(glm::vec3(m_sceneData.m_frustumPlanes[i]));
-			if (len > 0.0f)
-				m_sceneData.m_frustumPlanes[i] /= len;
-		}
-	}
-
 	// Calculate shadow mapping data for directional light
 	if (m_shadowsEnabled && m_mainDrawContext.m_DirectionalLight.active)
 	{

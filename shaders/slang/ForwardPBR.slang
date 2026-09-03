@@ -1,4 +1,6 @@
-// Mesh shader for PBR rendering with bindless textures
+// Forward opaque/transparent shading pass.
+// Vertex pulling via BDA, Cook-Torrance PBR with bindless textures and
+// materials, directional/point/spot lights, and their shadow lookups.
 import InputStructures;
 
 // Scene data (set 0, binding 0)

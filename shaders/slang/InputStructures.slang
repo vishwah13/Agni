@@ -18,7 +18,6 @@ struct SceneData
     float  pointShadowPadding;       // Alignment padding
     float3 camPos;                   // camera position for view vector
     float  padding;                  // alignment padding
-    float4 frustumPlanes[6];         // Gribb-Hartmann frustum planes for GPU culling
 };
 
 // Legacy material data uniform buffer (unused with bindless)
