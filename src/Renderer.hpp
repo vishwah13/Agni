@@ -19,11 +19,6 @@ class Camera;
 class Skybox;
 struct FrameData;
 
-namespace agni::ecs
-{
-class World;
-}
-
 struct EngineStats
 {
 	float m_frametime       = 0.0f;
@@ -219,17 +214,6 @@ public:
 		return m_loadedScenes;
 	}
 
-	// ECS World access (for direct queries)
-	void setWorld(agni::ecs::World* world)
-	{
-		m_world = world;
-	}
-
-	agni::ecs::World* getWorld() const
-	{
-		return m_world;
-	}
-
 	// Object picking
 	void     requestPicking(float x, float y);
 	void     processPickingResult();  // Call after fence wait to read GPU result
@@ -289,9 +273,6 @@ private:
 
 	// Statistics
 	EngineStats m_stats;
-
-	// ECS World for direct queries
-	agni::ecs::World* m_world {nullptr};
 
 	// Debug line rendering
 	VkPipeline       m_debugLinePipeline       = VK_NULL_HANDLE;

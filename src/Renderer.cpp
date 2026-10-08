@@ -1,9 +1,7 @@
 #include <Renderer.hpp>
 
 #include <AgniEngine.hpp>
-#include <Components.hpp>
 #include <Debug.hpp>
-#include <ECS/World.hpp>
 #include <Images.hpp>
 #include <Initializers.hpp>
 #include <Pipelines.hpp>
@@ -370,6 +368,19 @@ void Renderer::initShadowResources()
 
 	VK_CHECK(
 	vkCreateSampler(m_device, &samplerInfo, nullptr, &m_shadowSampler));
+
+	// Transition to the layout the scene descriptors advertise, so sampling is
+	// valid even on frames where the shadow passes are skipped (empty scene).
+	m_resourceManager->immediateSubmit(
+	[&](VkCommandBuffer cmd)
+	{
+		vkutil::transitionImage(cmd, m_shadowMap.m_image,
+		                        VK_IMAGE_LAYOUT_UNDEFINED,
+		                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+		vkutil::transitionImage(cmd, m_spotShadowMap.m_image,
+		                        VK_IMAGE_LAYOUT_UNDEFINED,
+		                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+	});
 }
 
 void Renderer::initPointShadowResources()
@@ -451,6 +462,18 @@ void Renderer::initPointShadowResources()
 	AGNI_PRINT("Point shadow cube map created ({}x{} per face)\n",
 	           POINT_SHADOW_MAP_RESOLUTION,
 	           POINT_SHADOW_MAP_RESOLUTION);
+
+	// Same reasoning as the 2D shadow maps: keep the cube map sampleable even
+	// when the point shadow pass does not run this frame.
+	m_resourceManager->immediateSubmit(
+	[&](VkCommandBuffer cmd)
+	{
+		vkinit::imageBarrier(cmd, m_pointShadowCubeMap.m_image,
+		    VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, 0,
+		    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT,
+		    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+		    VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 6);
+	});
 }
 
 void Renderer::initDescriptors()
@@ -1541,20 +1564,29 @@ void Renderer::renderFrame(VkCommandBuffer cmd,
 	if (anyShadowPass && !m_mainDrawContext.m_OpaqueSurfaces.empty())
 		shadowRes = buildShadowIndirectBuffers(currentFrame);
 
+	// The indirect buffers above are only built when there is geometry to cast
+	// shadows. Every pass below must therefore also check it — otherwise an
+	// active light with an empty draw list issues an indirect draw against a
+	// VK_NULL_HANDLE buffer.
+	const bool hasShadowCasters = shadowRes.totalDraws > 0;
+
 	// Shadow passes (before main geometry)
-	if (m_shadowsEnabled && m_mainDrawContext.m_DirectionalLight.active)
+	if (hasShadowCasters && m_shadowsEnabled &&
+	    m_mainDrawContext.m_DirectionalLight.active)
 	{
 		drawShadowPass(cmd, currentFrame, shadowRes);
 	}
 
 	// Spot light shadow pass
-	if (m_spotShadowsEnabled && !m_mainDrawContext.m_SpotLights.empty())
+	if (hasShadowCasters && m_spotShadowsEnabled &&
+	    !m_mainDrawContext.m_SpotLights.empty())
 	{
 		drawSpotShadowPass(cmd, currentFrame, shadowRes);
 	}
 
 	// Point light shadow pass
-	if (m_pointShadowsEnabled && !m_mainDrawContext.m_PointLights.empty() &&
+	if (hasShadowCasters && m_pointShadowsEnabled &&
+	    !m_mainDrawContext.m_PointLights.empty() &&
 	    m_pointShadowLightIndex <
 	    static_cast<int>(m_mainDrawContext.m_PointLights.size()))
 	{
@@ -2344,125 +2376,14 @@ void Renderer::updateScene()
 	// begin clock
 	auto start = std::chrono::system_clock::now();
 
-	m_mainDrawContext.m_OpaqueSurfaces.clear();
-	m_mainDrawContext.m_TransparentSurfaces.clear();
-	m_mainDrawContext.m_PointLights.clear();
-	m_mainDrawContext.m_SpotLights.clear();
-	m_mainDrawContext.m_DirectionalLight =
-	DirectionalLightData {}; // Reset directional light
+	// NOTE: m_mainDrawContext is filled by the caller before this runs — see
+	// getMainDrawContext(). This function only derives per-frame GPU state from
+	// it (camera matrices, frustum planes, shadow matrices).
 
-	// Use active camera matrices (set by Application via setActiveCamera)
+	// Use active camera matrices (set by the caller via setActiveCamera)
 	glm::mat4 view       = m_activeCamView;
 	glm::mat4 projection = m_activeCamProjection;
 	glm::mat4 viewProj   = projection * view;
-
-	// === QUERY RENDERABLES DIRECTLY FROM ECS ===
-	if (m_world)
-	{
-		m_world->get()
-		.query<const TransformComponent,
-		       const agni::ecs::RenderMeshComponent,
-		       const RenderableTag>()
-		.each(
-		[&](flecs::entity                         e,
-		    const TransformComponent&             transform,
-		    const agni::ecs::RenderMeshComponent& mesh,
-		    const RenderableTag&                  renderable)
-		{
-			// Skip invisible or invalid meshes
-			if (!renderable.visible || !mesh.visible || !mesh.meshAsset)
-				return;
-
-			// Create RenderObjects for each surface in the mesh
-			for (const auto& surface : mesh.meshAsset->m_surfaces)
-			{
-				RenderObject obj;
-				obj.m_indexCount = surface.m_count;
-				obj.m_firstIndex = mesh.meshAsset->m_meshBuffers.m_globalIndexOffset
-				                 + surface.m_startIndex;
-				obj.m_material  = &surface.m_material->m_data;
-				obj.m_bounds    = surface.m_bounds;
-				obj.m_transform = transform.worldTransform;
-				obj.m_vertexBufferAddress =
-				mesh.meshAsset->m_meshBuffers.m_vertexBufferAddress;
-				obj.m_entityID = e.id();
-
-				// Sort into opaque or transparent based on material pass type
-				if (surface.m_material->m_data.m_passType ==
-				    MaterialPass::Transparent)
-				{
-					m_mainDrawContext.m_TransparentSurfaces.push_back(obj);
-				}
-				else
-				{
-					m_mainDrawContext.m_OpaqueSurfaces.push_back(obj);
-				}
-			}
-		});
-
-		// === QUERY LIGHTS DIRECTLY FROM ECS ===
-		m_world->get()
-		.query<const TransformComponent, const LightComponent>()
-		.each(
-		[&](const TransformComponent& transform, const LightComponent& light)
-		{
-			// Extract world position from transform matrix
-			glm::vec3 worldPosition = glm::vec3(transform.worldTransform[3]);
-
-			// Transform direction by rotation (upper 3x3 of the matrix)
-			glm::vec3 worldDirection = glm::normalize(
-			glm::mat3(transform.worldTransform) * light.direction);
-
-			switch (light.type)
-			{
-				case LightType::Point:
-				{
-					if (m_mainDrawContext.m_PointLights.size() <
-					    MAX_POINT_LIGHTS)
-					{
-						GPUPointLight gpuLight;
-						gpuLight.m_position  = worldPosition;
-						gpuLight.m_color     = light.color;
-						gpuLight.m_intensity = light.intensity;
-						gpuLight.m_radius    = light.radius;
-						m_mainDrawContext.m_PointLights.push_back(gpuLight);
-					}
-					break;
-				}
-
-				case LightType::Directional:
-				{
-					// Only one directional light supported (last one wins)
-					m_mainDrawContext.m_DirectionalLight.direction =
-					worldDirection;
-					m_mainDrawContext.m_DirectionalLight.color = light.color;
-					m_mainDrawContext.m_DirectionalLight.intensity =
-					light.intensity;
-					m_mainDrawContext.m_DirectionalLight.active = true;
-					break;
-				}
-
-				case LightType::Spot:
-				{
-					if (m_mainDrawContext.m_SpotLights.size() < MAX_SPOT_LIGHTS)
-					{
-						GPUSpotLight gpuLight;
-						gpuLight.m_position  = worldPosition;
-						gpuLight.m_direction = worldDirection;
-						gpuLight.m_color     = light.color;
-						gpuLight.m_intensity = light.intensity;
-						gpuLight.m_radius    = light.radius;
-						gpuLight.m_innerCutoff =
-						glm::cos(glm::radians(light.innerConeAngle));
-						gpuLight.m_outerCutoff =
-						glm::cos(glm::radians(light.outerConeAngle));
-						m_mainDrawContext.m_SpotLights.push_back(gpuLight);
-					}
-					break;
-				}
-			}
-		});
-	}
 
 	m_sceneData.m_view     = view;
 	m_sceneData.m_proj     = projection;

@@ -4,11 +4,8 @@
 #include <vk_mem_alloc.h>
 
 #include <Camera.hpp>
-#include <Components.hpp>
 #include <DescriptorBuffer.hpp>
 #include <Descriptors.hpp>
-#include <ECS/EntityFactory.hpp>
-#include <ECS/World.hpp>
 #include <Loader.hpp>
 #include <Material.hpp>
 #include <Renderer.hpp>
@@ -18,12 +15,6 @@
 #include <SwapchainManager.hpp>
 #include <Texture.hpp>
 #include <Types.hpp>
-
-#ifdef AGNI_HAS_JOLT
-#include <ECS/Systems/PhysicsSystem.hpp>
-#include <Physics/JoltPhysicsManager.hpp>
-#include <Physics/AgniContactListener.hpp>
-#endif
 
 #include <deque>
 #include <functional>
@@ -47,126 +38,6 @@ struct FrameData
 	DeletionQueue m_deletionQueue;
 	// Descriptor buffer allocator for per-frame descriptors
 	DescriptorBufferAllocator m_descriptorBuffer;
-};
-
-// ============================================================================
-// Node Classes - Intermediate Representation for glTF Loading
-// ============================================================================
-// These classes are used during glTF file loading to build a scene graph,
-// which is then converted to ECS entities. They are NOT used for rendering.
-// See EntityFactory::convertNodeRecursive() for the conversion logic.
-// ============================================================================
-
-class MeshNode : public Node
-{
-public:
-	// Accessor for mesh
-	std::shared_ptr<MeshAsset>& getMesh()
-	{
-		return m_mesh;
-	}
-	const std::shared_ptr<MeshAsset>& getMesh() const
-	{
-		return m_mesh;
-	}
-
-protected:
-	std::shared_ptr<MeshAsset> m_mesh;
-};
-
-class LightNode : public Node
-{
-public:
-	// Light property accessors
-	LightComponent& getLightComponent()
-	{
-		return m_light;
-	}
-	const LightComponent& getLightComponent() const
-	{
-		return m_light;
-	}
-
-	// Light type
-	void setType(LightType type)
-	{
-		m_light.type = type;
-	}
-	LightType getType() const
-	{
-		return m_light.type;
-	}
-
-	// Convenience setters
-	void setColor(const glm::vec3& color)
-	{
-		m_light.color = color;
-	}
-	void setIntensity(float intensity)
-	{
-		m_light.intensity = intensity;
-	}
-	void setRadius(float radius)
-	{
-		m_light.radius = radius;
-	}
-	void setDirection(const glm::vec3& direction)
-	{
-		m_light.direction = direction;
-	}
-	void setInnerConeAngle(float degrees)
-	{
-		m_light.innerConeAngle = degrees;
-	}
-	void setOuterConeAngle(float degrees)
-	{
-		m_light.outerConeAngle = degrees;
-	}
-	void setConeAngles(float innerDegrees, float outerDegrees)
-	{
-		m_light.innerConeAngle = innerDegrees;
-		m_light.outerConeAngle = outerDegrees;
-	}
-
-	// Convenience getters
-	glm::vec3 getColor() const
-	{
-		return m_light.color;
-	}
-	float getIntensity() const
-	{
-		return m_light.intensity;
-	}
-	float getRadius() const
-	{
-		return m_light.radius;
-	}
-	glm::vec3 getDirection() const
-	{
-		return m_light.direction;
-	}
-	float getInnerConeAngle() const
-	{
-		return m_light.innerConeAngle;
-	}
-	float getOuterConeAngle() const
-	{
-		return m_light.outerConeAngle;
-	}
-
-	// Optional visual mesh for the light (uses MeshNode internally)
-	void                       setMesh(std::shared_ptr<MeshAsset> mesh);
-	void                       setMeshScale(float scale);
-	void                       setMeshScale(const glm::vec3& scale);
-	std::shared_ptr<MeshAsset> getMesh() const;
-	bool                       hasMesh() const
-	{
-		return m_meshNode != nullptr;
-	}
-
-protected:
-	LightComponent            m_light;
-	std::shared_ptr<MeshNode> m_meshNode; // Optional visual representation
 };
 
 class AgniEngine
@@ -248,10 +119,6 @@ public:
 	// m_skybox
 	Skybox m_skybox;
 
-	// ECS World and related systems
-	std::unique_ptr<agni::ecs::World>            m_ecsWorld;
-	std::unique_ptr<agni::ecs::EntityFactory>    m_entityFactory;
-
 	// Primitive meshes for editor entity creation
 	std::shared_ptr<MeshAsset> m_cubeMesh;
 	std::shared_ptr<MeshAsset> m_sphereMesh;
@@ -265,34 +132,6 @@ public:
 	bool m_shouldQuit = false;
 
 	// Simulation control (editor sets this for Play/Stop)
-	bool m_simulationPaused = true; // true = Edit mode (no physics/ECS tick)
-
-	// ECS accessors
-	agni::ecs::World& getECSWorld()
-	{
-		return *m_ecsWorld;
-	}
-	const agni::ecs::World& getECSWorld() const
-	{
-		return *m_ecsWorld;
-	}
-	agni::IWorld& getWorld()
-	{
-		return *m_ecsWorld;
-	}
-	const agni::IWorld& getWorld() const
-	{
-		return *m_ecsWorld;
-	}
-	agni::ecs::EntityFactory& getEntityFactory()
-	{
-		return *m_entityFactory;
-	}
-	const agni::ecs::EntityFactory& getEntityFactory() const
-	{
-		return *m_entityFactory;
-	}
-
 	// Renderer accessor
 	Renderer& getRenderer()
 	{
@@ -364,22 +203,6 @@ public:
 	{
 		m_shouldQuit = true;
 	}
-
-#ifdef AGNI_HAS_JOLT
-	// Physics Manager
-	std::unique_ptr<agni::physics::JoltPhysicsManager> m_physicsManager;
-	agni::physics::PhysicsDebugSettings m_physicsDebugSettings;
-	std::vector<agni::physics::CollisionEvent> m_collisionEvents;
-
-	agni::physics::JoltPhysicsManager& getPhysicsManager()
-	{
-		return *m_physicsManager;
-	}
-	const agni::physics::JoltPhysicsManager& getPhysicsManager() const
-	{
-		return *m_physicsManager;
-	}
-#endif
 
 private:
 	friend class agni::Application;

@@ -3,8 +3,6 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 
-#include <Components.hpp>
-#include <ECS/PrefabManager.hpp>
 #include <Initializers.hpp>
 #include <Types.hpp>
 #include <VulkanTools.hpp>
@@ -107,27 +105,6 @@ void AgniEngine::init()
 
 	initPipelines();
 
-	// Initialize ECS World and related systems
-	m_ecsWorld      = std::make_unique<agni::ecs::World>();
-	m_entityFactory = std::make_unique<agni::ecs::EntityFactory>(*m_ecsWorld);
-
-	// Give Renderer direct access to ECS World for queries
-	m_renderer.setWorld(m_ecsWorld.get());
-
-#ifdef AGNI_HAS_JOLT
-	// Initialize Jolt Physics
-	m_physicsManager = std::make_unique<agni::physics::JoltPhysicsManager>();
-	agni::physics::PhysicsSettings physicsSettings;
-	physicsSettings.gravity        = glm::vec3(0.0f, -9.81f, 0.0f);
-	physicsSettings.maxBodies      = 1024;
-	physicsSettings.collisionSteps = 1;
-
-	if (!m_physicsManager->initialize(physicsSettings))
-	{
-		fmt::print("[AgniEngine] Failed to initialize Jolt physics\n");
-	}
-#endif
-
 	initDefaultData();
 
 	// everything went fine
@@ -167,26 +144,6 @@ void AgniEngine::cleanup()
 
 		// Cleanup m_skybox resources
 		m_skybox.cleanup(this);
-
-#ifdef AGNI_HAS_JOLT
-		// Cleanup physics before renderer
-		if (m_physicsManager)
-		{
-			m_physicsManager->shutdown();
-			m_physicsManager.reset();
-		}
-#endif
-
-		// Cleanup ECS (destroys all entities and releases mesh references)
-		// IMPORTANT: Do this BEFORE renderer cleanup so entities release their
-		// mesh asset references
-		if (m_ecsWorld)
-		{
-			m_ecsWorld
-			->clearAllEntities(); // Explicitly destroy all entities first
-		}
-		m_entityFactory.reset();
-		m_ecsWorld.reset();
 
 		// Cleanup renderer (render targets, pipelines, descriptors, scenes)
 		m_renderer.cleanup();
@@ -650,7 +607,7 @@ void AgniEngine::initDefaultData()
 
 	m_mainCamera.m_pitch            = 0;
 	m_mainCamera.m_yaw              = 0;
-	m_mainCamera.m_speed            = .1f;
+	m_mainCamera.m_speed            = 50.0f;
 	m_mainCamera.m_mouseSensitivity = 0.3f;
 
 	std::string meshPrimitivesPath = resPath("assets/MeshPrimitives.glb");
@@ -684,28 +641,6 @@ void AgniEngine::initDefaultData()
 
 	m_assetLoader.getMeshResources() = meshPrimitivesFile;
 
-	// Set up mesh provider for PrefabManager (Flecs native prefabs)
-	m_ecsWorld->getPrefabManager().setMeshProvider(
-	[this](const std::string& meshName) -> std::shared_ptr<MeshAsset>
-	{
-		if (meshName == "Cube")
-			return m_cubeMesh;
-		if (meshName == "Sphere")
-			return m_sphereMesh;
-		if (meshName == "Plane")
-			return m_planeMesh;
-		if (meshName == "Suzanne")
-			return m_suzanneMesh;
-		if (meshName == "Cylinder")
-			return m_cylinderMesh;
-		if (meshName == "Torus")
-			return m_torusMesh;
-		if (meshName == "Cone")
-			return m_coneMesh;
-		return nullptr;
-	});
-	m_ecsWorld->getPrefabManager().registerBuiltinPrefabs();
-
 	// Initialize m_skybox
 	// Load cubemap faces (order: right, left, top, bottom, front, back for
 	// Vulkan)
@@ -719,41 +654,4 @@ void AgniEngine::initDefaultData()
 	};
 
 	m_skybox.init(this, cubemapFaces);
-}
-
-// ============================================================================
-// LightNode Implementation (used for glTF loading intermediate representation)
-// ============================================================================
-
-void LightNode::setMesh(std::shared_ptr<MeshAsset> mesh)
-{
-	if (mesh)
-	{
-		m_meshNode            = std::make_shared<MeshNode>();
-		m_meshNode->getMesh() = mesh;
-		// MeshNode uses identity local transform - position comes from
-		// LightNode
-	}
-	else
-	{
-		m_meshNode = nullptr;
-	}
-}
-
-void LightNode::setMeshScale(float scale)
-{
-	setMeshScale(glm::vec3(scale));
-}
-
-void LightNode::setMeshScale(const glm::vec3& scale)
-{
-	if (m_meshNode)
-	{
-		m_meshNode->getWorldTransform() = glm::scale(glm::mat4(1.0f), scale);
-	}
-}
-
-std::shared_ptr<MeshAsset> LightNode::getMesh() const
-{
-	return m_meshNode ? m_meshNode->getMesh() : nullptr;
 }

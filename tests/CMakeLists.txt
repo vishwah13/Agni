@@ -5,7 +5,6 @@
 add_executable(agni_tests
     # CPU test files
     test_IndexPageAllocator.cpp
-    test_CommandHistory.cpp
     test_ThreadPool.cpp
 
     # GPU test files (headless Vulkan)
@@ -15,9 +14,6 @@ add_executable(agni_tests
     test_gpu_bindless.cpp
     test_gpu_descriptor_buffer.cpp
     test_gpu_index_buffer_growth.cpp
-
-    # Editor source files not in agni library (editor-only code)
-    "${PROJECT_SOURCE_DIR}/src/Editor/CommandHistory.cpp"
 )
 
 set_property(TARGET agni_tests PROPERTY CXX_STANDARD 20)

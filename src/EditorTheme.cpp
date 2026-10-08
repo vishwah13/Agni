@@ -1,4 +1,4 @@
-#include <Editor/EditorTheme.hpp>
+#include <EditorTheme.hpp>
 #include <Debug.hpp>
 #include <Types.hpp>
 

@@ -1,9 +1,9 @@
 #pragma once
 #include <BindlessResources.hpp>
-#include <Components.hpp>
 #include <DescriptorBuffer.hpp>
 #include <Material.hpp>
 #include <Scene.hpp>
+#include <Texture.hpp>
 #include <Types.hpp>
 
 #include <atomic>

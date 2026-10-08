@@ -13,7 +13,7 @@ class AgniEngine;
 namespace agni
 {
 
-// Base class for editor and runtime applications.
+// Base class for Agni applications.
 // Inherit from this, override the virtual hooks, call run().
 class Application
 {

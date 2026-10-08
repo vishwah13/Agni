@@ -6,7 +6,7 @@
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_vulkan.h>
 
-#include <Editor/EditorTheme.hpp>
+#include <EditorTheme.hpp>
 
 #include <Initializers.hpp>
 #include <VulkanTools.hpp>

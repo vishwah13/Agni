@@ -1,32 +1,33 @@
 #pragma once
 #include <SDL3/SDL_events.h>
 
-#include <Components.hpp>
 #include <Types.hpp>
 
-// Camera class wraps CameraComponent for ECS-ready architecture
+// Free-fly camera. Holds its own state — no ECS component dependency.
 class Camera
 {
 public:
-	Camera()                                = default;
-	~Camera()                               = default;
-	Camera(const Camera& other)             = delete;
-	Camera(Camera&& other)                  = delete;
-	Camera& operator=(const Camera& other)  = delete;
-	Camera& operator=(Camera&& other)       = delete;
+	Camera()                               = default;
+	~Camera()                              = default;
+	Camera(const Camera& other)            = delete;
+	Camera(Camera&& other)                 = delete;
+	Camera& operator=(const Camera& other) = delete;
+	Camera& operator=(Camera&& other)      = delete;
 
-	// Component data (ECS-ready)
-	CameraComponent m_component;
+	glm::vec3 m_position {0.0f};
+	glm::vec3 m_velocity {0.0f};
 
-	// Public accessors for backwards compatibility
-	glm::vec3& m_velocity        = m_component.velocity;
-	glm::vec3& m_position        = m_component.position;
-	float&     m_pitch           = m_component.pitch;
-	float&     m_yaw             = m_component.yaw;
-	float&     m_speed           = m_component.speed;
-	float&     m_mouseSensitivity = m_component.mouseSensitivity;
+	float m_pitch {0.0f};
+	float m_yaw {0.0f};
 
-	// Input state (not part of component data)
+	float m_fov {70.0f}; // vertical FOV in degrees
+	float m_nearPlane {0.1f};
+	float m_farPlane {10000.0f};
+
+	float m_speed {35.0f};
+	float m_mouseSensitivity {1.0f};
+
+	// Input state
 	bool m_rightMousePressed = false;
 	bool m_keyW = false, m_keyS = false;
 	bool m_keyA = false, m_keyD = false;
@@ -35,11 +36,17 @@ public:
 	glm::mat4 getViewMatrix() const;
 	glm::mat4 getRotationMatrix() const;
 
+	// Vulkan projection: reversed-Z, Y-flipped
+	glm::mat4 buildProjection(VkExtent2D extent) const
+	{
+		float aspect = (float) extent.width / (float) extent.height;
+		glm::mat4 proj =
+		glm::perspective(glm::radians(m_fov), aspect, m_farPlane, m_nearPlane);
+		proj[1][1] *= -1;
+		return proj;
+	}
+
 	void processSDLEvent(const SDL_Event& e);
 
 	void update(float deltaTime);
-
-	// Direct component access for future ECS
-	CameraComponent& getComponent() { return m_component; }
-	const CameraComponent& getComponent() const { return m_component; }
 };

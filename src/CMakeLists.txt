@@ -1,10 +1,9 @@
 
-# Agni engine core — static library (no ImGui, no editor)
+# Agni renderer framework — static library (renderer + Vulkan foundation + ImGui debug UI)
 add_library(agni STATIC
   Application.hpp
   Application.cpp
   Types.hpp
-  Components.hpp
   Initializers.cpp
   Initializers.hpp
   Images.hpp
@@ -48,45 +47,14 @@ add_library(agni STATIC
   Scene.cpp
   IndexPageAllocator.hpp
 
-  # ECS Core
-  Interfaces/IWorld.hpp
-  ECS/World.hpp
-  ECS/World.cpp
-  ECS/EntityFactory.hpp
-  ECS/EntityFactory.cpp
-  ECS/EntityManager.hpp
-  ECS/EntityManager.cpp
-  ECS/PrefabManager.hpp
-  ECS/PrefabManager.cpp
+  # ImGui debug/dev UI (no editor panels)
+  EditorTheme.hpp
+  EditorTheme.cpp
+  ImGuiIntegration.hpp
+  ImGuiIntegration.cpp
 
-  # Scene Serialization
-  Scene/SceneSerializer.hpp
-  Scene/SceneSerializer.cpp
-
-  # Reflection System
-  Reflection/TypeDesc.hpp
-  Reflection/ComponentRegistry.hpp
-  Reflection/ComponentRegistry.cpp
-
-  # NO Editor/*.cpp — editor lives in editor/ directory
-  # NO main.cpp — entry points live in editor/ and runtime/
+  # NO main.cpp — the entry point lives in sample/
 )
-
-# Add Physics source files conditionally
-if(AGNI_ENABLE_JOLT)
-    target_sources(agni PRIVATE
-        Physics/JoltPhysicsManager.hpp
-        Physics/JoltPhysicsManager.cpp
-        Physics/JoltDebugRenderer.hpp
-        Physics/JoltDebugRenderer.cpp
-        Physics/AgniContactListener.hpp
-        Physics/AgniContactListener.cpp
-        ECS/Systems/PhysicsSystem.hpp
-        ECS/Systems/PhysicsSystem.cpp
-        ECS/Systems/CharacterSystem.hpp
-        ECS/Systems/CharacterSystem.cpp
-    )
-endif()
 
 # Add shader files to the project so they appear in Visual Studio
 file(GLOB_RECURSE SLANG_SHADER_FILES
@@ -133,22 +101,19 @@ target_include_directories(agni SYSTEM PUBLIC
     ${PROJECT_SOURCE_DIR}/third_party/volk
     ${PROJECT_SOURCE_DIR}/third_party/Vulkan-Headers/include
     ${PROJECT_SOURCE_DIR}/third_party/jolt
-    ${PROJECT_SOURCE_DIR}/third_party/dmon
+    ${PROJECT_SOURCE_DIR}/third_party/imgui
+    ${PROJECT_SOURCE_DIR}/third_party/imgui/backends
 )
 
 add_dependencies(agni Shaders)
 
-# Engine dependencies — NO imgui, NO imguizmo
+# Framework dependencies (flecs + jolt submodules are kept but intentionally unlinked)
 target_link_libraries(agni PUBLIC
+    imgui
     vma glm volk::volk Vulkan::Headers fmt::fmt stb_image
     SDL3::SDL3 vkbootstrap fastgltf::fastgltf simdjson
-    renderdoc mikktspace flecs::flecs_static dmon
+    renderdoc mikktspace
 )
-
-if(AGNI_ENABLE_JOLT)
-    target_link_libraries(agni PUBLIC jolt_interface)
-    target_compile_definitions(agni PUBLIC AGNI_HAS_JOLT=1)
-endif()
 
 if(AGNI_COMPILE_SHADERS)
     target_link_libraries(agni PUBLIC slang)

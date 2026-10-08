@@ -1,574 +1,238 @@
-# Agni Engine Architecture
+# Agni Architecture
 
 ## Overview
 
-Agni is a Vulkan 1.4 GPU-driven game engine built with C++20. The architecture uses two static libraries (engine + game) and two executables (editor + runtime), allowing multiple games to share the same engine and shipping builds to exclude editor overhead entirely.
+Agni is a GPU-driven Vulkan 1.4 renderer framework in C++20. It is deliberately **only** a
+renderer plus its Vulkan foundation: there is no ECS, no physics, no scene format and no
+editor. Games are written in code against the renderer.
 
-### Influences
+This is the result of a deliberate strip-down. Agni previously carried a Flecs ECS, Jolt
+physics, JSON scene serialization, a reflection system and a full ImGui editor
+(asset browser, prefabs, inspector, gizmos, undo/redo, Play/Stop). All of it was removed to
+leave a known-good renderer to rebuild on. Flecs and Jolt remain vendored as submodules but
+are not linked; they are being re-integrated from scratch, designed around thousands of
+interactable entities with skeletal animation rather than retrofitted.
 
-The architecture draws from several production engines:
+## Targets
 
-- **Godot**: Editor workflow (Play/Stop mode, scene-based level design, single-exe development)
-- **SpartanEngine**: Entity-Component architecture with editor integration
-- **edbr (vkguide)**: Engine-as-library approach, Application base class pattern, multiple games per engine
+```
+agni.lib      Static library   Renderer, Vulkan foundation, asset loading, ImGui debug UI
+agni_sample   Executable       Minimal app that drives the renderer
+agni_tests    Executable       GoogleTest suite (off by default, see Testing)
+```
 
-## Project Structure
+```
+             agni.lib
+                 |
+            agni_sample
+```
+
+## Project structure
 
 ```
 Agni/
-├── src/                      Engine core (static library: agni.lib)
-│   ├── AgniEngine.hpp/cpp        Engine lifecycle, Vulkan init, main systems
-│   ├── Application.hpp/cpp       Base class for editor and runtime applications
-│   ├── Renderer.hpp/cpp          Vulkan GPU-driven renderer
-│   ├── Camera.hpp/cpp            Editor fly camera
-│   ├── Components.hpp            Engine component definitions (Transform, Camera, Light, etc.)
-│   ├── Loader.hpp/cpp            glTF asset loading
-│   ├── ResourceManager.hpp/cpp   GPU resource management
-│   ├── BindlessResources.hpp/cpp Descriptor buffer bindless system
-│   ├── Material.hpp/cpp          PBR material pipeline
-│   ├── Pipelines.hpp/cpp         Vulkan pipeline builder
-│   ├── Descriptors.hpp/cpp       Descriptor set management
-│   ├── Images.hpp/cpp            Image creation utilities
-│   ├── Texture.hpp/cpp           Texture loading and GPU upload
-│   ├── Skybox.hpp/cpp            Skybox rendering
-│   ├── Scene.hpp/cpp             Scene graph
-│   ├── SwapchainManager.hpp/cpp  Swapchain lifecycle
-│   ├── ThreadPool.hpp/cpp        Parallel task execution
-│   ├── IndexPageAllocator.hpp    Page-based index buffer sub-allocator
-│   ├── Debug.hpp/cpp             VkDebugName utility, Vulkan debug callback
-│   ├── Types.hpp                 Common types and forward declarations
-│   ├── ECS/                      Flecs entity-component-system
-│   │   ├── World.hpp/cpp             ECS world, transform hierarchy, systems
-│   │   ├── EntityFactory.hpp/cpp     Entity creation from prefabs/types
-│   │   ├── EntityManager.hpp/cpp     Entity lifecycle management
-│   │   ├── PrefabManager.hpp/cpp     Prefab save/load/instantiate
-│   │   └── Systems/
-│   │       ├── PhysicsSystem.hpp/cpp       ECS ↔ Jolt transform sync
-│   │       └── CharacterSystem.hpp/cpp     Character controller update
-│   ├── Physics/                  Jolt Physics integration
-│   │   ├── JoltPhysicsManager.hpp/cpp  Physics world, bodies, raycasting, characters
-│   │   ├── AgniContactListener.hpp/cpp Collision event system (Begin/Persist/End)
-│   │   └── JoltDebugRenderer.hpp/cpp   Physics debug visualization
-│   ├── Editor/                   Editor UI panels (part of engine lib)
-│   │   ├── EditorManager.hpp/cpp     Coordinates all editor subsystems
-│   │   ├── EditorUI.hpp/cpp          Menu bar, toolbar (Play/Stop buttons)
-│   │   ├── ECSInspector.hpp/cpp      Entity hierarchy + component inspector + gizmos
-│   │   ├── AssetBrowser.hpp/cpp      Asset file browser with drag-and-drop
-│   │   ├── EditorTheme.hpp/cpp       Dark modern ImGui theme
-│   │   ├── EditorWidgets.hpp/cpp     Reusable styled ImGui widgets
-│   │   ├── CommandHistory.hpp/cpp    Undo/redo stack
-│   │   ├── EntityCommands.hpp/cpp    Undoable entity operations
-│   │   ├── InputManager.hpp/cpp      Keyboard shortcuts
-│   │   ├── ContextMenus.hpp/cpp      Right-click menus
-│   │   └── ExpressionEval.hpp/cpp    Math expression evaluator for input fields
-│   ├── Reflection/               Component reflection system
-│   │   ├── TypeDesc.hpp              Type descriptor template
-│   │   └── ComponentRegistry.hpp/cpp Component registration
-│   ├── Scene/                    Scene serialization
-│   │   └── SceneSerializer.hpp/cpp   JSON scene save/load
-│   └── Interfaces/               Abstract interfaces
-│       └── IWorld.hpp                World interface
+├── src/                        agni.lib
+│   ├── AgniEngine.hpp/cpp          Vulkan init, per-frame submit/present, default assets
+│   ├── Application.hpp/cpp         App base class; owns the frame loop
+│   ├── Renderer.hpp/cpp            The GPU-driven renderer
+│   ├── Camera.hpp/cpp              Free-fly camera (holds its own state)
+│   ├── Loader.hpp/cpp              glTF loading, sync and async
+│   ├── Scene.hpp/cpp               Node / MeshNode / LightNode — glTF import tree
+│   ├── Material.hpp/cpp            PBR pipeline construction
+│   ├── Texture.hpp/cpp             Texture upload
+│   ├── Skybox.hpp/cpp              Cubemap skybox
+│   ├── ResourceManager.hpp/cpp     Buffers, images, global index buffer, immediate submit
+│   ├── SwapchainManager.hpp/cpp    Swapchain lifecycle
+│   ├── BindlessResources.hpp/cpp   Texture/sampler/material registries
+│   ├── DescriptorBuffer.hpp/cpp    VK_EXT_descriptor_buffer allocator + writer
+│   ├── Descriptors.hpp/cpp         Classic descriptor set helpers
+│   ├── Pipelines.hpp/cpp           Graphics/compute pipeline builders
+│   ├── Images.hpp/cpp              Image creation and transitions
+│   ├── Initializers.hpp/cpp        Vk*CreateInfo helpers, barriers
+│   ├── IndexPageAllocator.hpp      Page sub-allocator for the global index buffer
+│   ├── FallbackShaders.hpp/cpp     Embedded SPIR-V used when a .spv is missing
+│   ├── ImGuiIntegration.hpp/cpp    ImGui lifecycle (debug UI only)
+│   ├── EditorTheme.hpp/cpp         ImGui theme + fonts
+│   ├── Debug.hpp/cpp               VkDebugName, validation callback, VMA stats
+│   ├── ThreadPool.hpp/cpp          Parallel task execution (used by the loader)
+│   ├── Types.hpp                   Shared GPU-facing structs
+│   └── VulkanTools.hpp/cpp         Shader module loading, misc helpers
 │
-├── games/                    Game projects (each builds a static library: agni_game.lib)
-│   └── horror/               Survival horror game
-│       ├── GameApp.hpp/cpp       Game initialization and update loop
-│       └── CMakeLists.txt
-│       ├── Components/           (Planned) Game-specific component types
-│       └── Systems/              (Planned) Game-specific ECS systems
-│
-├── editor/                   Editor application (builds: agni_editor.exe)
-│   ├── main_editor.cpp           Editor entry point + EditorApp class
-│   ├── ImGuiIntegration.hpp/cpp  ImGui lifecycle management
-│   └── EditorTests.cpp           Editor test integration
-│
-├── runtime/                  Runtime application (builds: agni_runtime.exe)
-│   ├── main_runtime.cpp          Loads scene, starts game immediately
-│   └── CMakeLists.txt
-│
-├── tests/                    Unit + GPU tests (builds: agni_tests.exe)
-├── shaders/                  Slang shaders compiled to SPIR-V
-├── assets/                   3D models, textures, scenes
-├── third_party/              Git submodules (Vulkan, SDL3, Flecs, Jolt, ImGui, etc.)
-├── CMakeLists.txt            Root build configuration
-└── build.py                  Python build wrapper
+├── sample/main.cpp             agni_sample — reference for driving the renderer
+├── shaders/slang/              Slang shaders compiled to SPIR-V
+├── tests/                      GoogleTest (CPU + headless GPU)
+├── assets/                     glTF models, skybox
+└── third_party/                Submodules (Flecs and Jolt vendored but unlinked)
 ```
 
-## Build Targets
+## The renderer seam
 
-```
-agni.lib           Static library    Engine core (renderer, ECS, physics, assets, reflection)
-agni_game.lib      Static library    Game logic (components, systems, prefabs)
-agni_editor.exe    Executable        agni + agni_game + editor + ImGui
-agni_runtime.exe   Executable        agni + agni_game (no editor, no ImGui)
-agni_tests.exe     Executable        agni + GoogleTest test suites
-```
+**The renderer owns no scene representation.** This is the central design point, and what
+makes it reusable while the engine above it is rebuilt.
 
-### Build Commands
-
-```bash
-python build.py                          # Build editor (default game: horror)
-python build.py --game racing            # Build editor with racing game
-python build.py --game horror --runtime  # Build shipping runtime (no editor)
-python build.py --test                   # Build and run tests
-python build.py --release                # Optimized build
-```
-
-### CMake Configuration
-
-```cmake
-# Root CMakeLists.txt
-set(AGNI_ACTIVE_GAME "horror" CACHE STRING "Which game to build")
-
-add_subdirectory(src)                              # agni static library
-add_subdirectory(games/${AGNI_ACTIVE_GAME})         # agni_game static library
-add_subdirectory(editor)                            # agni_editor executable
-add_subdirectory(runtime)                           # agni_runtime executable
-```
-
-### Compile Impact
-
-| Changed File | What Recompiles |
-|---|---|
-| `games/horror/GameApp.cpp` | agni_game only (engine untouched) |
-| `src/Renderer.cpp` | agni only (game untouched) |
-| `editor/main_editor.cpp` | agni_editor only |
-| Shader (.slang) | Nothing recompiles, just shader recompile |
-
-## Dependency Flow
-
-```
-                    agni.lib (engine)
-                    /              \
-            agni_game.lib          (no ImGui)
-            /         \
-  agni_editor.exe    agni_runtime.exe
-  (+ ImGui)          (no ImGui, no editor)
-```
-
-- Engine depends on: Vulkan, SDL3, Flecs, Jolt, GLM, fmt, fastgltf
-- Editor additionally depends on: ImGui, ImGuizmo
-- Runtime depends on: engine + game only
-- Game depends on: engine only
-
-## Component Reflection System
-
-Components are plain C++ structs with a static `ReflectType` method that describes their properties for the editor inspector, serializer, and prefab system.
-
-### Defining a Component
+Each frame the caller fills `DrawContext`:
 
 ```cpp
-// Example: game-specific component (Planned — game components not yet implemented)
-
-struct EnemyComponent {
-    float detectionRadius = 20.0f;
-    float attackDamage = 15.0f;
-    float chaseSpeed = 5.0f;
-    std::string enemyType = "wolf";
-
-    static void ReflectType(agni::TypeDesc<EnemyComponent>& desc) {
-        desc.SetName("EnemyComponent");
-        desc.SetCategory("Game/AI");
-
-        desc.AddMember(&EnemyComponent::detectionRadius,
-            "detectionRadius", "Detection Radius")
-            .SetRange(0.0f, 100.0f).SetUnit("m");
-
-        desc.AddMember(&EnemyComponent::attackDamage,
-            "attackDamage", "Attack Damage");
-
-        desc.AddMember(&EnemyComponent::chaseSpeed,
-            "chaseSpeed", "Chase Speed")
-            .SetRange(0.0f, 50.0f).SetUnit("m/s");
-
-        desc.AddMember(&EnemyComponent::enemyType,
-            "enemyType", "Enemy Type");
-    }
+struct DrawContext {
+    std::vector<RenderObject>  m_OpaqueSurfaces;
+    std::vector<RenderObject>  m_TransparentSurfaces;
+    std::vector<GPUPointLight> m_PointLights;
+    std::vector<GPUSpotLight>  m_SpotLights;
+    DirectionalLightData       m_DirectionalLight;
 };
 ```
 
-### Registering Components
+A `RenderObject` is flat data — index range, material pointer, local-space bounds, world
+matrix, vertex buffer device address, and an object ID for picking.
 
-Components must be registered at startup for the editor and serializer to discover them:
+`Renderer::updateScene()` then derives per-frame GPU state from whatever it was handed:
+camera matrices, Gribb-Hartmann frustum planes, and the directional/spot/point shadow
+matrices. It does not clear or populate the context — that is the caller's job.
 
-```cpp
-// Engine components are registered automatically in AgniEngine::init()
-// Game components are registered in GameApp::init()
+Order per frame: fill `DrawContext` → `setActiveCamera()` → `updateScene()` → `renderFrame()`.
+`Application::run()` already sequences this; see `sample/main.cpp` for the fill step.
 
-// Planned — game component registration example:
-void GameApp::init(AgniEngine& engine) {
-    agni::ComponentRegistry::Register<EnemyComponent>();
-    agni::ComponentRegistry::Register<PlayerComponent>();
-}
-```
+## Frame flow
 
-### Currently Registered Engine Components
+`Renderer::renderFrame()`:
 
-| Component | Category | Description |
+1. Transition MSAA color, depth, and the depth-resolve target
+2. Build shadow indirect buffers once, shared across all shadow passes
+3. Directional → spot → point (6 cube faces) shadow passes — each skipped when there are no
+   shadow casters
+4. Object-ID pass, only when picking was requested
+5. **GPU cull compute → draw compaction → indirect geometry draw**, plus the skybox
+6. Debug lines, if any were submitted
+7. Build the Hi-Z pyramid for the *next* frame's occlusion culling
+8. Blit to swapchain, UI callback, present
+
+## GPU-driven rendering
+
+Nothing is bound per object.
+
+**Vertex pulling.** No vertex input state at all. Each mesh owns a vertex buffer; the shader
+dereferences its device address indexed by `SV_VertexID`.
+
+**One global index buffer.** `ResourceManager` holds a single 64 MB index buffer
+sub-allocated by `IndexPageAllocator` in 16K-index (64 KB) pages, with a bitset and
+generation counters to catch stale handles. `vkCmdBindIndexBuffer` is called once per pass;
+every draw is just a `firstIndex`.
+
+**Per-draw data via `firstInstance`.** Parallel arrays of `VkDrawIndexedIndirectCommand` and
+`GPUDrawData` (world matrix, vertex address, material index) are built per frame.
+`firstInstance` carries the draw index, which the vertex shader reconstructs as
+`instanceID + baseInstance` to index the draw-data SSBO through a push-constant address. The
+entire binding cost is one 8-byte push constant per pass.
+
+**Cull and compaction** (`IndirectCull.slang`, 256 threads/group, one thread per draw):
+transform the 8 AABB corners by `viewproj * world`, reject if all 8 fail one clip plane, then
+Hi-Z test — pick a mip from the screen footprint, refine one mip finer when the footprint is
+≤2×2 texels, inflate by a texel, 5 taps, `min`-reduce. Survivors claim a slot with
+`InterlockedAdd` and both the command and its draw data are copied to compacted output with
+`firstInstance` remapped. One `vkCmdDrawIndexedIndirectCount` then draws the whole opaque
+scene.
+
+**Hi-Z pyramid.** MSAA depth resolves via `VK_RESOLVE_MODE_MIN_BIT` as a side effect of the
+geometry pass, then `HiZDownsample.slang` walks the mip chain with a MIN 2×2 reduction. Built
+at the end of frame N and consumed by frame N+1 — the usual one-frame-late tradeoff, absorbed
+by the cull bias.
+
+Reverse-Z throughout: `glm::perspective(fov, aspect, far, near)` with `proj[1][1] *= -1`,
+`GREATER_OR_EQUAL` depth test, clears to 0.0, and `min` for conservative Hi-Z.
+
+## Bindless resources
+
+Descriptor buffers, not descriptor sets. Four buffers bound once per frame:
+
+| Set | Contents | Owner |
 |---|---|---|
-| `TransformComponent` | Core | Local + world transform matrices, parent hierarchy |
-| `CameraComponent` | Rendering | Position, rotation, FOV, near/far planes, speed |
-| `LightComponent` | Rendering | Point/spot/directional lights with color, intensity, radius |
-| `RenderableTag` | Rendering | Visibility flag for rendered entities |
-| `RigidBodyComponent` | Physics | Body type (static/dynamic/kinematic), mass, friction, restitution |
-| `ColliderComponent` | Physics | Box/sphere/capsule collider with offset and size |
-| `CharacterControllerComponent` | Physics | Character height, radius, max slope, stair stepping, jump |
-| `AssetReferenceComponent` | Assets | glTF asset path reference |
-| `EntityInfoComponent` | Core | Entity name and metadata |
+| 0 | Scene UBO, light SSBO, 3 shadow maps, Hi-Z pyramid | per-frame ring |
+| 1 | `Texture2D textures[]`, sized from GPU limits | `TextureRegistry` |
+| 2 | `SamplerState samplers[4]` | `SamplerRegistry` |
+| 3 | `GPUMaterialData[]` SSBO | `MaterialRegistry` |
 
-### What Registration Enables
+Descriptors are written with `vkGetDescriptorEXT` directly into mapped memory at offsets from
+`vkGetDescriptorSetLayoutBindingOffsetEXT`. `TextureRegistry::registerTexture` dedupes by
+image view and returns an index; the fragment shader does
+`textures[NonUniformResourceIndex(mat.colorTexIndex)]`. Sets 1–3 are static, always bound at
+offset 0.
 
-Once registered, a component automatically works with:
+The scene UBO is the only descriptor-bound buffer left; everything else reaches the GPU by
+device address or push constant.
 
-- **Inspector**: "Add Component" menu shows the component. All `AddMember` fields appear as editable widgets (float → drag slider, string → text field, bool → checkbox, enum → dropdown).
-- **Serializer**: Scene save/load reads and writes all reflected fields to JSON.
-- **Prefabs**: Prefab save/instantiate handles all reflected fields automatically.
-- **Play/Stop**: World snapshot captures and restores all reflected field values.
+## Device requirements
 
-### Supported Property Types
+Vulkan 1.4, and these are hard requirements (`AgniEngine::initVulkan`):
 
-| Type | Inspector Widget | JSON Representation |
-|---|---|---|
-| `float` | DragFloat / slider | number |
-| `int` | DragInt | integer |
-| `bool` | Checkbox | true/false |
-| `std::string` | Text input | string |
-| `glm::vec3` | DragFloat3 (XYZ) | [x, y, z] |
-| `glm::quat` | Euler angle input | [x, y, z, w] |
-| Enum | Dropdown | string (enum name) |
-| Nested struct | Foldout with sub-fields | nested object |
+`VK_EXT_descriptor_buffer`, buffer device address, `drawIndirectCount`, `multiDrawIndirect`,
+`drawIndirectFirstInstance`, `shaderInt64`, dynamic rendering, synchronization2, runtime
+descriptor arrays, `shaderSampledImageArrayNonUniformIndexing`, pipeline statistics queries,
+`sampleRateShading`, `shaderDrawParameters`.
 
-### Property Modifiers
+## Asset loading
 
-```cpp
-desc.AddMember(&Component::value, "value", "Value")
-    .SetRange(0.0f, 100.0f)    // Clamp in editor
-    .SetUnit("m/s")            // Display unit label
-    .SetReadOnly()             // Non-editable in inspector
-    .SetHidden()               // Hidden from inspector
-    .SetNoSerialize();         // Skip during save/load
-```
+glTF via fastgltf. `AssetLoader::loadGltf` is blocking but internally parallel;
+`loadGltfAsync` returns a handle and requires `processCompletedLoads()` to be pumped from the
+main thread for GPU upload. Images decode in parallel, meshes are processed in parallel
+(vertex extraction plus MikkTSpace tangent generation when a glTF supplies none).
 
-## Application Base Class
+A load produces a `LoadedGLTF` holding meshes, materials, images and a `Node` tree.
 
-Both the editor and runtime inherit from `agni::Application`, which provides virtual lifecycle hooks called by the engine:
+**Use the node tree, not the mesh map.** `LoadedGLTF::meshes` is keyed by glTF mesh *name*,
+so same-named meshes overwrite each other, and it carries no transforms. `m_topNodes` is the
+correct source: the loader has already called `refreshTransform()` on it, so each
+`MeshNode`/`LightNode` has a valid world matrix. `sample/main.cpp` shows the walk.
+
+## Application lifecycle
+
+Inherit `agni::Application`, override the hooks, call `run()`:
 
 ```cpp
-namespace agni {
-class Application {
-public:
-    int run(int argc = 0, char** argv = nullptr);
-
-protected:
-    // Lifecycle
-    virtual void onInit() {}
-    virtual void onPostInit() {}
-    virtual void onUpdate(float deltaTime) {}
-    virtual void onCleanup() {}
-
-    // Events
-    virtual void onEvent(SDL_Event& event) {}
-
-    // UI overlay (editor overrides these, runtime leaves them empty)
-    virtual void onBeginUIFrame() {}
-    virtual void onRenderUI() {}
-    virtual void onEndUIFrame() {}
-    virtual void onDrawUI(VkCommandBuffer cmd, VkImageView targetView) {}
-    virtual bool wantCaptureMouse() { return false; }
-    virtual bool wantCaptureKeyboard() { return false; }
-
-    // Notifications
-    virtual void onEntityPicked(uint64_t entityID) {}
-    virtual void onWindowResize(uint32_t width, uint32_t height) {}
-
-    AgniEngine& getEngine();
-    const AgniEngine& getEngine() const;
-};
-}
-```
-
-### Editor Application
-
-The editor entry point (`editor/main_editor.cpp`) defines the `EditorApp` class inline:
-
-```cpp
-class EditorApp : public agni::Application {
-    ImGuiIntegration m_imgui;
-    std::unique_ptr<EditorManager> m_editor;
-    GameApp m_game;
-
-    void onPostInit() override {
-        m_imgui.init(getEngine());
-        m_editor = std::make_unique<EditorManager>(...);
-        m_game.init(getEngine());
-    }
-
-    void onUpdate(float dt) override {
-        m_editor->update();
-        if (!getEngine().m_simulationPaused)
-            m_game.update(getEngine(), dt);
-    }
-
-    void onEvent(SDL_Event& e) override {
-        m_imgui.processEvent(e);
-        m_editor->processInput(e);
-    }
+class MyApp : public agni::Application {
+    void onInit() override;          // before engine subsystems are used
+    void onPostInit() override;      // engine ready — load assets here
+    void onUpdate(float dt) override;// fill DrawContext here
+    void onEvent(SDL_Event&) override;
+    void onBeginUIFrame() override;  // ImGui
+    void onRenderUI() override;
+    void onEndUIFrame() override;
+    void onEntityPicked(uint64_t id) override;
+    void onCleanup() override;
 };
 ```
 
-### Runtime Application
+`run()` drives: delta time → poll events → camera → `onUpdate` → UI frame →
+`setActiveCamera` → `engine.draw()` → picking readback.
 
-```cpp
-class RuntimeApp : public agni::Application {
-    GameApp m_game;
+## Shaders
 
-    void onPostInit() override {
-        SceneSerializer(getEngine()).loadScene("assets/scenes/main.json");
-        m_game.init(getEngine());
-    }
+Slang in `shaders/slang/`, compiled to SPIR-V by `slangc` at build time (`AGNI_COMPILE_SHADERS`,
+default ON). Entry points are `vertexMain` / `fragmentMain` / `computeMain`; CMake sorts
+sources into graphics, vertex-only and compute lists. `.spv` files are committed so CI can
+build with `AGNI_COMPILE_SHADERS=OFF`.
 
-    void onUpdate(float dt) override {
-        m_game.update(getEngine(), dt);
-    }
-};
-```
+`ForwardPBR.slang` is the main forward opaque/transparent pass. `FallbackShaders.cpp` carries
+embedded SPIR-V used when a `.spv` is missing from disk.
 
-## Play/Stop Mode
+See [ShaderCompilation.md](ShaderCompilation.md).
 
-The editor supports Play/Stop mode for testing game logic without leaving the editor.
+## Testing
 
-### How It Works
+`tests/` builds `agni_tests` and is **off by default** — configure with
+`-DAGNI_BUILD_TESTS=ON` or use `python build.py --test`.
 
-1. **Edit Mode** (default): Scene is frozen. No physics, no game systems. Place entities, tweak values, save scenes.
-2. **Press Play**: The entire world state is serialized to a memory buffer (snapshot). Physics and game systems start running. Editor camera is saved and game camera (CameraComponent entity) becomes active.
-3. **Press Pause**: Game systems pause. Can still inspect entities.
-4. **Press Stop**: The memory snapshot is deserialized back, restoring all entities to their pre-Play state. Editor camera is restored. All runtime changes are discarded.
+CPU tests cover `IndexPageAllocator` and `ThreadPool`. Headless-GPU tests cover
+`ResourceManager`, the indirect cull compute path, bindless registries, descriptor buffers
+and index buffer growth.
 
-### Camera Separation
+**Known issue:** the GPU tests currently all fail on a fixture teardown bug — a `VkFence` and
+`VkCommandPool` outlive `vkDestroyDevice` in `tests/gpu_test_fixture.hpp`. This predates the
+strip-down and is not yet fixed.
 
-- **Edit mode**: Uses the editor fly camera (`Camera` class) — WASD movement while right-click held, gizmo shortcuts (W/E/R/X) when not flying.
-- **Play mode**: Uses the first entity with a `CameraComponent` found via `findGameCamera()`. Editor camera state is saved and restored on Play/Stop.
-- The renderer receives camera matrices via `setActiveCamera()`, decoupled from the Camera class.
+## Planned
 
-## Prefab System
-
-Prefabs are reusable entity templates saved as `.prefab` JSON files. Create an entity once with all its components configured, save it as a prefab, then stamp out copies across any scene.
-
-### Creating a Prefab
-
-1. In the editor, create an entity with all desired components (mesh, physics, etc.)
-2. Right-click → "Save as Prefab"
-3. The entity is serialized to a `.prefab` file using the reflection system
-
-### Prefab File Format
-
-```json
-{
-  "prefab": "EnemyWolf",
-  "components": {
-    "TransformComponent": {
-      "position": [0, 0, 0],
-      "rotation": [0, 0, 0, 1],
-      "scale": [1, 1, 1]
-    },
-    "RenderMeshComponent": {
-      "asset": "assets/enemies/wolf.glb"
-    },
-    "RigidBodyComponent": {
-      "type": "Dynamic",
-      "mass": 50.0
-    },
-    "ColliderComponent": {
-      "type": "Capsule",
-      "radius": 0.5,
-      "height": 1.8
-    }
-  }
-}
-```
-
-### Instantiating a Prefab
-
-Drag a `.prefab` file from the asset browser into the scene viewport. A new entity is created with all components from the prefab. Only the transform position differs per instance.
-
-### Scene References
-
-Scenes store prefab references with per-instance overrides rather than duplicating all component data:
-
-```json
-{
-  "entities": [
-    {
-      "name": "Wolf_01",
-      "prefab": "prefabs/wolf.prefab",
-      "overrides": {
-        "TransformComponent": { "position": [10, 0, 5] }
-      }
-    }
-  ]
-}
-```
-
-## Editor Features
-
-### Gizmo Controls
-
-- **Toolbar buttons**: T (Translate), R (Rotate), S (Scale) | L (Local), W (World) | Snap toggle
-- **Keyboard shortcuts** (only active when an entity is selected and not in fly mode):
-  - **W** — Translate, **E** — Rotate, **R** — Scale
-  - **X** — Toggle Local/World space
-- Snap values configurable per operation (position: meters, rotation: degrees, scale: factor)
-
-### Editor Shortcuts
-
-| Shortcut | Action |
+| Area | Notes |
 |---|---|
-| Delete | Delete selected entity |
-| Escape | Deselect entity |
-| Ctrl+D | Duplicate entity |
-| Ctrl+N | New scene |
-| Ctrl+O | Open scene |
-| Ctrl+S | Save scene |
-| Ctrl+Shift+S | Save scene as |
-| Ctrl+Z | Undo |
-| Ctrl+Y | Redo |
-
-### Inspector Features
-
-- Component values edited via reflection (auto-generated widgets)
-- Value ranges and units displayed on reflected properties
-- Expression evaluation: double-click a numeric field to type math (e.g., `1+1`)
-- Transform edited via ImGuizmo gizmos in viewport
-
-## Engine Subsystems
-
-### Renderer
-
-GPU-driven Vulkan 1.4 renderer featuring:
-- Vertex pulling via buffer device addresses (BDA)
-- Indirect draw calls with draw compaction (`vkCmdDrawIndexedIndirectCount`)
-- AABB frustum culling + Hi-Z occlusion culling via compute shader
-- Bindless resources (`VK_EXT_descriptor_buffer`)
-- PBR Cook-Torrance BRDF with metallic-roughness workflow
-- Shadow mapping (directional, spot, point with PCF)
-- Global index buffer with page-based sub-allocator
-
-### Entity-Component-System (Flecs)
-
-Data-oriented ECS using Flecs. Entities are IDs, components are plain structs, systems are queries that run on matching entities. The reflection system bridges ECS with the editor.
-
-**Transform Hierarchy:**
-- `SceneNodeComponent` tracks parent/children relationships with a dirty flag and depth value
-- `TransformHierarchy` system runs at PreUpdate, computing `worldTransform = parentWorld * localTransform`
-- Depth-based processing ensures parents are computed before children
-
-### Physics (Jolt)
-
-Jolt Physics integration with:
-- **Rigid bodies**: Static, dynamic, kinematic creation with box/sphere/capsule colliders
-- **Forces**: Velocity control, addForce, addImpulse, per-body gravity toggle
-- **Raycasting**: Single hit (`raycast`), multi-hit (`raycastAll`), screen-to-world ray conversion
-- **Collision callbacks**: `AgniContactListener` with Begin/Persist/End events, contact point/normal/penetration data, `drainCollisionEvents()` for frame processing
-- **Character controller**: `CharacterVirtual` with ExtendedUpdate, stair stepping, floor sticking, configurable height/radius/mass/maxSlope/jumpSpeed
-- **Debug visualization**: Wireframe shapes, bounding boxes, velocity vectors, center of mass — works in both Edit mode (from ECS data) and Play mode (from Jolt bodies)
-- **ECS sync**: `PhysicsSystem` syncs transforms bidirectionally, `CharacterSystem` handles character controller input and camera head tracking
-
-### Scene Serialization
-
-JSON-based scene format. Uses the reflection system to automatically serialize all registered component types. Supports prefab references with per-instance overrides.
-
-## Game Development Workflow
-
-### Creating a New Game
-
-1. Create a new directory under `games/` (e.g., `games/racing/`)
-2. Create `GameApp.hpp/cpp` with init/update/cleanup
-3. Create `CMakeLists.txt` (same template as `games/horror/`)
-4. Build with: `python build.py --game racing`
-
-### Adding Game Components *(Planned)*
-
-> Game-specific components and systems are not yet implemented. The framework below is ready but `games/horror/` currently only contains GameApp.
-
-```cpp
-// 1. Define the component (games/horror/Components/InteractableComponent.hpp)
-struct InteractableComponent {
-    std::string type = "door";
-    bool isLocked = false;
-    float interactRadius = 2.0f;
-
-    static void ReflectType(agni::TypeDesc<InteractableComponent>& desc) {
-        desc.SetName("InteractableComponent");
-        desc.SetCategory("Game/Interaction");
-        desc.AddMember(&InteractableComponent::type, "type", "Type");
-        desc.AddMember(&InteractableComponent::isLocked, "isLocked", "Is Locked");
-        desc.AddMember(&InteractableComponent::interactRadius, "interactRadius", "Interact Radius")
-            .SetRange(0.0f, 20.0f).SetUnit("m");
-    }
-};
-
-// 2. Register it (games/horror/GameApp.cpp)
-void GameApp::init(AgniEngine& engine) {
-    agni::ComponentRegistry::Register<InteractableComponent>();
-}
-
-// 3. Done. The editor automatically:
-//    - Shows "InteractableComponent" in "Add Component" menu under "Game/Interaction"
-//    - Displays all fields as editable widgets in the inspector
-//    - Saves/loads all fields to/from scene JSON and prefab files
-//    - Captures/restores values during Play/Stop
-```
-
-### Adding a Game System *(Planned)*
-
-```cpp
-// games/horror/Systems/InteractionSystem.cpp
-void InteractionSystem::registerSystems(agni::ecs::World& world) {
-    world.get().system<InteractableComponent, TransformComponent>("InteractionSystem")
-        .each([&](flecs::entity e, InteractableComponent& interact, TransformComponent& t) {
-            // Check if player is near, show prompt, handle interaction
-        });
-}
-```
-
-## Implementation Status
-
-### Stage 1: Structural Split — Complete
-
-| Phase | What | Status |
-|---|---|---|
-| 1 | Application base class | **Complete** |
-| 2 | Engine as static library | **Complete** |
-| 3 | Editor executable | **Complete** |
-| 4 | Game library | **Complete** |
-| 5 | Runtime executable | **Complete** |
-| 6 | Tests + build.py | **Complete** |
-
-### Stage 2: Engine Features
-
-| Phase | What | Status |
-|---|---|---|
-| 7 | Reflection system (TypeDesc, ComponentRegistry) | **Complete** |
-| 8 | ReflectType on all engine components | **Complete** |
-| 9 | Inspector uses reflection (auto-generated UI) | **Complete** |
-| 10 | Serializer uses reflection | **Complete** |
-| 11 | Play/Stop mode with world snapshot | **Complete** |
-| 12 | Prefab system | **Complete** |
-
-### Stage 3: Physics Integration
-
-| Feature | Status |
-|---|---|
-| Rigid body creation + ECS sync | **Complete** |
-| Physics debug visualization | **Complete** |
-| Raycasting (single + multi-hit + screen-to-world) | **Complete** |
-| Collision callbacks (Begin/Persist/End) | **Complete** |
-| Character controller (CharacterVirtual) | **Complete** |
-| Camera separation (editor vs game) | **Complete** |
-
-### Planned
-
-| Feature | Description |
-|---|---|
-| Game-specific components | EnemyComponent, PlayerComponent, etc. in `games/horror/Components/` |
-| Game-specific systems | AI, interaction, NPC systems in `games/horror/Systems/` |
-| Animation system | Skeletal animation in `src/Animation/` |
+| ECS | Flecs, re-integrated properly — target is thousands of interactable entities |
+| Skeletal animation | A primary driver for the ECS redesign |
+| Physics | Jolt, re-integrated around the new ECS |
