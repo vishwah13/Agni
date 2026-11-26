@@ -1,18 +1,11 @@
 # Agni
 
-A GPU-driven Vulkan 1.4 renderer framework in C++20, for building small games in code.
+A GPU-driven Vulkan 1.3 renderer framework in C++20, for building small games in code.
 
 ## On the note of using AI
 AI got pretty good at writing code to the point where it finish things in few minutes where previously it would take days.
 and I use Claude code to write Editor and gamelayer part of this project, I did some deep reflection on what this project ment to me and why I started this project, The reason I started learning graphics programming and started building this engine because I am curious on how game engines,GPU,computer graphics work and I want to develop my understanding and programming skills, so I had Claude remove the code that it had written for me. That being I still use AI for creating personalised learning experiences like making it create visualizations for alogorithm or concepts that I have trouble understanding, writing documentations and simple python scripts in this project.
 
-> **Status: renderer core.** Agni was previously an engine with an ImGui editor, an ECS and
-> physics. All of that has been removed to leave a known-good renderer to rebuild on — the
-> ECS (Flecs) and physics (Jolt) are being re-integrated properly, designed around
-> thousands of interactable entities with skeletal animation. Their submodules are still
-> vendored but nothing links them yet.
->
-> There is no editor and none is planned. ImGui is kept for debug and development UI only.
 
 ## What's here
 
@@ -27,30 +20,6 @@ and I use Claude code to write Editor and gamelayer part of this project, I did 
   MikkTSpace tangent generation
 - **Debug UI** — ImGui, wired up and ready; no editor panels
 - **Profiling** — Tracy and NVIDIA Nsight Graphics support
-
-## Architecture
-
-Two targets:
-
-```
-agni.lib        renderer framework + Vulkan foundation + ImGui debug UI
-agni_sample     minimal app that drives it
-```
-
-The renderer owns **no scene representation**. You fill its `DrawContext` each frame and it
-derives the rest (camera matrices, frustum planes, shadow matrices) from what you gave it:
-
-```cpp
-DrawContext& ctx = renderer.getMainDrawContext();
-ctx.m_OpaqueSurfaces = myDrawList;          // vector<RenderObject>
-ctx.m_DirectionalLight = { .direction = ..., .active = true };
-```
-
-That keeps the renderer independent of however you choose to represent a scene.
-`sample/main.cpp` is the worked reference — it loads a glTF, walks its node tree, and submits
-the surfaces.
-
-See [docs/Architecture.md](docs/Architecture.md) for detail.
 
 ## Building
 
