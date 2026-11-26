@@ -2,6 +2,10 @@
 
 A GPU-driven Vulkan 1.4 renderer framework in C++20, for building small games in code.
 
+## On the note of using AI
+AI got pretty good at writing code to the point where it finish things in few minutes where previously it would take days.
+and I use Claude code to write Editor and gamelayer part of this project, I did some deep reflection on what this project ment to me and why I started this project, The reason I started learning graphics programming and started building this engine because I am curious on how game engines,GPU,computer graphics work and I want to develop my understanding and programming skills, so I had Claude remove the code that it had written for me. That being I still use AI for creating personalised learning experiences like making it create visualizations for alogorithm or concepts that I have trouble understanding, writing documentations and simple python scripts in this project.
+
 > **Status: renderer core.** Agni was previously an engine with an ImGui editor, an ECS and
 > physics. All of that has been removed to leave a known-good renderer to rebuild on — the
 > ECS (Flecs) and physics (Jolt) are being re-integrated properly, designed around
